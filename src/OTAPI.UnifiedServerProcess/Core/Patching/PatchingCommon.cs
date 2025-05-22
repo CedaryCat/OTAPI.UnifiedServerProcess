@@ -77,6 +77,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching {
         }
         public static void InsertParamAt0AndRemapIndices(MethodBody body, InsertParamMode mode, ParameterDefinition? definition = null) {
             if (mode is InsertParamMode.Insert) {
+                if (body.Method.Name == "StripDust") {
+
+                }
                 if (definition is null) {
                     throw new ArgumentNullException($"The {nameof(definition)} is required when {nameof(mode)} is {InsertParamMode.Insert}");
                 }

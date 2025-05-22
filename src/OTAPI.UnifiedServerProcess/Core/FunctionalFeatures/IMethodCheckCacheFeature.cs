@@ -81,6 +81,17 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
                         }
                     }
                 }
+
+                if (currentCheck.Body.Instructions.Count == 1 
+                    && (currentCheck.Body.Instructions[0].OpCode == OpCodes.Ret || currentCheck.Body.Instructions[0].OpCode == OpCodes.Throw)) {
+                    continue;
+                }
+                if (currentCheck.Body.Instructions.Count == 2 && 
+                    currentCheck.Body.Instructions[0].OpCode == OpCodes.Ldnull && 
+                    currentCheck.Body.Instructions[1].OpCode == OpCodes.Ret) {
+                    continue;
+                }
+
                 var currentId = currentCheck.GetIdentifier();
 
                 if (callGraph.MediatedCallGraph.TryGetValue(currentId, out var calldata)) {

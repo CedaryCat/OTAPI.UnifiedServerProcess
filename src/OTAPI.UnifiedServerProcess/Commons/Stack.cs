@@ -544,6 +544,19 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                     case Code.Conv_R8: return method.Module.TypeSystem.Double;
                     case Code.Conv_I: return method.Module.TypeSystem.IntPtr;
                     case Code.Conv_U: return method.Module.TypeSystem.UIntPtr;
+                    case Code.Conv_Ovf_I1: return method.Module.TypeSystem.SByte;
+                    case Code.Conv_Ovf_I2: return method.Module.TypeSystem.Int16;
+                    case Code.Conv_Ovf_I4: return method.Module.TypeSystem.Int32;
+                    case Code.Conv_Ovf_I8: return method.Module.TypeSystem.Int64;
+                    case Code.Conv_Ovf_U1: return method.Module.TypeSystem.Byte;
+                    case Code.Conv_Ovf_U2: return method.Module.TypeSystem.UInt16;
+                    case Code.Conv_Ovf_U4: return method.Module.TypeSystem.UInt32;
+                    case Code.Conv_Ovf_U8: return method.Module.TypeSystem.UInt64;
+                    case Code.Conv_Ovf_I: return method.Module.TypeSystem.IntPtr;
+                    case Code.Conv_Ovf_U: return method.Module.TypeSystem.UIntPtr;
+
+                    // fixed return Single
+                    case Code.Conv_R_Un: return method.Module.TypeSystem.Single;
 
                     // reference type convert
                     case Code.Castclass:
@@ -908,6 +921,9 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                 foreach (var instruction in method.Body.Instructions) {
                     if (instruction.Operand is ILLabel label) {
                         var target = label.Target;
+                        if (target is null) {
+                            continue;
+                        }
                         if (!jumpTargets.TryGetValue(target!, out var sources)) {
                             sources = [];
                             jumpTargets.Add(target, sources);

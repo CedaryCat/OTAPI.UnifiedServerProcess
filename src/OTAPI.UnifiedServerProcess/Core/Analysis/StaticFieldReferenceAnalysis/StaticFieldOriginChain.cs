@@ -10,17 +10,17 @@ using System.Linq;
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
     public class StaticFieldOriginChain : IEquatable<StaticFieldOriginChain> {
         public readonly FieldDefinition SourceStaticField;
-        public readonly ImmutableArray<MemberLayer> MemberAccessChain;
+        public readonly ImmutableArray<MemberAccessStep> MemberAccessChain;
         readonly string Key;
 
-        public StaticFieldOriginChain(FieldDefinition sourceStataicField, IEnumerable<MemberLayer> accessChain) {
+        public StaticFieldOriginChain(FieldDefinition sourceStataicField, IEnumerable<MemberAccessStep> accessChain) {
             SourceStaticField = sourceStataicField ?? throw new ArgumentNullException(nameof(sourceStataicField));
             MemberAccessChain = accessChain?.ToImmutableArray() ?? [];
             Key = ToString();
         }
 
-        public StaticFieldOriginChain(StaticFieldOriginChain baseChain, MethodReference newMember) : this(baseChain, (MemberLayer)newMember) { }
-        private StaticFieldOriginChain(StaticFieldOriginChain baseChain, MemberLayer newMember) {
+        public StaticFieldOriginChain(StaticFieldOriginChain baseChain, MethodReference newMember) : this(baseChain, (MemberAccessStep)newMember) { }
+        private StaticFieldOriginChain(StaticFieldOriginChain baseChain, MemberAccessStep newMember) {
             SourceStaticField = baseChain.SourceStaticField;
             MemberAccessChain = baseChain.MemberAccessChain.Insert(0, newMember);
             Key = ToString();
@@ -34,8 +34,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
         }
 
         public bool TryExtendWithMemberLoad(MemberReference member, [NotNullWhen(true)] out StaticFieldOriginChain? result)
-            => TryExtendWithMemberLoad((MemberLayer)member, out result);
-        private bool TryExtendWithMemberLoad(MemberLayer member, [NotNullWhen(true)] out StaticFieldOriginChain? result) {
+            => TryExtendWithMemberLoad((MemberAccessStep)member, out result);
+        private bool TryExtendWithMemberLoad(MemberAccessStep member, [NotNullWhen(true)] out StaticFieldOriginChain? result) {
             result = null;
 
             if (MemberAccessChain.IsEmpty) {
@@ -108,7 +108,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
         }
 
         public StaticFieldOriginChain CreateFromStoreSelfAsMember(MemberReference newMember)
-            => new(this, (MemberLayer)newMember);
+            => new(this, (MemberAccessStep)newMember);
         public StaticFieldOriginChain CreateFromStoreSelfAsArrayElement(ArrayType arrayType)
             => new(this, new ArrayElementLayer(arrayType));
         public StaticFieldOriginChain CreateFromStoreSelfAsCollectionElement(TypeReference collectionType, TypeReference elementType)

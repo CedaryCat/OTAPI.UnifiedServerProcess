@@ -7,13 +7,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
             var unmodifiedStaticFieldFullNames = new HashSet<string>(raw.UnmodifiedStaticFieldFullNames);
 
             foreach (var type in raw.MainModule.GetTypes()) {
+                if (type.Name.StartsWith('<')) {
+                    continue;
+                }
                 foreach (var field in type.Fields) {
                     if (!field.IsStatic) {
                         continue;
                     }
-                    if (field.IsInitOnly) {
-                        continue;
-                    }
+                    //if (field.IsInitOnly) {
+                    //    continue;
+                    //}
                     if (field.IsLiteral) {
                         continue;
                     }

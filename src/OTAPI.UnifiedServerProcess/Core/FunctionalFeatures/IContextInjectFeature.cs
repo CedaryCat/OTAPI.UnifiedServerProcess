@@ -86,7 +86,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
             MethodDefinition modifyMethod, 
             MethodDefinition contextBound,
             MethodReference calleeRef,
-            MethodReference vanillaCallee,
+            MethodReference vanillaCalleeRef,
             ContextTypeData? contextTypeData,
             Instruction[] loads) {
             
@@ -94,7 +94,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
             int contextParamInsertIndex;
 
             // Determine context type and insertion position based on method characteristics:
-            if (!vanillaCallee.HasThis && calleeRef.HasThis && contextTypeData is not null) {
+            if (!vanillaCalleeRef.HasThis && calleeRef.HasThis && contextTypeData is not null) {
                 // Static-to-instance conversion: use declaring type's context at index 0
                 contextTypeDef = contextTypeData.ContextTypeDef;
                 contextParamInsertIndex = 0;
@@ -110,14 +110,14 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
                 contextParamInsertIndex = 1;
             }
 
-            methodCallInstruction.Operand = vanillaCallee; // Use vanilla for stack analysis
+            methodCallInstruction.Operand = vanillaCalleeRef; // Use vanilla for stack analysis
 
             var jumpSites = point.GetMethodJumpSites(modifyMethod);
 
             HashSet<Instruction> insertBeforeTargets = [];
 
             // Determine optimal insertion points for context parameters
-            if ((!vanillaCallee.HasThis || (vanillaCallee.Name == ".ctor" && methodCallInstruction.OpCode == OpCodes.Newobj)) && vanillaCallee.Parameters.Count == 0) {
+            if ((!vanillaCalleeRef.HasThis || (vanillaCalleeRef.Name == ".ctor" && methodCallInstruction.OpCode == OpCodes.Newobj)) && vanillaCalleeRef.Parameters.Count == 0) {
                 insertBeforeTargets.Add(methodCallInstruction); // Insert before call
             }
             else {
@@ -190,7 +190,9 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
                     ilProcessor.InsertBeforeSeamlessly(ref tmp, loads.Select(i => i.Clone()));
                 }
             }
-
+            if (contextTypeData is not null && contextTypeData.IsPredefined && calleeRef.Resolve().IsVirtual) {
+                methodCallInstruction.OpCode = OpCodes.Callvirt;
+            }
             methodCallInstruction.Operand = calleeRef; // Restore context-bound callee
         }
 

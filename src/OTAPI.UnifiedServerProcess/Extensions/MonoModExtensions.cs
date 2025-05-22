@@ -159,8 +159,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
             }
 
             if (method.HasGenericParameters || (typeToString?.HasGenericParameters ?? false)) {
-                Dictionary<MethodReference, MethodReference> providerMethodMap = [];
-                Dictionary<TypeReference, TypeReference> providerTypeMap = [];
+                Dictionary<IGenericParameterProvider, IGenericParameterProvider> providerMap = [];
 
                 var tmpMethod = new MethodReference(method.Name, method.Module.TypeSystem.Void);
 
@@ -168,7 +167,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
                     for (int i = 0; i < method.GenericParameters.Count; i++) {
                         tmpMethod.GenericParameters.Add(new GenericParameter(method));
                     }
-                    providerMethodMap.Add(method, tmpMethod);
+                    providerMap.Add(method, tmpMethod);
                 }
 
                 tmpMethod.DeclaringType = method.DeclaringType;
@@ -181,11 +180,11 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
                     for (int i = 0; i < typeToString.GenericParameters.Count; i++) {
                         tmpType.GenericParameters.Add(new GenericParameter(tmpType));
                     }
-                    providerTypeMap.Add(typeToString, tmpType);
+                    providerMap.Add(typeToString, tmpType);
                     typeToString = tmpMethod.DeclaringType = tmpType;
                 }
 
-                var mapOption = new MonoModCommon.Structure.MapOption(providerMethod: providerMethodMap, providerType: providerTypeMap);
+                var mapOption = new MonoModCommon.Structure.MapOption(providers: providerMap);
                 foreach (var param in method.Parameters) {
                     tmpMethod.Parameters.Add(new ParameterDefinition(param.Name, param.Attributes, MonoModCommon.Structure.DeepMapTypeReference(param.ParameterType, mapOption)));
                 }

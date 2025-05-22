@@ -34,6 +34,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
                         source.OriginalToInstanceConvdField.Add(modified.FullName, field);
                     }
                     else {
+                        if (source.OriginalToInstanceConvdField.ContainsKey(modified.FullName)) {
+                            continue;
+                        }
                         var field = new FieldDefinition(modified.Name, modified.Attributes & ~FieldAttributes.Static, modified.FieldType);
                         field.CustomAttributes.AddRange(modified.CustomAttributes.Select(c => c.Clone()));
                         contextType.ContextTypeDef.Fields.Add(field);

@@ -48,7 +48,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
                     foreach (var capture in Captures) {
                         capture.CaptureField.FieldType = MonoModCommon.Structure.DeepMapTypeReference(
                             capture.CaptureField.FieldType,
-                            MonoModCommon.Structure.MapOption.Create(provideType: [(declaringType, ClosureType)]));
+                            MonoModCommon.Structure.MapOption.Create(providers: [(declaringType, ClosureType)]));
                         ClosureType.Fields.Add(capture.CaptureField);
                     }
                 }
@@ -162,7 +162,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
                 foreach (var capture in captures) {
                     capture.CaptureField.FieldType = MonoModCommon.Structure.DeepMapTypeReference(
                         capture.CaptureField.FieldType, 
-                        MonoModCommon.Structure.MapOption.Create(provideType: [(declaringType, closureTypeDef)]));
+                        MonoModCommon.Structure.MapOption.Create(providers: [(declaringType, closureTypeDef)]));
                     closureTypeDef.Fields.Add(capture.CaptureField);
                 }
             }

@@ -237,7 +237,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 var parameter = MonoModCommon.IL.GetReferencedParameter(method, instruction);
                 if (parameter.ParameterType.IsTruelyValueType()) return;
 
-                var chain = new ParameterOriginChain(parameter, []);
+                var chain = new ParameterTrackingChain(parameter, [], []);
                 var stackKey = ParameterReferenceData.GenerateStackKey(method, instruction);
 
                 if (stackTrace.TryAddOriginChain(stackKey, chain)) {
@@ -313,7 +313,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                     var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceInstr);
 
-                    CompositeParameterTrace? instanceTrace;
+                    CompositeParameterTracking? instanceTrace;
 
                     // If the instance is an auto-generated enumerator (with special name)
                     if (instanceType is not null && instanceType.IsSpecialName && EnumeratorLayer.IsEnumerator(typeInheritance, instanceType)) {
@@ -321,14 +321,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                     }
                     // normal case
                     else {
-                        CompositeParameterTrace filteredValueTrace;
+                        CompositeParameterTracking filteredValueTrace;
                         if (stackTrace.TryGetTrace(instanceKey, out var existingInstanceTrace)) {
                             filteredValueTrace = new();
-                            foreach (var origin in valueTrace.ParameterOrigins) {
-                                if (existingInstanceTrace.ParameterOrigins.ContainsKey(origin.Key)) {
+                            foreach (var origin in valueTrace.ReferencedParameters) {
+                                if (existingInstanceTrace.ReferencedParameters.ContainsKey(origin.Key)) {
                                     continue;
                                 }
-                                filteredValueTrace.ParameterOrigins.Add(origin.Key, origin.Value);
+                                filteredValueTrace.ReferencedParameters.Add(origin.Key, origin.Value);
                             }
                         }
                         else {
@@ -436,14 +436,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceInstr);
 
 
-                CompositeParameterTrace filteredValueTrace;
+                CompositeParameterTracking filteredValueTrace;
                 if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
                     filteredValueTrace = new();
-                    foreach (var origin in valueTrace.ParameterOrigins) {
-                        if (instanceTrace.ParameterOrigins.ContainsKey(origin.Key)) {
+                    foreach (var origin in valueTrace.ReferencedParameters) {
+                        if (instanceTrace.ReferencedParameters.ContainsKey(origin.Key)) {
                             continue;
                         }
-                        filteredValueTrace.ParameterOrigins.Add(origin.Key, origin.Value);
+                        filteredValueTrace.ReferencedParameters.Add(origin.Key, origin.Value);
                     }
                 }
                 else {
@@ -497,14 +497,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                     var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceInstr);
 
-                    CompositeParameterTrace filteredValueTrace;
+                    CompositeParameterTracking filteredValueTrace;
                     if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
                         filteredValueTrace = new();
-                        foreach (var origin in valueTrace.ParameterOrigins) {
-                            if (instanceTrace.ParameterOrigins.ContainsKey(origin.Key)) {
+                        foreach (var origin in valueTrace.ReferencedParameters) {
+                            if (instanceTrace.ReferencedParameters.ContainsKey(origin.Key)) {
                                 continue;
                             }
-                            filteredValueTrace.ParameterOrigins.Add(origin.Key, origin.Value);
+                            filteredValueTrace.ReferencedParameters.Add(origin.Key, origin.Value);
                         }
                     }
                     else {
@@ -656,13 +656,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                             // Return value parameter propagation
                             if (calleeReturnTrace is not null) {
-                                if (!calleeReturnTrace.ParameterOrigins.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                                if (!calleeReturnTrace.ReferencedParameters.TryGetValue(paramInImpl.Name, out var paramParts)) {
                                     continue;
                                 }
 
-                                foreach (var outerPart in loadingParamStackValue.ParameterOrigins.Values.SelectMany(v => v.ParameterOrigins).ToArray()) {
-                                    foreach (var innerPart in paramParts.ParameterOrigins) {
-                                        var substitution = new ParameterOriginChain(outerPart.SourceParameter, [.. outerPart.MemberAccessChain, .. innerPart.MemberAccessChain]);
+                                foreach (var outerPart in loadingParamStackValue.ReferencedParameters.Values.SelectMany(v => v.PartTrackingPaths).ToArray()) {
+                                    foreach (var innerPart in paramParts.PartTrackingPaths) {
+                                        var substitution = new ParameterTrackingChain(
+                                            outerPart.TrackingParameter,
+                                            [.. outerPart.EncapsulationHierarchy, .. innerPart.EncapsulationHierarchy],
+                                            [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
+                                        );
                                         if (stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, instruction), substitution)) {
                                             hasExternalChange = true;
                                         }
@@ -673,19 +677,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                             // Parameter propagation of the caller
                             if (parameterTraces.TryGetValue(implMethod.GetIdentifier(), out var calleeParameterValues)) {
                                 foreach (var paramValue in calleeParameterValues) {
-                                    if (!paramValue.ParameterOrigins.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                                    if (!paramValue.ReferencedParameters.TryGetValue(paramInImpl.Name, out var paramParts)) {
                                         continue;
                                     }
 
-                                    foreach (var outerPart in loadingParamStackValue.ParameterOrigins.Values.SelectMany(v => v.ParameterOrigins).ToArray()) {
-                                        foreach (var innerPart in paramParts.ParameterOrigins) {
+                                    foreach (var outerPart in loadingParamStackValue.ReferencedParameters.Values.SelectMany(v => v.PartTrackingPaths).ToArray()) {
+                                        foreach (var innerPart in paramParts.PartTrackingPaths) {
 
                                             // Ignore self
-                                            if (innerPart.SourceParameter.Name == paramInImpl.Name) {
+                                            if (innerPart.TrackingParameter.Name == paramInImpl.Name) {
                                                 continue;
                                             }
 
-                                            var substitution = new ParameterOriginChain(outerPart.SourceParameter, [.. outerPart.MemberAccessChain, .. innerPart.MemberAccessChain]);
+                                            var substitution = new ParameterTrackingChain(
+                                                outerPart.TrackingParameter, 
+                                                [.. outerPart.EncapsulationHierarchy, .. innerPart.EncapsulationHierarchy],
+                                                [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
+                                            );
                                             if (stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, loadValue.RealPushValueInstruction), substitution)) {
                                                 hasExternalChange = true;
                                             }

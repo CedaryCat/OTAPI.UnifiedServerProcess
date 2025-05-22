@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels {
-    public class CollectionElementLayer(TypeReference collectionType, TypeReference elementType) : MemberLayer {
+    public class CollectionElementLayer(TypeReference collectionType, TypeReference elementType) : MemberAccessStep {
         public sealed override string Name => "{Element}";
         public sealed override string FullName => collectionType.FullName + "." + Name;
         public sealed override TypeReference DeclaringType => collectionType;
@@ -46,7 +46,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels {
             LazyInit(caller.Module);
             var inheritancesTypes = graph.GetInheritancesTypes(resolvedStoreMethod.DeclaringType);
 
-            if (inheritancesTypes.ContainsKey(IDictionaryType.FullName) && (resolvedStoreMethod.Name is "Add" || resolvedStoreMethod.Name is "TryAdd")) {
+            if (inheritancesTypes.ContainsKey(IDictionaryType.FullName) && (resolvedStoreMethod.Name is "Add" || resolvedStoreMethod.Name is "TryAddModifications")) {
                 // 0: key, 1: value
                 indexOfValueInParameters = 1;
                 return true;

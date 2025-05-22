@@ -10,8 +10,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
     /// Removes all original counterparts of contextualized methods and fields after the completion of primary contextualization logic.
     /// </summary>
     /// <param name="logger"></param>
-    public class CtxUnboundRemovePatcher(ILogger logger) : GeneralPatcher(logger) {
-        public override string Name => nameof(CtxUnboundRemovePatcher);
+    public class CleanupCtxUnboundPatcher(ILogger logger) : GeneralPatcher(logger) {
+        public override string Name => nameof(CleanupCtxUnboundPatcher);
 
         public override void Patch(PatcherArguments arguments) {
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();

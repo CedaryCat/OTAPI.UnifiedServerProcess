@@ -211,7 +211,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
                     PatchingCommon.InsertParamAndRemapIndices(invokeMethod.Body, 2, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
 
-                    // Parameters:
+                    // ReferencedParameters:
                     // sender, originalMethodDelegate, rootContext, otherArgs...
                     // so we need to insert root context at index 2
                     invokeMethodRef.Parameters.Insert(2, new ParameterDefinition(arguments.RootContextDef));

@@ -60,6 +60,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
                     if (contextTypes.ContainsKey(fieldType.FullName)) {
                         continue;
                     }
+                    if (source.OriginalToInstanceConvdField.ContainsKey(field.FullName)) {
+                        continue;
+                    }
                     if (!source.OriginalToContextType.TryGetValue(field.DeclaringType.FullName, out var contextType)) {
                         contextType = new ContextTypeData(field.DeclaringType, source.RootContextDef, methodCallGraph.MediatedCallGraph, ref source.OriginalToContextType);
                     }

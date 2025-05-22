@@ -7,12 +7,12 @@ using System;
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
     public sealed class ParameterReferenceData(
         MethodDefinition methodDefinition,
-        CompositeParameterTrace? returnValueTrace,
+        CompositeParameterTracking? returnValueTrace,
         ParameterTraceCollection<string> parameterTraces,
         ParameterTraceCollection<VariableDefinition> localVariableTraces,
         ParameterTraceCollection<string> stackValueTraces) {
         public MethodDefinition MethodDefinition { get; } = methodDefinition ?? throw new ArgumentNullException(nameof(methodDefinition));
-        public CompositeParameterTrace? ReturnValueTrace { get; } = returnValueTrace;
+        public CompositeParameterTracking? ReturnValueTrace { get; } = returnValueTrace;
         public ParameterTraceCollection<string> ParameterTraces { get; } = parameterTraces ?? new ParameterTraceCollection<string>();
         public ParameterTraceCollection<VariableDefinition> LocalVariableTraces { get; } = localVariableTraces ?? new ParameterTraceCollection<VariableDefinition>();
         public ParameterTraceCollection<string> StackValueTraces { get; } = stackValueTraces ?? new ParameterTraceCollection<string>();

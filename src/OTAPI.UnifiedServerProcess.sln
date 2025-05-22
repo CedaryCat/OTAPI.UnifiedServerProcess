@@ -6,6 +6,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OTAPI.UnifiedServerProcess"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OTAPI.UnifiedServerProcess.Test", "OTAPI.UnifiedServerProcess.Test\OTAPI.UnifiedServerProcess.Test.csproj", "{88829850-A06A-407E-ADA3-A6AA7451A225}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OTAPI.UnifiedServerProcess.GlobalNetwork", "OTAPI.UnifiedServerProcess.GlobalNetwork\OTAPI.UnifiedServerProcess.GlobalNetwork.csproj", "{31DDC61F-815F-4D7E-80AD-40E8F9B2006D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OTAPI.UnifiedServerProcess.ConsoleClient", "OTAPI.UnifiedServerProcess.ConsoleClient\OTAPI.UnifiedServerProcess.ConsoleClient.csproj", "{5BFD176F-57B3-711D-14AE-097425D79738}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,6 +24,14 @@ Global
 		{88829850-A06A-407E-ADA3-A6AA7451A225}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{88829850-A06A-407E-ADA3-A6AA7451A225}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{88829850-A06A-407E-ADA3-A6AA7451A225}.Release|Any CPU.Build.0 = Release|Any CPU
+		{31DDC61F-815F-4D7E-80AD-40E8F9B2006D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{31DDC61F-815F-4D7E-80AD-40E8F9B2006D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{31DDC61F-815F-4D7E-80AD-40E8F9B2006D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{31DDC61F-815F-4D7E-80AD-40E8F9B2006D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5BFD176F-57B3-711D-14AE-097425D79738}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5BFD176F-57B3-711D-14AE-097425D79738}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5BFD176F-57B3-711D-14AE-097425D79738}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5BFD176F-57B3-711D-14AE-097425D79738}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -27,13 +27,13 @@ namespace OTAPI.UnifiedServerProcess.Core {
 
             new PatchChain(logger)
                 .Then(new SimplifyMacrosPatcher(logger, module))
+                .Then(new RemoveUnusedCodePatcherAtBegin(logger, module))
 
                 .DefineArgument(new FilterArgumentSource(module, unmodifiedStaticFields))
                 .RegisterProcessor(new AddModifiedProcessor())
                 .RegisterProcessor(new AddEventsProcessor())
                 .RegisterProcessor(new AddHooksProcessor())
-                .RegisterProcessor(new IgnoreAssetsProccessor())
-                .RegisterProcessor(new IgnoreLanguageProcessor())
+                .RegisterProcessor(new ForceStaticProcessor())
                 .RegisterProcessor(new StaticGenericProcessor(analyzers.MethodCallGraph))
                 .RegisterProcessor(new ContextRequiredFieldsProcessor(analyzers.MethodCallGraph, rootContextDef))
                 .ApplyArgument()
@@ -54,7 +54,7 @@ namespace OTAPI.UnifiedServerProcess.Core {
                 .Then(new HooksCtxAdaptPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new InvocationCtxAdaptPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new EnumeratorCtxAdaptPatcher(logger, analyzers.MethodCallGraph))
-                .Then(new CtxUnboundRemovePatcher(logger))
+                .Then(new CleanupCtxUnboundPatcher(logger))
                 .Then(new AdjustPropertiesPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new AdjustEventsPatcher(logger))
                 .Then(new AdjustAccessModifiersPatcher(logger))
@@ -62,6 +62,7 @@ namespace OTAPI.UnifiedServerProcess.Core {
                 .Then(new TrivialDefaultValuePatcher(logger))
                 .Finalize()
 
+                .Then(new RemoveUnusedCodePatcherAtEnd(logger, module))
                 .Then(new OptimizeMacrosPatcher(logger, module))
 
                 .Execute();

@@ -89,10 +89,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
             ImmutableDictionary<string, MethodCallData> callGraph,
             ref Dictionary<string, ContextTypeData> instanceConvdTypeOrigMap) {
 
+            if (originalType.Name == "LocalizedText" || originalType.Name == "Lang") {
+
+            }
+
             PredefinedMethodMap = ImmutableDictionary<string, MethodDefinition>.Empty;
 
             if (instanceConvdTypeOrigMap.ContainsKey(originalType.FullName)) {
-                throw new Exception("Duplicate instanceConvd type");
+                throw new Exception("Duplicate contextType type");
             }
 
             this.originalType = originalType;
@@ -106,8 +110,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
             chain.Reverse();
 
             foreach (var type in chain) {
-                if (!instanceConvdTypeOrigMap.TryGetValue(type.FullName, out var instanceConvd)) {
-                    instanceConvd = new ContextTypeData(type, rootContextDef, callGraph, ref instanceConvdTypeOrigMap);
+                if (!instanceConvdTypeOrigMap.TryGetValue(type.FullName, out var contextType)) {
+                    contextType = new ContextTypeData(type, rootContextDef, callGraph, ref instanceConvdTypeOrigMap);
                 }
             }
 

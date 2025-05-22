@@ -44,7 +44,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
             foreach (var context in order) {
                 rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-                rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Dup));
+                rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
                 rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Newobj, context.constructor));
                 rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, context.nestedChain.Single()));
             }

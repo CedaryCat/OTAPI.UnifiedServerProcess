@@ -214,7 +214,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
         private void HandleMethodCall(Instruction methodCallInstruction, MethodDefinition enumeratorMethod, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, FieldDefinition captureContextField, FieldReference captureContextFieldRef) {
             var calleeRef = (MethodReference)methodCallInstruction.Operand;
 
-            var option = MonoModCommon.Structure.MapOption.Create(provideType: [(enumeratorMethod.DeclaringType.DeclaringType, enumeratorMethod.DeclaringType)]);
+            var option = MonoModCommon.Structure.MapOption.Create(providers: [(enumeratorMethod.DeclaringType.DeclaringType, enumeratorMethod.DeclaringType)]);
             calleeRef = MonoModCommon.Structure.DeepMapMethodReference(calleeRef, option);
             if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out var contextBoundMethodDef, out var vanillaCallee, out var contextProvider)) {
                 return;
@@ -231,7 +231,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 return;
             }
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName]);
+            ContextTypeData? contextType = null;
+            if (contextBoundFieldDef.DeclaringType.FullName != arguments.RootContextDef.FullName) {
+                contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
+            }
+
+            var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextType);
             this.InjectContextFieldStoreInstanceLoads(arguments, ref instruction, out _, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
 
@@ -241,7 +246,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 return;
             }
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName]);
+            ContextTypeData? contextType = null;
+            if (contextBoundFieldDef.DeclaringType.FullName != arguments.RootContextDef.FullName) {
+                contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
+            }
+
+            var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextType);
             this.InjectContextFieldLoadInstanceLoads(arguments, ref instruction, out _, isAddress, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
         /// <summary>

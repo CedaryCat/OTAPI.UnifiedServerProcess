@@ -4,6 +4,7 @@ using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
+using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
@@ -16,12 +17,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
 
         public string Name => "StaticGenericPatcher";
 
+        readonly HashSet<string> ignoredStaticGenericFieldDeclaringFullNames = new HashSet<string>() {
+            "ReLogic.Utilities.AttributeUtilities/TypeAttributeCache`2",
+            "ReLogic.Content.Asset`1",
+        };
+
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
             ProcessTerraria_Net_NetManager(raw);
             ProcessTerraria_GameContent_Creative_CreativePowerManager(raw);
 
             foreach (var field in raw.ModifiedStaticFields) {
                 if (field.DeclaringType.HasGenericParameters) {
+                    if (ignoredStaticGenericFieldDeclaringFullNames.Contains(field.DeclaringType.FullName)) {
+                        raw.ModifiedStaticFields.Remove(field);
+                        continue;
+                    }
                     throw new Exception("This generic static type not supported yet");
                 }
             }
@@ -45,6 +55,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
 
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Id);
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Module);
+
+            argument.ModifiedStaticFields.Add(netManager.Field("Instance"));
+            argument.ModifiedStaticFields.Add(netManager.Field("PacketTypeStorageInstance"));
         }
 
         void ProcessTerraria_GameContent_Creative_CreativePowerManager(FilterArgumentSource argument) {
@@ -71,6 +84,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Id);
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Name);
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Power);
+            argument.ModifiedStaticFields.Add(creativePowerManager.Field("PowerTypeStorageInstance"));
         }
 
         public readonly struct TypeInitializationParams {

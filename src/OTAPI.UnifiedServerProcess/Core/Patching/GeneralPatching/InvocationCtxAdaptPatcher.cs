@@ -433,7 +433,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             var generatedMethodBody = generatedMethod.Body.Instructions;
 
             var closureField = closureObjData.Captures.First().CaptureField;
-            var mapOption = MonoModCommon.Structure.MapOption.Create(provideType: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
+            var mapOption = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
             var fieldType = MonoModCommon.Structure.DeepMapTypeReference(closureField.FieldType, mapOption);
             var declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
             var fieldRef = new FieldReference(closureField.Name, fieldType, declaringTypeRef);
@@ -780,7 +780,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             var thisField = closureObjData.Captures[1].CaptureField;
 
 
-            var mapOption = MonoModCommon.Structure.MapOption.Create(provideType: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
+            var mapOption = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
             var declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
 
             var contextFieldTypeRef = new FieldReference(contextField.Name, contextField.FieldType, declaringTypeRef);
@@ -1092,7 +1092,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
         void HandleMethodCall(Instruction methodCallInstruction, MethodDefinition caller, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, ClosureData closureObjData, Dictionary<string, ClosureData> cachedClosureObjs, ref bool anyModified) {
             var calleeRef = (MethodReference)methodCallInstruction.Operand;
 
-            var option = MonoModCommon.Structure.MapOption.Create(provideType: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
+            var option = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
             calleeRef = MonoModCommon.Structure.DeepMapMethodReference(calleeRef, option);
             if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out var contextBound, out var vanillaCallee, out var contextProvider)) {
                 return;
@@ -1117,9 +1117,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             var contextField = closureData.Captures.First().CaptureField;
             var closureContextType = contextField.FieldType;
 
-            var declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(
-                closureData.Closure.VariableType,
-                MonoModCommon.Structure.MapOption.Create(provideType: [(closureData.ClosureType.DeclaringType, closureData.ClosureType)]));
+            TypeReference declaringTypeRef = closureData.ClosureType;
+            if (closureData.ClosureType.HasGenericParameters) {
+                var genericInstanceTypeRef = new GenericInstanceType(closureData.ClosureType);
+                foreach(var genericParam in closureData.ClosureType.GenericParameters) {
+                    genericInstanceTypeRef.GenericArguments.Add(genericParam);
+                }
+                declaringTypeRef = genericInstanceTypeRef;
+            }
             var contextFieldRef = new FieldReference(contextField.Name, contextField.FieldType, declaringTypeRef);
 
             if (contextType is not null && closureContextType.FullName == contextType.ContextTypeDef.FullName) {
@@ -1172,7 +1177,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             }
             anyModified = true;
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName]);
+            ContextTypeData? contextType = null;
+            if (contextBoundFieldDef.DeclaringType.FullName != arguments.RootContextDef.FullName) {
+                contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
+            }
+
+            var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextType);
             this.InjectContextFieldStoreInstanceLoads(arguments, ref instruction, out _, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
 
@@ -1184,7 +1194,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
             anyModified = true;
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName]);
+            ContextTypeData? contextType = null;
+            if (contextBoundFieldDef.DeclaringType.FullName != arguments.RootContextDef.FullName) {
+                contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
+            }
+
+            var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextType);
             this.InjectContextFieldLoadInstanceLoads(arguments, ref instruction, out _, isAddress, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
         static partial class RegexTool {

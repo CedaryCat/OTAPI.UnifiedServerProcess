@@ -4,6 +4,7 @@ using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis;
+using OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
 using OTAPI.UnifiedServerProcess.Loggers;

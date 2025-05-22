@@ -2,6 +2,7 @@
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
+using OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Immutable;
 using System.Linq;
@@ -14,6 +15,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
             var convertedTypes = source.OriginalToContextType.Values.ToDictionary(t => t.ContextTypeDef.FullName, t => t.ContextTypeDef).ToImmutableDictionary();
             foreach (var type in source.MainModule.GetAllTypes().ToArray()) {
                 if (type.Name.StartsWith('<')) {
+                    continue;
+                }
+                if (ForceStaticProcessor.forceStaticTypeFullNames.Contains(type.FullName)) {
                     continue;
                 }
                 if (source.OriginalToContextType.ContainsKey(type.FullName) || convertedTypes.ContainsKey(type.FullName)) {

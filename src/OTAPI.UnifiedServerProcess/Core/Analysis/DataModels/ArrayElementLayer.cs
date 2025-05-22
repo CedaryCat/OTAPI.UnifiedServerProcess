@@ -1,7 +1,7 @@
 ﻿using Mono.Cecil;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels {
-    public sealed class ArrayElementLayer(ArrayType declaringType) : MemberLayer {
+    public sealed class ArrayElementLayer(ArrayType declaringType) : MemberAccessStep {
         private readonly ArrayType arrayType = declaringType;
 
         public sealed override string Name => "{Index}";

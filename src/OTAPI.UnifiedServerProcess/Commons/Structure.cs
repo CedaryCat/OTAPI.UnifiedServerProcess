@@ -38,48 +38,40 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                 public MapOption() {
                     this.MethodReplaceMap = [];
                     this.TypeReplaceMap = [];
-                    this.GenericProviderTypeMap = [];
-                    this.GenericProviderMethodMap = [];
+                    this.GenericProvider = [];
                     this.GenericParameterMap = [];
                 }
                 public MapOption(
                     Dictionary<TypeDefinition, TypeDefinition>? typeReplace = null,
                     Dictionary<MethodDefinition, MethodDefinition>? methodReplace = null,
-                    Dictionary<TypeReference, TypeReference>? providerType = null,
-                    Dictionary<MethodReference, MethodReference>? providerMethod = null,
+                    Dictionary<IGenericParameterProvider, IGenericParameterProvider>? providers = null,
                     Dictionary<GenericParameter, TypeReference>? genericParameterMap = null) {
                     this.MethodReplaceMap = methodReplace ?? [];
                     this.TypeReplaceMap = typeReplace ?? [];
-                    this.GenericProviderTypeMap = providerType ?? [];
-                    this.GenericProviderMethodMap = providerMethod ?? [];
+                    this.GenericProvider = providers ?? [];
                     this.GenericParameterMap = genericParameterMap?.ToDictionary(kv => GenerateKeyForGenericParameter(kv.Key), kv => kv.Value) ?? [];
                 }
                 public static MapOption Create(
                     (TypeDefinition from, TypeDefinition to)[]? replaceType = null,
                     (MethodDefinition from, MethodDefinition to)[]? replaceMethod = null,
-                    (TypeReference provideFrom, TypeReference provideTo)[]? provideType = null,
-                    (MethodReference provideFrom, MethodReference provideTo)[]? provideMethod = null,
+                    (IGenericParameterProvider provideFrom, IGenericParameterProvider provideTo)[]? providers = null,
                     (GenericParameter paramFrom, TypeReference typeTo)[]? genericParameterMap = null) {
                     return new MapOption(
                         replaceType?.ToDictionary(x => x.from, x => x.to) ?? [],
                         replaceMethod?.ToDictionary(x => x.from, x => x.to) ?? [],
-                        provideType?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? [],
-                        provideMethod?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? [],
+                        providers?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? [],
                         genericParameterMap?.ToDictionary(x => x.paramFrom, x => x.typeTo) ?? []);
                 }
                 public static MapOption CreateGenericProviderMap(
-                    (TypeReference provideFrom, TypeReference provideTo)[]? provideType = null,
-                    (MethodReference provideFrom, MethodReference provideTo)[]? provideMethod = null) {
+                    (IGenericParameterProvider provideFrom, IGenericParameterProvider provideTo)[]? providers = null) {
                     return new MapOption(
-                        [], 
-                        [], 
-                        provideType?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? [],
-                        provideMethod?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? []);
+                        [],
+                        [],
+                        providers?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? []);
                 }
                 public readonly Dictionary<TypeDefinition, TypeDefinition> TypeReplaceMap;
                 public readonly Dictionary<MethodDefinition, MethodDefinition> MethodReplaceMap;
-                public readonly Dictionary<TypeReference, TypeReference> GenericProviderTypeMap;
-                public readonly Dictionary<MethodReference, MethodReference> GenericProviderMethodMap;
+                public readonly Dictionary<IGenericParameterProvider, IGenericParameterProvider> GenericProvider;
                 public readonly Dictionary<string, TypeReference> GenericParameterMap;
             }
             public static GenericInstanceType DeepMapGenericInstanceType(GenericInstanceType instance, MapOption option) {
@@ -114,8 +106,8 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                     if (elementMethodDef is not null && option.MethodReplaceMap.TryGetValue(elementMethodDef, out var methodReplace)) {
                         elementMethodRef = methodReplace;
                     }
-                    else if (option.GenericProviderMethodMap.TryGetValue(elementMethodRef, out var genericProvider)) {
-                        elementMethodRef = genericProvider;
+                    else if (option.GenericProvider.TryGetValue(elementMethodRef, out var genericProvider) && genericProvider is MethodReference genericProviderMethod) {
+                        elementMethodRef = genericProviderMethod;
                     }
                     copiedGenericParam = elementMethodRef.GenericParameters[param.Position];
                 }
@@ -125,8 +117,8 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                     if (elementTypeDef is not null && option.TypeReplaceMap.TryGetValue(elementTypeDef, out var typeReplace)) {
                         elementTypeRef = typeReplace;
                     }
-                    else if (option.GenericProviderTypeMap.TryGetValue(elementTypeRef, out var genericProvider)) {
-                        elementTypeRef = genericProvider;
+                    else if (option.GenericProvider.TryGetValue(elementTypeRef, out var genericProvider) && genericProvider is TypeReference genericProviderType) {
+                        elementTypeRef = genericProviderType;
                     }
                     copiedGenericParam = elementTypeRef.GenericParameters[param.Position];
                 }

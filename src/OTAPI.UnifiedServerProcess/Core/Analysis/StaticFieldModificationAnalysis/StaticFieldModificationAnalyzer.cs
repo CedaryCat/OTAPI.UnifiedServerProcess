@@ -5,6 +5,7 @@ using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis;
+using OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -89,6 +90,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                 return;
             }
 
+            static void AddField(Dictionary<string, FieldDefinition> dict, FieldDefinition field) {
+                dict.TryAdd(field.FullName, field);
+            }
+
             staticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(caller.GetIdentifier(), out var staticFieldReferenceData);
 
             var jumpSites = this.GetMethodJumpSites(caller);
@@ -121,7 +126,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                 foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
                                     foreach (var part in willBeModified.StaticFieldOrigins) {
                                         if (part.MemberAccessChain.Length == 0) {
-                                            storedFields.TryAdd(willBeModified.SourceStaticField.FullName, willBeModified.SourceStaticField);
+                                            AddField(storedFields, willBeModified.SourceStaticField);
                                         }
                                     }
                                 }
@@ -164,14 +169,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                             }
 
                             // Multidimensional array does not exist a method definition that can be resolved
-                            if (resolvedCallee is null
+                            if ((resolvedCallee is null
                                 && methodRef.DeclaringType is ArrayType arrayType
-                                && methodRef.Name is "Address" or "Set"
+                                && methodRef.Name is "Address" or "Set")
 
                                 ||
 
-                                resolvedCallee is not null
-                                && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, caller, instruction)) {
+                                (resolvedCallee is not null
+                                && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, caller, instruction))) {
 
                                 foreach (var paramGroup in loadParamsInEveryPaths) {
                                     var loadInstance = paramGroup[0];
@@ -183,7 +188,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                     }
 
                                     foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
-                                        storedFields.TryAdd(willBeModified.SourceStaticField.FullName, willBeModified.SourceStaticField);
+                                        AddField(storedFields, willBeModified.SourceStaticField);
                                     }
                                 }
 
@@ -227,9 +232,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                             continue;
                                         }
                                         // If the input argument is not modified by the callMethod, skip
-                                        if (!modifiedParameters.TryGetValue(paramIndexInImpl, out var modifiedParameter)) {
+                                        if (!modifiedParameters.TryGetValue(paramIndex, out var modifiedParameter)) {
                                             continue;
                                         }
+
                                         // If the input argument is not coming from a static field, skip
                                         if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
                                             StaticFieldReferenceData.GenerateStackKey(caller, loadParam.RealPushValueInstruction),
@@ -238,7 +244,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                         }
 
                                         foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
-                                            storedFields.TryAdd(willBeModified.SourceStaticField.FullName, willBeModified.SourceStaticField);
+                                            AddField(storedFields, willBeModified.SourceStaticField);
                                         }
                                     }
                                 }
@@ -251,7 +257,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                             if (field is null) {
                                 break;
                             }
-                            storedFields.TryAdd(field.FullName, field);
+                            AddField(storedFields, field);
                             break;
                         }
 
@@ -282,7 +288,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                     foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
                                         foreach (var part in willBeModified.StaticFieldOrigins) {
                                             if (part.MemberAccessChain.Length == 0) {
-                                                storedFields.TryAdd(willBeModified.SourceStaticField.FullName, willBeModified.SourceStaticField);
+                                                AddField(storedFields, willBeModified.SourceStaticField);
                                             }
                                         }
                                     }

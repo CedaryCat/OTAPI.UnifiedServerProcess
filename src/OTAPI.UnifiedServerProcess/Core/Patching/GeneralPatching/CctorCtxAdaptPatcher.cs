@@ -127,7 +127,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             }
             return;
 
-            static MethodDefinition BuildNewConstructor(PatcherArguments arguments, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap) {
+            MethodDefinition BuildNewConstructor(PatcherArguments arguments, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap) {
                 var newCtor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, cctor.ReturnType);
                 newCtor.Parameters.Add(new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                 var newCtorBody = new MethodBody(newCtor);
@@ -175,7 +175,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                         }
                     }
                     newCtorBody.Instructions.Add(copiedInst);
-                    cctor.Body.Instructions.Remove(inst);
+                    cctor.Body.RemoveInstructionSeamlessly(this.GetMethodJumpSites(cctor), inst);
                 }
 
                 foreach (var inst in newCtor.Body.Instructions) {
