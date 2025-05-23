@@ -18,7 +18,7 @@ namespace OTAPI.UnifiedServerProcess.Core {
 
             var main = module.GetType("Terraria.Main");
 
-            var unmodifiedStaticFields = cacheHelper.LoadReadonlyStaticFields(module, analyzers,
+            var unmodifiedStaticFields = cacheHelper.LoadUnmodifiedStaticFields(module, analyzers,
                 main.Method(".ctor"),
                 main.Method("DedServ"));
 
@@ -30,11 +30,11 @@ namespace OTAPI.UnifiedServerProcess.Core {
                 .Then(new RemoveUnusedCodePatcherAtBegin(logger, module))
 
                 .DefineArgument(new FilterArgumentSource(module, unmodifiedStaticFields))
-                .RegisterProcessor(new AddModifiedProcessor())
+                .RegisterProcessor(new AddModifiedFieldsProcessor())
                 .RegisterProcessor(new AddEventsProcessor())
                 .RegisterProcessor(new AddHooksProcessor())
                 .RegisterProcessor(new ForceStaticProcessor())
-                .RegisterProcessor(new StaticGenericProcessor(analyzers.MethodCallGraph))
+                .RegisterProcessor(new StaticGenericProcessor())
                 .RegisterProcessor(new ContextRequiredFieldsProcessor(analyzers.MethodCallGraph, rootContextDef))
                 .ApplyArgument()
                 .Finalize((fieldArgument) => {

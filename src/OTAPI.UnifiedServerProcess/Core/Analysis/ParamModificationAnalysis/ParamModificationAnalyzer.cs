@@ -238,7 +238,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis {
                             continue;
                         }
 
-                        if (!tracedStackData.TryTrackMemberLoad(field, out var modified)) {
+                        if (!tracedStackData.TryExtendTrackingWithMemberAccess(field, out var modified)) {
                             continue;
                         }
 
@@ -280,7 +280,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis {
                     if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
                         continue;
                     }
-                    if (!tracedStackData.TryTrackArrayElementLoad((ArrayType)loadModifyingInstance.StackTopType!, out var modified)) {
+                    if (!tracedStackData.TryExtendTrackingWithArrayAccess((ArrayType)loadModifyingInstance.StackTopType!, out var modified)) {
                         continue;
                     }
                     foreach (var modifiedParameter in tracedStackData.ReferencedParameters.Values) {
@@ -304,7 +304,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis {
                     }
                     var collectionType = ((MethodReference)modifyingInstruction.Operand).DeclaringType;
                     var elementType = collectionType is GenericInstanceType generic ? generic.GenericArguments.Last() : collectionType.Module.TypeSystem.Object;
-                    if (!tracedStackData.TryTrackCollectionElementLoad(collectionType, elementType, out var modified)) {
+                    if (!tracedStackData.TryExtendTrackingWithCollectionAccess(collectionType, elementType, out var modified)) {
                         continue;
                     }
                     foreach (var modifiedParameter in tracedStackData.ReferencedParameters.Values) {

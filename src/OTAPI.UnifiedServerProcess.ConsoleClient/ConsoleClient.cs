@@ -15,7 +15,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient
             _reader = new StreamReader(_pipeClient);
             _writer = new StreamWriter(_pipeClient) { AutoFlush = true };
 
-            // 启动监听线程
+            // start a thread to listen for commands
             var listenThread = new Thread(ListenForCommands);
             listenThread.IsBackground = true;
             listenThread.Start();

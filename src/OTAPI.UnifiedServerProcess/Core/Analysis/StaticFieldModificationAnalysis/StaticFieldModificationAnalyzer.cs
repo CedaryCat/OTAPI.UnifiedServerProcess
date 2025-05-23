@@ -112,21 +112,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                             }
 
                             foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, instruction, jumpSites)) {
-                                var loadInstance = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[0].Instructions.Last(), jumpSites)
-                                    .First();
-                                var loadValue = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[1].Instructions.Last(), jumpSites)
+                                var loadModifyingInstance = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[0].Instructions.Last(), jumpSites)
                                     .First();
 
-                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
-                                    StaticFieldReferenceData.GenerateStackKey(caller, loadInstance.RealPushValueInstruction),
-                                    out var stackValueTrace)) {
+                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(caller, loadModifyingInstance.RealPushValueInstruction), out var stackValueTrace)) {
                                     continue;
                                 }
 
-                                foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
-                                    foreach (var part in willBeModified.StaticFieldOrigins) {
-                                        if (part.MemberAccessChain.Length == 0) {
-                                            AddField(storedFields, willBeModified.SourceStaticField);
+                                foreach (var willBeModified in stackValueTrace.TrackedStaticField.Values) {
+                                    foreach (var part in willBeModified.PartTrackingPaths) {
+                                        if (part.EncapsulationHierarchy.Length == 0) {
+                                            AddField(storedFields, willBeModified.TrackingStaticField);
                                         }
                                     }
                                 }
@@ -181,14 +177,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                 foreach (var paramGroup in loadParamsInEveryPaths) {
                                     var loadInstance = paramGroup[0];
 
-                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
-                                        StaticFieldReferenceData.GenerateStackKey(caller, loadInstance.RealPushValueInstruction),
-                                        out var stackValueTrace)) {
+                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(caller, loadInstance.RealPushValueInstruction), out var stackValueTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
-                                        AddField(storedFields, willBeModified.SourceStaticField);
+                                    foreach (var willBeModified in stackValueTrace.TrackedStaticField.Values) {
+                                        AddField(storedFields, willBeModified.TrackingStaticField);
                                     }
                                 }
 
@@ -243,8 +237,38 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                             continue;
                                         }
 
-                                        foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
-                                            AddField(storedFields, willBeModified.SourceStaticField);
+                                        foreach (var referencedStaticField in stackValueTrace.TrackedStaticField.Values) {
+                                            List<MemberAccessStep[]> chains = [];
+                                            foreach (var part in referencedStaticField.PartTrackingPaths) {
+                                                foreach (var willBeModified in modifiedParameters.Values) {
+                                                    foreach (var modification in willBeModified.modifications) {
+                                                        if (part.ComponentAccessPath.Length > 0) {
+                                                            if (modification.modificationAccessChain.Length <= part.ComponentAccessPath.Length) {
+                                                                continue;
+                                                            }
+                                                            bool isLeadingChain = true;
+                                                            for (int i = 0; i < part.ComponentAccessPath.Length; i++) {
+                                                                if (modification.modificationAccessChain[i] != part.ComponentAccessPath[i]) {
+                                                                    isLeadingChain = false;
+                                                                    break;
+                                                                }
+                                                            }
+                                                            if (isLeadingChain) {
+                                                                chains.Add([.. modification.modificationAccessChain.Skip(part.ComponentAccessPath.Length)]);
+                                                            }
+                                                        }
+                                                        else {
+                                                            chains.Add([.. modification.modificationAccessChain.Skip(part.ComponentAccessPath.Length)]);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Chains are for debugging purposes only.
+                                            if (chains.Count > 0) {
+                                                AddField(storedFields, referencedStaticField.TrackingStaticField);
+                                                chains.Clear();
+                                            }
                                         }
                                     }
                                 }
@@ -285,10 +309,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.StaticFieldOrigins.Values) {
-                                        foreach (var part in willBeModified.StaticFieldOrigins) {
-                                            if (part.MemberAccessChain.Length == 0) {
-                                                AddField(storedFields, willBeModified.SourceStaticField);
+                                    foreach (var willBeModified in stackValueTrace.TrackedStaticField.Values) {
+                                        foreach (var part in willBeModified.PartTrackingPaths) {
+                                            if (part.EncapsulationHierarchy.Length == 0) {
+                                                AddField(storedFields, willBeModified.TrackingStaticField);
                                             }
                                         }
                                     }

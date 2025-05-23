@@ -7,12 +7,12 @@ using System;
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
     public class StaticFieldReferenceData(
         MethodDefinition methodDefinition,
-        CompositeStaticFieldTrace? returnValueTrace,
+        CompositeStaticFieldTracking? returnValueTrace,
         StaticFieldTraceCollection<string> parameterTraces,
         StaticFieldTraceCollection<VariableDefinition> localVariableTraces,
         StaticFieldTraceCollection<string> stackValueTraces) {
         public MethodDefinition MethodDefinition { get; } = methodDefinition ?? throw new ArgumentNullException(nameof(methodDefinition));
-        public CompositeStaticFieldTrace? ReturnValueTrace { get; } = returnValueTrace;
+        public CompositeStaticFieldTracking? ReturnValueTrace { get; } = returnValueTrace;
         public StaticFieldTraceCollection<string> StaticFieldTraces { get; } = parameterTraces ?? new StaticFieldTraceCollection<string>();
         public StaticFieldTraceCollection<VariableDefinition> LocalVariableTraces { get; } = localVariableTraces ?? new StaticFieldTraceCollection<VariableDefinition>();
         public StaticFieldTraceCollection<string> StackValueTraces { get; } = stackValueTraces ?? new StaticFieldTraceCollection<string>();

@@ -229,7 +229,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
 
                 var stackKey = StaticFieldReferenceData.GenerateStackKey(method, instruction);
 
-                if (stackTrace.TryAddOriginChain(stackKey, new StaticFieldOriginChain(fieldDef, []))) {
+                if (stackTrace.TryAddOriginChain(stackKey, new StaticFieldTrackingChain(fieldDef, [], []))) {
                     hasInnerChange = true;
                 }
             }
@@ -278,9 +278,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                         // 1) Verify if the loaded field is the tracked static field itself (as member)
                         // 2) Check if the loaded field is a reference member of the tracked static field (as host)
                         // If either condition holds, the stack value references the tracked static field
-                        // Use TryTrackMemberLoad for validation, update stack trace when returns true
+                        // Use TryExtendTrackingWithMemberAccess for validation, update stack trace when returns true
 
-                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryTrackMemberLoad(fieldRef, out var newTrace)) {
+                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryExtendTrackingWithMemberAccess(fieldRef, out var newTrace)) {
                             var stackKey = StaticFieldReferenceData.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(stackKey, newTrace)) {
                                 hasInnerChange = true;
@@ -309,29 +309,29 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
 
                     var instanceKey = StaticFieldReferenceData.GenerateStackKey(method, instanceInstr);
 
-                    CompositeStaticFieldTrace? instanceTrace;
+                    CompositeStaticFieldTracking? instanceTrace;
 
                     // If the instance is an auto-generated enumerator (with special name)
                     if (instanceType is not null && instanceType.IsSpecialName && EnumeratorLayer.IsEnumerator(typeInheritance, instanceType)) {
-                        instanceTrace = valueTrace.CreateFromStoreSelfInEnumerator();
+                        instanceTrace = valueTrace.CreateEncapsulatedEnumeratorInstance();
                     }
                     // normal case
                     else {
-                        CompositeStaticFieldTrace filteredValueTrace;
+                        CompositeStaticFieldTracking filteredValueTrace;
                         if (stackTrace.TryGetTrace(instanceKey, out var existingInstanceTrace)) {
                             filteredValueTrace = new();
-                            foreach (var origin in valueTrace.StaticFieldOrigins) {
-                                if (existingInstanceTrace.StaticFieldOrigins.ContainsKey(origin.Key)) {
+                            foreach (var origin in valueTrace.TrackedStaticField) {
+                                if (existingInstanceTrace.TrackedStaticField.ContainsKey(origin.Key)) {
                                     continue;
                                 }
-                                filteredValueTrace.StaticFieldOrigins.Add(origin.Key, origin.Value);
+                                filteredValueTrace.TrackedStaticField.Add(origin.Key, origin.Value);
                             }
                         }
                         else {
                             filteredValueTrace = valueTrace;
                         }
                         // Create field storage tracking chain
-                        instanceTrace = filteredValueTrace.CreateFromStoreSelfAsMember(fieldRef);
+                        instanceTrace = filteredValueTrace.CreateEncapsulatedInstance(fieldRef);
                     }
 
                     if (instanceTrace is null) continue;
@@ -406,7 +406,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                     var stackKey = StaticFieldReferenceData.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                     if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                        baseTrace.TryTrackArrayElementLoad((ArrayType)loadInstance.StackTopType, out var newTrace)) {
+                        baseTrace.TryExtendTrackingWithArrayAccess((ArrayType)loadInstance.StackTopType, out var newTrace)) {
                         var targetKey = StaticFieldReferenceData.GenerateStackKey(method, loadEleInstruction);
                         if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                             hasInnerChange = true;
@@ -434,14 +434,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
 
                 var instanceKey = StaticFieldReferenceData.GenerateStackKey(method, instanceInstr);
 
-                CompositeStaticFieldTrace filteredValueTrace;
+                CompositeStaticFieldTracking filteredValueTrace;
                 if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
                     filteredValueTrace = new();
-                    foreach (var origin in valueTrace.StaticFieldOrigins) {
-                        if (instanceTrace.StaticFieldOrigins.ContainsKey(origin.Key)) {
+                    foreach (var origin in valueTrace.TrackedStaticField) {
+                        if (instanceTrace.TrackedStaticField.ContainsKey(origin.Key)) {
                             continue;
                         }
-                        filteredValueTrace.StaticFieldOrigins.Add(origin.Key, origin.Value);
+                        filteredValueTrace.TrackedStaticField.Add(origin.Key, origin.Value);
                     }
                 }
                 else {
@@ -449,7 +449,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                 }
 
                 // Create element storage tracking chain
-                var fieldTrace = filteredValueTrace.CreateFromStoreSelfAsArrayElement((ArrayType)instancePath.StackTopType);
+                var fieldTrace = filteredValueTrace.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType);
 
                 if (stackTrace.TryAddTrace(instanceKey, fieldTrace)) {
                     hasInnerChange = true;
@@ -467,7 +467,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                         var stackKey = StaticFieldReferenceData.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                         if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                            baseTrace.TryTrackCollectionElementLoad(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, out var newTrace)) {
+                            baseTrace.TryExtendTrackingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, out var newTrace)) {
                             var targetKey = StaticFieldReferenceData.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                                 hasInnerChange = true;
@@ -495,14 +495,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
 
                     var instanceKey = StaticFieldReferenceData.GenerateStackKey(method, instanceInstr);
 
-                    CompositeStaticFieldTrace filteredValueTrace;
+                    CompositeStaticFieldTracking filteredValueTrace;
                     if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
                         filteredValueTrace = new();
-                        foreach (var origin in valueTrace.StaticFieldOrigins) {
-                            if (instanceTrace.StaticFieldOrigins.ContainsKey(origin.Key)) {
+                        foreach (var origin in valueTrace.TrackedStaticField) {
+                            if (instanceTrace.TrackedStaticField.ContainsKey(origin.Key)) {
                                 continue;
                             }
-                            filteredValueTrace.StaticFieldOrigins.Add(origin.Key, origin.Value);
+                            filteredValueTrace.TrackedStaticField.Add(origin.Key, origin.Value);
                         }
                     }
                     else {
@@ -510,7 +510,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                     }
 
                     // Create element storage tracking chain
-                    var fieldTrace = filteredValueTrace.CreateFromStoreSelfAsCollectionElement(instancePath.StackTopType, valuePath.StackTopType);
+                    var fieldTrace = filteredValueTrace.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType);
 
                     if (stackTrace.TryAddTrace(instanceKey, fieldTrace)) {
                         hasInnerChange = true;
@@ -549,7 +549,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                         if (!stackTrace.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(method, instanceInstr), out var instanceTrace)) {
                             continue;
                         }
-                        var enumerator = instanceTrace.CreateFromStoreSelfInEnumerator();
+                        var enumerator = instanceTrace.CreateEncapsulatedEnumeratorInstance();
                         if (enumerator is null) {
                             continue;
                         }
@@ -666,7 +666,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                                     continue;
                                 }
 
-                                if (!instanceTrace.TryTrackCollectionElementLoad(loadInstance.StackTopType, loadValue.StackTopType, out var elementAccess)) {
+                                if (!instanceTrace.TryExtendTrackingWithCollectionAccess(loadInstance.StackTopType, loadValue.StackTopType, out var elementAccess)) {
                                     continue;
                                 }
 
@@ -679,14 +679,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
 
                             // Return value reference propagation
                             if (calleeReturnTrace is not null) {
-                                if (!calleeReturnTrace.StaticFieldOrigins.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                                if (!calleeReturnTrace.TrackedStaticField.TryGetValue(paramInImpl.Name, out var paramParts)) {
                                     continue;
                                 }
 
-                                foreach (var outerPart in loadingParamStackValue.StaticFieldOrigins.Values.SelectMany(v => v.StaticFieldOrigins).ToArray()) {
-                                    foreach (var innerPart in paramParts.StaticFieldOrigins) {
-                                        var substitution = new StaticFieldOriginChain(outerPart.SourceStaticField, [.. outerPart.MemberAccessChain, .. innerPart.MemberAccessChain]);
-                                        if (stackTrace.TryAddOriginChain(StaticFieldReferenceData.GenerateStackKey(method, instruction), substitution)) {
+                                foreach (var outerPart in loadingParamStackValue.TrackedStaticField.Values.SelectMany(v => v.PartTrackingPaths).ToArray()) {
+                                    foreach (var innerPart in paramParts.PartTrackingPaths) {
+                                        var substitution = StaticFieldTrackingChain.CombineParameterTraces(outerPart, innerPart);
+                                        if (substitution is not null && stackTrace.TryAddOriginChain(StaticFieldReferenceData.GenerateStackKey(method, instruction), substitution)) {
                                             hasExternalChange = true;
                                         }
                                     }
@@ -696,20 +696,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis 
                             // Called method reference propagation
                             if (parameterTraces.TryGetValue(implCallee.GetIdentifier(), out var calleeStaticFieldValues)) {
                                 foreach (var paramValue in calleeStaticFieldValues) {
-                                    if (!paramValue.StaticFieldOrigins.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                                    if (!paramValue.TrackedStaticField.TryGetValue(paramInImpl.Name, out var paramParts)) {
                                         continue;
                                     }
 
-                                    foreach (var outerPart in loadingParamStackValue.StaticFieldOrigins.Values.SelectMany(v => v.StaticFieldOrigins).ToArray()) {
-                                        foreach (var innerPart in paramParts.StaticFieldOrigins) {
+                                    foreach (var outerPart in loadingParamStackValue.TrackedStaticField.Values.SelectMany(v => v.PartTrackingPaths).ToArray()) {
+                                        foreach (var innerPart in paramParts.PartTrackingPaths) {
 
-                                            // Ignore self
-                                            if (innerPart.SourceStaticField.Name == paramInImpl.Name) {
-                                                continue;
-                                            }
+                                            //// Ignore self
+                                            //if (innerPart.TrackingStaticField.Name == paramInImpl.Name) {
+                                            //    continue;
+                                            //}
 
-                                            var substitution = new StaticFieldOriginChain(outerPart.SourceStaticField, [.. outerPart.MemberAccessChain, .. innerPart.MemberAccessChain]);
-                                            if (stackTrace.TryAddOriginChain(loadValueKey, substitution)) {
+                                            var substitution = StaticFieldTrackingChain.CombineParameterTraces(outerPart, innerPart);
+                                            if (substitution is not null && stackTrace.TryAddOriginChain(loadValueKey, substitution)) {
                                                 hasExternalChange = true;
                                             }
                                         }

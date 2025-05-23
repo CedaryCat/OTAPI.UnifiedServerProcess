@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
         private StreamReader? _reader;
         private StreamWriter? _writer;
         private Process _clientProcess;
-        [MemberNotNullWhen(false, nameof(_clientProcess), nameof(_pipeServer), nameof(_reader), nameof(_writer))]
+        [MemberNotNullWhen(false, nameof(_clientProcess), nameof(_pipeServer))]
         private bool IsRunning { get; set; } = true;
         private readonly Lock _syncLock = new();
 
@@ -30,12 +30,10 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
         [MemberNotNull(nameof(_pipeServer))]
         private void InitializePipeServer() {
             lock (_syncLock) {
-                // 清理旧管道资源
                 _pipeServer?.Dispose();
                 _reader = null;
                 _writer = null;
 
-                // 创建新管道服务器
                 _pipeServer = new NamedPipeServerStream(
                     _pipeName,
                     PipeDirection.InOut,
@@ -44,7 +42,6 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
                     PipeOptions.Asynchronous
                 );
 
-                // 异步等待连接
                 _pipeServer.WaitForConnection();
 
                 try {
@@ -52,7 +49,9 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
                     _writer = new StreamWriter(_pipeServer) { AutoFlush = true };
                     StartListeningThread();
                 }
-                catch (ObjectDisposedException) { /* 正常关闭时忽略 */ }
+                catch (ObjectDisposedException) { 
+                    // Is manually disposed, not need to restart
+                }
                 catch {
                     if (IsRunning) RestartCommunication();
                 }
@@ -62,7 +61,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
         [MemberNotNull(nameof(_clientProcess))]
         private void StartClientProcess() {
             lock (_syncLock) {
-                // 清理旧进程
+
+                // stop old process
                 try {
                     if (_clientProcess != null && !_clientProcess.HasExited) {
                         _clientProcess.Kill();
@@ -70,7 +70,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
                 }
                 catch { }
 
-                // 启动新进程
+                // start new process
                 var clientExePath = "OTAPI.UnifiedServerProcess.ConsoleClient.exe";
                 var startInfo = new ProcessStartInfo {
                     FileName = clientExePath,
@@ -119,7 +119,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
             }
             catch {
                 if (IsRunning) {
-                    // 重新启动管道服务器和客户端进程
+                    // restart pipe server and client process
                     RestartCommunication();
                 }
             }

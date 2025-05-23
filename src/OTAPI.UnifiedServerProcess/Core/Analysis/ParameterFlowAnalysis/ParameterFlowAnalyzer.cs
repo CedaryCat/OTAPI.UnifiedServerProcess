@@ -1,4 +1,5 @@
-﻿using Mono.Cecil;
+﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
@@ -284,7 +285,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                         var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceLoad.RealPushValueInstruction);
 
-                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryTrackMemberLoad(fieldRef, out var newTrace)) {
+                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryExtendTrackingWithMemberAccess(fieldRef, out var newTrace)) {
                             var stackKey = ParameterReferenceData.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(stackKey, newTrace)) {
                                 hasInnerChange = true;
@@ -300,7 +301,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
 
-                    // 获取实例对象和存储值的来源
                     var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)
                         .First();
                     var instanceInstr = instancePath.RealPushValueInstruction;
@@ -317,7 +317,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                     // If the instance is an auto-generated enumerator (with special name)
                     if (instanceType is not null && instanceType.IsSpecialName && EnumeratorLayer.IsEnumerator(typeInheritance, instanceType)) {
-                        instanceTrace = valueTrace.CreateFromStoreSelfInEnumerator();
+                        instanceTrace = valueTrace.CreateEncapsulatedEnumeratorInstance();
                     }
                     // normal case
                     else {
@@ -335,7 +335,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                             filteredValueTrace = valueTrace;
                         }
                         // Create field storage tracking chain
-                        instanceTrace = filteredValueTrace.CreateFromStoreSelfAsMember(fieldRef);
+                        instanceTrace = filteredValueTrace.CreateEncapsulatedInstance(fieldRef);
                     }
 
                     if (instanceTrace is null) continue;
@@ -344,7 +344,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                         hasInnerChange = true;
                     }
 
-                    // 处理构造函数中的this参数
                     if (MonoModCommon.IL.TryGetReferencedParameter(method, instanceInstr, out var param)
                         && param.IsParameterThis(method)
                         && method.IsConstructor) {
@@ -409,7 +408,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                     var stackKey = ParameterReferenceData.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                     if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                        baseTrace.TryTrackArrayElementLoad(arrayType, out var newTrace)) {
+                        baseTrace.TryExtendTrackingWithArrayAccess(arrayType, out var newTrace)) {
                         var targetKey = ParameterReferenceData.GenerateStackKey(method, loadEleInstruction);
                         if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                             hasInnerChange = true;
@@ -451,7 +450,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 }
 
                 // Create element storage tracking chain
-                var fieldTrace = filteredValueTrace.CreateFromStoreSelfAsArrayElement((ArrayType)instancePath.StackTopType);
+                var fieldTrace = filteredValueTrace.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType);
 
                 if (stackTrace.TryAddTrace(instanceKey, fieldTrace)) {
                     hasInnerChange = true;
@@ -469,7 +468,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                         var stackKey = ParameterReferenceData.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                         if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                            baseTrace.TryTrackCollectionElementLoad(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSitess)!, out var newTrace)) {
+                            baseTrace.TryExtendTrackingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSitess)!, out var newTrace)) {
                             var targetKey = ParameterReferenceData.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                                 hasInnerChange = true;
@@ -512,7 +511,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                     }
 
                     // Create element storage tracking chain
-                    var fieldTrace = filteredValueTrace.CreateFromStoreSelfAsCollectionElement(instancePath.StackTopType, valuePath.StackTopType);
+                    var fieldTrace = filteredValueTrace.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType);
 
                     if (stackTrace.TryAddTrace(instanceKey, fieldTrace)) {
                         hasInnerChange = true;
@@ -552,7 +551,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                         if (!stackTrace.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, instanceInstr), out var instanceTrace)) {
                             continue;
                         }
-                        var enumerator = instanceTrace.CreateFromStoreSelfInEnumerator();
+                        var enumerator = instanceTrace.CreateEncapsulatedEnumeratorInstance();
                         if (enumerator is null) {
                             continue;
                         }
@@ -662,12 +661,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                                 foreach (var outerPart in loadingParamStackValue.ReferencedParameters.Values.SelectMany(v => v.PartTrackingPaths).ToArray()) {
                                     foreach (var innerPart in paramParts.PartTrackingPaths) {
-                                        var substitution = new ParameterTrackingChain(
-                                            outerPart.TrackingParameter,
-                                            [.. outerPart.EncapsulationHierarchy, .. innerPart.EncapsulationHierarchy],
-                                            [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
-                                        );
-                                        if (stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, instruction), substitution)) {
+                                        var substitution = ParameterTrackingChain.CombineParameterTraces(outerPart, innerPart);
+                                        if (substitution is not null && stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, instruction), substitution)) {
                                             hasExternalChange = true;
                                         }
                                     }
@@ -683,18 +678,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
                                     foreach (var outerPart in loadingParamStackValue.ReferencedParameters.Values.SelectMany(v => v.PartTrackingPaths).ToArray()) {
                                         foreach (var innerPart in paramParts.PartTrackingPaths) {
-
-                                            // Ignore self
-                                            if (innerPart.TrackingParameter.Name == paramInImpl.Name) {
-                                                continue;
-                                            }
-
-                                            var substitution = new ParameterTrackingChain(
-                                                outerPart.TrackingParameter, 
-                                                [.. outerPart.EncapsulationHierarchy, .. innerPart.EncapsulationHierarchy],
-                                                [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
-                                            );
-                                            if (stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, loadValue.RealPushValueInstruction), substitution)) {
+                                            //// Ignore self
+                                            //if (innerPart.TrackingParameter.Name == paramInImpl.Name) {
+                                            //    continue;
+                                            //}
+                                            var substitution = ParameterTrackingChain.CombineParameterTraces(outerPart, innerPart);
+                                            if (substitution is not null && stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, loadValue.RealPushValueInstruction), substitution)) {
                                                 hasExternalChange = true;
                                             }
                                         }

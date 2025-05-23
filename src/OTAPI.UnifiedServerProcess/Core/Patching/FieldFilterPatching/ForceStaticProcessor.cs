@@ -7,7 +7,11 @@ using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 {
-    public class ForceStaticProcessor : IFieldFilterArgProcessor
+    /// <summary>
+    /// There are some rather special logics. It's best to maintain global static, otherwise, it's easy for some regular functions to be unexpectedly localized.
+    /// <para>such as NetworkText.ToString()</para>
+    /// </summary>
+    public class ForceStaticProcessor() : IFieldFilterArgProcessor
     {
         public static readonly HashSet<string> forceStaticTypeFullNames = [
             // ignore platform

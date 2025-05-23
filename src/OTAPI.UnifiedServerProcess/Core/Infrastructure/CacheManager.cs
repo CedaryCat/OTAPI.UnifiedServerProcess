@@ -9,7 +9,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Infrastructure {
         public sealed override string Name => "CacheHelper";
         const string unmodifiedStaticFieldCacheFile = "UnmodifiedStaticField.AnalysisCache.txt";
         const string modifiedStaticFieldCacheFile = "ModifiedStaticField.AnalysisCache.txt";
-        public string[] LoadReadonlyStaticFields(ModuleDefinition module, AnalyzerGroups analyzers, params MethodDefinition[] entryPoints) {
+        public string[] LoadUnmodifiedStaticFields(ModuleDefinition module, AnalyzerGroups analyzers, params MethodDefinition[] entryPoints) {
             if (File.Exists(unmodifiedStaticFieldCacheFile)) {
                 var result = File.ReadAllLines(unmodifiedStaticFieldCacheFile);
                 Info("Loaded cached data ({0}) from: UnmodifiedStaticField.AnalysisCache.txt", $"count: {result.Length}");

@@ -2,9 +2,7 @@
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
-using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
-using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
@@ -12,8 +10,12 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
-    public class StaticGenericProcessor(MethodCallGraph callGraph) : IFieldFilterArgProcessor, IJumpSitesCacheFeature {
-        readonly MethodCallGraph callGraph = callGraph;
+    /// <summary>
+    /// Handle static generic classes based on specific circumstances.
+    /// <para>If they can be set as global, try not to modify them.</para>
+    /// <para>If they are used as type key-value pair storers and it is necessary to allocate an instantiated storer for each server context, then modify them to dictionaries.</para>
+    /// </summary>
+    public class StaticGenericProcessor() : IFieldFilterArgProcessor, IJumpSitesCacheFeature {
 
         public string Name => "StaticGenericPatcher";
 

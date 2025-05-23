@@ -30,6 +30,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
             bool useCache = true)
             where TFeature : IMethodCheckCacheFeature {
 
+            // Due to some uncontrollable factors, the caching mechanism will not be adopted temporarily.
             useCache = false;
 
             if (!checkMethod.HasBody) {

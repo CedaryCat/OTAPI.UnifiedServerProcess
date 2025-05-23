@@ -24,8 +24,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
             // Because the RootContext contains most of the static conversion entities,
             // this makes it possible for some lazy loading logic to be triggered earlier (before Program.RunGame).
-            // And dedServ is only set to true in Program.RunGame,
-            // so setting dedServ to true in the initialization is very necessary, otherwise some servers that should not run will be executed incorrectly.
+
+            // Such as Main.dedServ is only set to true in Program.RunGame,
+            // so setting MainSystenContext.dedServ to true in the initialization is very necessary, otherwise some servers that should not run will be executed incorrectly.
             var mainCtor = main.constructor;
             var dedServ = main.ContextTypeDef.Field("dedServ");
             var baseCtorCall = MonoModCommon.IL.GetBaseConstructorCall(mainCtor.Body) ?? throw new Exception("Failed to find base constructor call");

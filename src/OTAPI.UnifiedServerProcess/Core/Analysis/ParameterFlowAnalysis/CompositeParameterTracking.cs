@@ -9,49 +9,49 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
 
         public CompositeParameterTracking() { }
-        public CompositeParameterTracking CreateFromStoreSelfAsMember(MemberReference newMember) {
+        public CompositeParameterTracking CreateEncapsulatedInstance(MemberReference newMember) {
             var result = new CompositeParameterTracking();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
                     new ParameterTrackingManifest(
                         origin.Value.TrackedParameter,
-                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateFromStoreSelfAsMember(newMember))));
+                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateEncapsulatedInstance(newMember))));
             }
             return result;
         }
-        public CompositeParameterTracking CreateFromStoreSelfAsMember(FieldReference newMember)
-            => CreateFromStoreSelfAsMember((MemberReference)newMember);
-        public CompositeParameterTracking CreateFromStoreSelfAsArrayElement(ArrayType arrayType) {
+        public CompositeParameterTracking CreateEncapsulatedInstance(FieldReference newMember)
+            => CreateEncapsulatedInstance((MemberReference)newMember);
+        public CompositeParameterTracking CreateEncapsulatedArrayInstance(ArrayType arrayType) {
             var result = new CompositeParameterTracking();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
                     new ParameterTrackingManifest(
                         origin.Value.TrackedParameter,
-                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateFromStoreSelfAsElement(arrayType))));
+                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateEncapsulatedArrayInstance(arrayType))));
             }
             return result;
         }
-        public CompositeParameterTracking CreateFromStoreSelfAsCollectionElement(TypeReference collectionType, TypeReference elementType) {
+        public CompositeParameterTracking CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType) {
             var result = new CompositeParameterTracking();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
                     new ParameterTrackingManifest(
                         origin.Value.TrackedParameter,
-                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateFromStoreSelfAsCollectionElement(collectionType, elementType))));
+                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateEncapsulatedCollectionInstance(collectionType, elementType))));
             }
             return result;
         }
-        public CompositeParameterTracking? CreateFromStoreSelfInEnumerator() {
+        public CompositeParameterTracking? CreateEncapsulatedEnumeratorInstance() {
             var result = new CompositeParameterTracking();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
                     new ParameterTrackingManifest(
                         origin.Value.TrackedParameter,
-                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateFromStoreSelfInEnumerator())
+                        origin.Value.PartTrackingPaths.Select(chain => chain.CreateEncapsulatedEnumeratorInstance())
                         .Where(chain => chain != null)
                         .OfType<ParameterTrackingChain>()));
             }
@@ -61,7 +61,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
             return result;
         }
 
-        public bool TryTrackMemberLoad(MemberReference member, [NotNullWhen(true)] out CompositeParameterTracking? resultTrace) {
+        public bool TryExtendTrackingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out CompositeParameterTracking? resultTrace) {
             resultTrace = new CompositeParameterTracking();
             bool foundAny = false;
 
@@ -69,7 +69,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 var newChains = new HashSet<ParameterTrackingChain>();
 
                 foreach (var chain in originGroup.Value.PartTrackingPaths) {
-                    if (chain.TryExtendWithMemberLoad(member, out ParameterTrackingChain? newChain)) {
+                    if (chain.TryExtendTrackingWithMemberAccess(member, out ParameterTrackingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }
@@ -86,7 +86,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
             }
             return true;
         }
-        public bool TryTrackArrayElementLoad(ArrayType arrayType, [NotNullWhen(true)] out CompositeParameterTracking? resultTrace) {
+        public bool TryExtendTrackingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out CompositeParameterTracking? resultTrace) {
             resultTrace = new CompositeParameterTracking();
             bool foundAny = false;
 
@@ -94,7 +94,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 var newChains = new HashSet<ParameterTrackingChain>();
 
                 foreach (var chain in originGroup.Value.PartTrackingPaths) {
-                    if (chain.TryExtendWithArrayElementLoad(arrayType, out ParameterTrackingChain? newChain)) {
+                    if (chain.TryExtendTrackingWithArrayAccess(arrayType, out ParameterTrackingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }
@@ -111,7 +111,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
             }
             return true;
         }
-        public bool TryTrackCollectionElementLoad(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out CompositeParameterTracking? resultTrace) {
+        public bool TryExtendTrackingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out CompositeParameterTracking? resultTrace) {
             resultTrace = new CompositeParameterTracking();
             bool foundAny = false;
 
@@ -119,7 +119,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 var newChains = new HashSet<ParameterTrackingChain>();
 
                 foreach (var chain in originGroup.Value.PartTrackingPaths) {
-                    if (chain.TryTrackCollectionElementLoad(collectionType, elementType, out ParameterTrackingChain? newChain)) {
+                    if (chain.TryExtendTrackingWithCollectionAccess(collectionType, elementType, out ParameterTrackingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }

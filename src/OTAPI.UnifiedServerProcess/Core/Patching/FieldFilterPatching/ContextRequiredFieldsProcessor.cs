@@ -11,6 +11,11 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
+    /// <summary>
+    /// Even if some static fields have never been modified during runtime, they still need to be contextualized because their instance constructors use context-dependent content.
+    /// </summary>
+    /// <param name="callGraph"></param>
+    /// <param name="rootContextDef"></param>
     public class ContextRequiredFieldsProcessor(MethodCallGraph callGraph, TypeDefinition rootContextDef) : IFieldFilterArgProcessor, IMethodCheckCacheFeature {
         public MethodCallGraph MethodCallGraph => callGraph;
 

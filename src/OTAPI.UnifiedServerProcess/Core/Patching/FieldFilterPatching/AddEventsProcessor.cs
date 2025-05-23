@@ -2,7 +2,10 @@
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
-    public class AddEventsProcessor : IFieldFilterArgProcessor {
+    /// <summary>
+    /// In any case, binding events to the context is always beneficial and harmless. However, OTAPI's HookEvents will contextualize in another way, so skip it.
+    /// </summary>
+    public class AddEventsProcessor() : IFieldFilterArgProcessor {
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
             foreach (var type in raw.MainModule.GetTypes()) {
                 if (type.Namespace.StartsWith("HookEvents.")) {

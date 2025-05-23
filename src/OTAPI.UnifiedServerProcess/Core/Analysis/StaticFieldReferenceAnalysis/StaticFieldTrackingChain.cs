@@ -7,13 +7,13 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
-    public sealed class ParameterTrackingChain : IEquatable<ParameterTrackingChain> {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
+    public class StaticFieldTrackingChain : IEquatable<StaticFieldTrackingChain>
+    {
         /// <summary>
-        /// The original parameter definition being tracked
+        /// The static field definition being tracked
         /// </summary>
-
-        public readonly ParameterDefinition TrackingParameter;
+        public readonly FieldDefinition TrackingStaticField;
         /// <summary>
         /// When a parameter is encapsulated within an instance, the storeIn containing the parameter
         /// is prepended to this hierarchy in the chain replica created by <see cref="CreateEncapsulatedInstance"/>.
@@ -35,64 +35,47 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
         public readonly ImmutableArray<MemberAccessStep> ComponentAccessPath = [];
         readonly string Key;
 
-        public ParameterTrackingChain(ParameterDefinition sourceParameter, IEnumerable<MemberAccessStep> encapsulationHierarchy, IEnumerable<MemberAccessStep> componentAccessPath) {
-            TrackingParameter = sourceParameter ?? throw new ArgumentNullException(nameof(sourceParameter));
+        public StaticFieldTrackingChain(FieldDefinition trackingStataicField, IEnumerable<MemberAccessStep> encapsulationHierarchy, IEnumerable<MemberAccessStep> componentAccessPath) {
+            TrackingStaticField = trackingStataicField ?? throw new ArgumentNullException(nameof(trackingStataicField));
             EncapsulationHierarchy = encapsulationHierarchy?.ToImmutableArray() ?? [];
             ComponentAccessPath = componentAccessPath?.ToImmutableArray() ?? [];
             Key = ToString();
         }
-        private ParameterTrackingChain(ParameterTrackingChain baseChain, MemberAccessStep encapsulationLayer) {
-            TrackingParameter = baseChain.TrackingParameter;
-            EncapsulationHierarchy = baseChain.EncapsulationHierarchy.Insert(0, encapsulationLayer);
+
+        public StaticFieldTrackingChain(StaticFieldTrackingChain baseChain, MethodReference storedIn) : this(baseChain, (MemberAccessStep)storedIn) { }
+        private StaticFieldTrackingChain(StaticFieldTrackingChain baseChain, MemberAccessStep storedIn) {
+            TrackingStaticField = baseChain.TrackingStaticField;
+            EncapsulationHierarchy = baseChain.EncapsulationHierarchy.Insert(0, storedIn);
             Key = ToString();
         }
-        public ParameterTrackingChain CreateEncapsulatedArrayInstance(ArrayType arrayType)
-            => new(this, new ArrayElementLayer(arrayType));
-        public ParameterTrackingChain CreateEncapsulatedInstance(MemberReference storeIn)
-            => new(this, storeIn);
-        public ParameterTrackingChain CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType)
-            => new(this, new CollectionElementLayer(collectionType, elementType));
-        public ParameterTrackingChain? CreateEncapsulatedEnumeratorInstance() {
-            if (EncapsulationHierarchy.IsEmpty) {
-                return null;
-            }
-            if (EncapsulationHierarchy[0] is ArrayElementLayer or CollectionElementLayer) {
-                var collectionEle = EncapsulationHierarchy[0];
-                return new ParameterTrackingChain(this, new EnumeratorLayer(collectionEle.DeclaringType));
-            }
-            // if there has already enumerator, we don't need to create a nested one
-            if (EncapsulationHierarchy[0] is EnumeratorLayer) {
-                return this;
-            }
-            return null;
-        }
+
         public override string ToString() {
-            var paramName = TrackingParameter.GetDebugName();
+            var fieldName = TrackingStaticField.Name;
             if (!EncapsulationHierarchy.IsEmpty && !ComponentAccessPath.IsEmpty) {
-                return $"{{ {string.Join(".", EncapsulationHierarchy.Select(m => m.Name))}: ${paramName}.{string.Join(".", ComponentAccessPath.Select(m => m.Name))} }}";
+                return $"{{ {string.Join(".", EncapsulationHierarchy.Select(m => m.Name))}: ${fieldName}.{string.Join(".", ComponentAccessPath.Select(m => m.Name))} }}";
             }
             else if (!EncapsulationHierarchy.IsEmpty && ComponentAccessPath.IsEmpty) {
-                return $"{{ {string.Join(".", EncapsulationHierarchy.Select(m => m.Name))}: ${paramName} }}";
+                return $"{{ {string.Join(".", EncapsulationHierarchy.Select(m => m.Name))}: ${fieldName} }}";
             }
             else if (EncapsulationHierarchy.IsEmpty && !ComponentAccessPath.IsEmpty) {
-                return $"{{ ${paramName}.{string.Join(".", ComponentAccessPath.Select(m => m.Name))} }}";
+                return $"{{ ${fieldName}.{string.Join(".", ComponentAccessPath.Select(m => m.Name))} }}";
             }
             else {
-                return $"{{ ${paramName} }}";
+                return $"{{ ${fieldName} }}";
             }
         }
-
-        public bool TryExtendTrackingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out ParameterTrackingChain? result)
-            => TryExtendTrackingWithMemberAccess((MemberAccessStep)member, out result);
-        public bool TryExtendTrackingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out ParameterTrackingChain? result) {
-            var indexer = new ArrayElementLayer(arrayType);
-            return TryExtendTrackingWithMemberAccess(indexer, out result);
+        public bool TryExtendTrackingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out StaticFieldTrackingChain? result) {
+            var array = new ArrayElementLayer(arrayType);
+            return TryExtendTrackingWithMemberAccess(array, out result);
         }
-        public bool TryExtendTrackingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out ParameterTrackingChain? result) {
+        public bool TryExtendTrackingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out StaticFieldTrackingChain? result) {
             var collection = new CollectionElementLayer(collectionType, elementType);
             return TryExtendTrackingWithMemberAccess(collection, out result);
         }
-        private bool TryExtendTrackingWithMemberAccess(MemberAccessStep member, [NotNullWhen(true)] out ParameterTrackingChain? result) {
+
+        public bool TryExtendTrackingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out StaticFieldTrackingChain? result)
+            => TryExtendTrackingWithMemberAccess((MemberAccessStep)member, out result);
+        private bool TryExtendTrackingWithMemberAccess(MemberAccessStep member, [NotNullWhen(true)] out StaticFieldTrackingChain? result) {
             result = null;
 
             if (EncapsulationHierarchy.IsEmpty) {
@@ -117,19 +100,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 if (isValidReference) {
 
                     // ** very special case **
-                    // it's means that storeIn is a reference part of the argument
+                    // it's means that member is a reference part of the argument
                     // so we treat it as the argument itself
-                    // and the encapsulation hierarchy is empty
+                    // and the call chain is empty
 
-                    result = new ParameterTrackingChain(TrackingParameter, [], [.. ComponentAccessPath, member]);
+                    result = new StaticFieldTrackingChain(TrackingStaticField, [], [.. ComponentAccessPath, member]);
                     return true;
                 }
                 return false;
             }
 
             if (member.IsSameLayer(EncapsulationHierarchy[0])) {
-                result = new ParameterTrackingChain(
-                    TrackingParameter,
+                result = new StaticFieldTrackingChain(
+                    TrackingStaticField,
                     EncapsulationHierarchy.RemoveAt(0),
                     ComponentAccessPath
                 );
@@ -138,7 +121,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
             return false;
         }
-        public bool TryTrackEnumeratorCurrent([NotNullWhen(true)] out ParameterTrackingChain? result) {
+        public bool TryTrackEnumeratorCurrent([NotNullWhen(true)] out StaticFieldTrackingChain? result) {
             if (EncapsulationHierarchy.Length < 2) {
                 result = null;
                 return false;
@@ -150,14 +133,35 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
             if (EncapsulationHierarchy[1] is not ArrayElementLayer && EncapsulationHierarchy[1] is not CollectionElementLayer) {
                 throw new NotSupportedException("Enumerator layer must be followed by ArrayElementLayer or CollectionElementLayer.");
             }
-            result = new ParameterTrackingChain(
-                TrackingParameter,
+            result = new StaticFieldTrackingChain(
+                TrackingStaticField,
                 EncapsulationHierarchy.RemoveAt(0).RemoveAt(0),
                 ComponentAccessPath
             );
             return true;
         }
-        public static ParameterTrackingChain? CombineParameterTraces(ParameterTrackingChain outerPart, ParameterTrackingChain innerPart) {
+
+        public StaticFieldTrackingChain CreateEncapsulatedInstance(MemberReference storedIn)
+            => new(this, (MemberAccessStep)storedIn);
+        public StaticFieldTrackingChain CreateEncapsulatedArrayInstance(ArrayType arrayType)
+            => new(this, new ArrayElementLayer(arrayType));
+        public StaticFieldTrackingChain CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType)
+            => new(this, new CollectionElementLayer(collectionType, elementType));
+        public StaticFieldTrackingChain? CreateEncapsulatedEnumeratorInstance() {
+            if (EncapsulationHierarchy.IsEmpty) {
+                return null;
+            }
+            if (EncapsulationHierarchy[0] is ArrayElementLayer or CollectionElementLayer) {
+                var collectionEle = EncapsulationHierarchy[0];
+                return new StaticFieldTrackingChain(this, new EnumeratorLayer(collectionEle.DeclaringType));
+            }
+            // if there has already enumerator, we don't need to create a nested one
+            if (EncapsulationHierarchy[0] is EnumeratorLayer) {
+                return this;
+            }
+            return null;
+        }
+        public static StaticFieldTrackingChain? CombineParameterTraces(StaticFieldTrackingChain outerPart, StaticFieldTrackingChain innerPart) {
             static bool AreEqualLengthSegmentsEqual(ImmutableArray<MemberAccessStep> a, ImmutableArray<MemberAccessStep> b) {
                 var length = Math.Min(a.Length, b.Length);
                 for (int i = 0; i < length; i++) {
@@ -172,45 +176,46 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                     return null;
                 }
                 if (innerPart.ComponentAccessPath.Length < outerPart.EncapsulationHierarchy.Length) {
-                    return new ParameterTrackingChain(outerPart.TrackingParameter,
+                    return new StaticFieldTrackingChain(outerPart.TrackingStaticField,
                         [.. innerPart.EncapsulationHierarchy, .. outerPart.EncapsulationHierarchy.Skip(innerPart.ComponentAccessPath.Length)],
                         []
                     );
                 }
                 else if (innerPart.ComponentAccessPath.Length > outerPart.EncapsulationHierarchy.Length) {
-                    return new ParameterTrackingChain(outerPart.TrackingParameter,
+                    return new StaticFieldTrackingChain(outerPart.TrackingStaticField,
                         innerPart.EncapsulationHierarchy,
                         innerPart.ComponentAccessPath.Skip(outerPart.EncapsulationHierarchy.Length)
                     );
                 }
                 else {
-                    return new ParameterTrackingChain(outerPart.TrackingParameter,
+                    return new StaticFieldTrackingChain(outerPart.TrackingStaticField,
                         innerPart.EncapsulationHierarchy,
                         []
                     );
                 }
             }
             else if (innerPart.ComponentAccessPath.Length == 0 && outerPart.EncapsulationHierarchy.Length != 0) {
-                return new ParameterTrackingChain(outerPart.TrackingParameter,
+                return new StaticFieldTrackingChain(outerPart.TrackingStaticField,
                     [.. innerPart.EncapsulationHierarchy, .. outerPart.EncapsulationHierarchy],
                     outerPart.ComponentAccessPath
                 );
             }
             else if (innerPart.ComponentAccessPath.Length != 0 && outerPart.EncapsulationHierarchy.Length == 0) {
-                return new ParameterTrackingChain(outerPart.TrackingParameter,
+                return new StaticFieldTrackingChain(outerPart.TrackingStaticField,
                     [],
                     [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
                 );
             }
             else {
-                return new ParameterTrackingChain(outerPart.TrackingParameter,
+                return new StaticFieldTrackingChain(outerPart.TrackingStaticField,
                     [],
                     []
                 );
             }
         }
-        public override bool Equals(object? obj) => Equals(obj as ParameterTrackingChain);
-        public bool Equals(ParameterTrackingChain? other) =>
+
+        public override bool Equals(object? obj) => Equals(obj as StaticFieldTrackingChain);
+        public bool Equals(StaticFieldTrackingChain? other) =>
             other != null &&
             other.Key == Key;
 

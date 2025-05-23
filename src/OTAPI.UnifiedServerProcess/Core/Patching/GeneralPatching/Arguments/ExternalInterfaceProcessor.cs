@@ -14,6 +14,15 @@ using System.Collections.Immutable;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
+    /// <summary>
+    /// If the implementation of a function that implements a certain interface uses context-related content,
+    /// <para>we need to evaluate whether to modify the interface definition to add a RootContext parameter to achieve context attachment</para>
+    /// <para>or to introduce a RootContext field within the instance to achieve context attachment</para>
+    /// <para>based on: </para>
+    /// <para>1. Whether the interface is defined in an external assembly;</para>
+    /// <para>2. Ensuring the consistency of all implementations of the interface in the current module.</para>
+    /// </summary>
+    /// <param name="methodCallGraph"></param>
     public class ExternalInterfaceProcessor(MethodCallGraph methodCallGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature {
         readonly MethodInheritanceGraph inheritanceGraph = methodCallGraph.MethodInheritanceGraph;
         public MethodCallGraph MethodCallGraph => methodCallGraph;

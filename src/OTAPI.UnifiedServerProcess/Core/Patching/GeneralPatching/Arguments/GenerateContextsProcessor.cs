@@ -9,6 +9,11 @@ using System.Collections.Generic;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
+    /// <summary>
+    /// Create corresponding context types based on the declaring type of those static fields that need to be contextualized, and create their corresponding fields on that context.
+    /// </summary>
+    /// <param name="modifiedFields"></param>
+    /// <param name="callGraph"></param>
     public class GenerateContextsProcessor(IReadOnlyList<FieldDefinition> modifiedFields, MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature {
         public MethodCallGraph MethodCallGraph => callGraph;
 
