@@ -12,6 +12,11 @@ using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 {
+    /// <summary>
+    /// Removes unnecessary client only code
+    /// </summary>
+    /// <param name="logger"></param>
+    /// <param name="module"></param>
     public class RemoveUnusedCodePatcherAtEnd(ILogger logger, ModuleDefinition module) : Patcher(logger)
     {
         public override string Name => nameof(RemoveUnusedCodePatcherAtEnd);

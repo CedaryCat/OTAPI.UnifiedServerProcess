@@ -1,17 +1,16 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
-using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching;
-using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 {
+    /// <summary>
+    /// It's probably about removing some useless code logic to avoid unnecessary localization.
+    /// </summary>
+    /// <param name="logger"></param>
+    /// <param name="module"></param>
     public class RemoveUnusedCodePatcherAtBegin(ILogger logger, ModuleDefinition module) : Patcher(logger)
     {
         public override string Name => nameof(RemoveUnusedCodePatcherAtBegin);
