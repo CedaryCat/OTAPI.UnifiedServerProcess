@@ -15,7 +15,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Servers
         public ServerContext(string worldName, byte[] worldFileData, int port) : base(worldName) {
             Console = new ConsoleClientLauncher(this);
 
-            var worldPath = Terraria.Main.GetWorldPathFromName(worldName, false);
+            var worldPath = Path.Combine(Terraria.Main.WorldPath, worldName);
             File.WriteAllBytes(worldPath, worldFileData);
             Main.ActiveWorldFileData = WorldFile.GetAllMetadata(worldPath, false);
 

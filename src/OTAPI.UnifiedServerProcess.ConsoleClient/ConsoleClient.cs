@@ -1,4 +1,6 @@
-﻿using System.IO.Pipes;
+﻿using OTAPI.UnifiedServerProcess.ConsoleClient.Protocol;
+using System.IO.Pipes;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace OTAPI.UnifiedServerProcess.ConsoleClient
@@ -6,101 +8,104 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient
     public class ConsoleClient : IDisposable
     {
         private readonly NamedPipeClientStream _pipeClient;
-        private readonly StreamReader _reader;
-        private readonly StreamWriter _writer;
+        private readonly byte[] readBuffer = new byte[1024 * 1024];
+        private int bufferWritePosition = 0;
+        private bool _disposed = false; // Track whether Dispose has been called
 
         public ConsoleClient(string pipeName) {
             _pipeClient = new NamedPipeClientStream(".", pipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
             _pipeClient.Connect();
-            _reader = new StreamReader(_pipeClient);
-            _writer = new StreamWriter(_pipeClient) { AutoFlush = true };
 
             // start a thread to listen for commands
-            var listenThread = new Thread(ListenForCommands);
-            listenThread.IsBackground = true;
+            var listenThread = new Thread(ListenForCommands) {
+                IsBackground = true
+            };
             listenThread.Start();
         }
 
-        private void ListenForCommands() {
+        unsafe void ListenForCommands() {
             try {
+                const int packetLenSize = sizeof(int);
+                const int packetIdSize = 1;
+                const int packetHeaderSize = packetLenSize + packetIdSize;
+                const int maxPacketSize = 1024 * 1024; 
+
                 while (_pipeClient.IsConnected) {
+                    var count = _pipeClient.Read(readBuffer, bufferWritePosition, readBuffer.Length - bufferWritePosition);
+                    if (count == 0) continue;
 
-                    var command = _reader.ReadLine();
-                    if (command == null) continue;
+                    bufferWritePosition += count;
+                    int currentReadPosition = 0;
+                    int restLen = bufferWritePosition - currentReadPosition;
 
-                    var parts = command.Split(new[] { ':' }, 2);
-                    if (parts.Length < 2) continue;
+                    fixed (void* beginPtr = readBuffer) {
+                        while (restLen >= packetLenSize) {
+                            var packetLen = Unsafe.Read<int>((byte*)beginPtr + currentReadPosition);
 
-                    var commandType = parts[0];
-                    var arguments = parts[1];
+                            // length check
+                            if (packetLen < packetHeaderSize || packetLen > maxPacketSize) {
+                                throw new InvalidDataException($"Invalid packet length: {packetLen}");
+                            }
 
-                    switch (commandType) {
-                        case "SET_BG_COLOR":
-                            Console.BackgroundColor = (ConsoleColor)Enum.Parse(typeof(ConsoleColor), arguments);
-                            break;
-                        case "SET_FG_COLOR":
-                            Console.ForegroundColor = (ConsoleColor)Enum.Parse(typeof(ConsoleColor), arguments);
-                            break;
-                        case "SET_INPUT_ENCODING":
-                            Console.InputEncoding = Encoding.GetEncoding(arguments);
-                            break;
-                        case "SET_OUTPUT_ENCODING":
-                            Console.OutputEncoding = Encoding.GetEncoding(arguments);
-                            break;
-                        case "SET_WINDOW_SIZE":
-                            var size = arguments.Split(',');
-                            Console.WindowWidth = int.Parse(size[0]);
-                            Console.WindowHeight = int.Parse(size[1]);
-                            break;
-                        case "SET_WINDOW_POS":
-                            var pos = arguments.Split(',');
-                            Console.WindowLeft = int.Parse(pos[0]);
-                            Console.WindowTop = int.Parse(pos[1]);
-                            break;
-                        case "SET_TITLE":
-                            Console.Title = arguments;
-                            break;
-                        case "WRITE":
-                            Console.Write(arguments);
-                            break;
-                        case "WRITE_LINE":
-                            Console.WriteLine(arguments);
-                            break;
-                        case "WRITE_FORMAT":
-                            var formatParts = arguments.Split(new[] { "|||" }, StringSplitOptions.None);
-                            if (formatParts.Length > 1) {
-                                var formatArgs = formatParts[1].Split(new[] { "||" }, StringSplitOptions.None);
-                                Console.Write(formatParts[0], formatArgs);
+                            if (restLen < packetLen) {
+                                break;
                             }
-                            else {
-                                Console.Write(formatParts[0]);
-                            }
-                            break;
-                        case "WRITE_LINE_FORMAT":
-                            var lineFormatParts = arguments.Split(new[] { "|||" }, StringSplitOptions.None);
-                            if (lineFormatParts.Length > 1) {
-                                var lineFormatArgs = lineFormatParts[1].Split(new[] { "||" }, StringSplitOptions.None);
-                                Console.WriteLine(lineFormatParts[0], lineFormatArgs);
-                            }
-                            else {
-                                Console.WriteLine(lineFormatParts[0]);
-                            }
-                            break;
+
+                            ConsoleClientLogic.ProcessData(
+                                this,
+                                readBuffer[currentReadPosition + packetLenSize],
+                                new Span<byte>((byte*)beginPtr + currentReadPosition + packetHeaderSize, packetLen - packetHeaderSize)
+                            );
+
+                            currentReadPosition += packetLen;
+                            restLen -= packetLen;
+                        }
                     }
+
+                    // copy remaining data
+                    if (restLen > 0) {
+                        for (int i = 0; i < restLen; i++) {
+                            readBuffer[i] = readBuffer[currentReadPosition + i];
+                        }
+                    }
+                    bufferWritePosition = restLen;
                 }
             }
             catch (Exception ex) {
-                Console.WriteLine($"Error in client: {ex.Message}");
+                Console.WriteLine($"Error in client: {ex}");
             }
-            Environment.Exit(0);
+            finally {
+                Environment.Exit(0);
+            }
         }
 
-        public void SendInput(string input) {
-            _writer.WriteLine($"INPUT:{input}");
+        public unsafe void Send<TPacket>(TPacket packet) where TPacket : unmanaged, IPacket<TPacket> {
+            IPacket.Write(_pipeClient, packet);
+        }
+        public unsafe void SendManaged<TPacket>(TPacket packet) where TPacket : struct, IPacket<TPacket> {
+            IPacket.WriteManaged(_pipeClient, packet);
         }
 
         public void Dispose() {
-            _pipeClient?.Dispose();
+            Dispose(true);
+            GC.SuppressFinalize(this); // Suppress finalization
+        }
+
+        protected virtual void Dispose(bool disposing) {
+            if (!_disposed) {
+                if (disposing) {
+                    // Dispose managed resources
+                    _pipeClient?.Dispose();
+                }
+
+                // Dispose unmanaged resources if any
+
+                _disposed = true;
+            }
+        }
+
+        ~ConsoleClient() {
+            Dispose(false); // Finalizer calls Dispose with false
         }
     }
 }

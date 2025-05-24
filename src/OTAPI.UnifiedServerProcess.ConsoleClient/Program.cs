@@ -16,11 +16,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient
             var pipeName = args[0];
             using var client = new ConsoleClient(pipeName);
 
-            while (true) {
-                var input = Console.ReadLine();
-                if (input == null) break;
-                client.SendInput(input);
-            }
+            ConsoleClientLogic.Run(client).Wait();
         }
     }
 }

@@ -63,6 +63,12 @@ namespace UnifiedServerProcess {
         public virtual void WriteLine(string format, params object?[]? arg) => Console.WriteLine(format, arg);
         public virtual void WriteLine(ulong value) => Console.WriteLine(value);
         public virtual void WriteLine(char value) => Console.WriteLine(value);
+        public virtual void Clear() => Console.Clear();
+        public virtual string? ReadLine() => Console.ReadLine();
+        public virtual int Read() => Console.Read();
+        public virtual ConsoleKeyInfo ReadKey() => Console.ReadKey();
+        public virtual ConsoleKeyInfo ReadKey(bool intercept) => Console.ReadKey(intercept);
+
         #endregion
 
         #region Properties Implementation
