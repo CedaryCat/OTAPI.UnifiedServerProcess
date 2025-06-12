@@ -6,26 +6,24 @@ using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
     public class FileLogger : Logger, IDisposable {
-        private readonly string _filePath;
-        private readonly FileStream _fileStream;
-        private readonly StreamWriter _writer;
-        private readonly Channel<string> _logChannel;
-        private readonly Task _processingTask;
+        private readonly string filePath;
+        private readonly FileStream fileStream;
+        private readonly StreamWriter writer;
+        private readonly Channel<string> logChannel;
+        private readonly Task processingTask;
 
         public FileLogger(string filePrefix = "Log", string? folder = null) {
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            _filePath = folder is not null
+            filePath = folder is not null
                 ? Path.Combine(folder, $"{filePrefix}_{timestamp}.log")
                 : $"{filePrefix}_{timestamp}.log";
 
-            _fileStream = File.Create(_filePath);
-            _writer = new StreamWriter(_fileStream);
+            fileStream = File.Create(filePath);
+            writer = new StreamWriter(fileStream);
 
-            // 创建无界Channel（根据需求可改为有界）
-            _logChannel = Channel.CreateUnbounded<string>();
+            logChannel = Channel.CreateUnbounded<string>();
 
-            // 启动后台处理任务
-            _processingTask = Task.Factory.StartNew(
+            processingTask = Task.Factory.StartNew(
                 ProcessLogEntries,
                 TaskCreationOptions.LongRunning
             ).Unwrap();
@@ -33,12 +31,12 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
 
         public override void LogSegments(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
             var line = FormatLogLine(sender, level, segments, false);
-            _logChannel.Writer.TryWrite(line);
+            logChannel.Writer.TryWrite(line);
         }
 
         public override void LogSegmentsLine(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
             var line = FormatLogLine(sender, level, segments, true);
-            _logChannel.Writer.TryWrite(line);
+            logChannel.Writer.TryWrite(line);
         }
 
         private static string FormatLogLine(
@@ -54,10 +52,10 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
 
         private async Task ProcessLogEntries() {
             try {
-                await foreach (var logEntry in _logChannel.Reader.ReadAllAsync()) {
+                await foreach (var logEntry in logChannel.Reader.ReadAllAsync()) {
                     try {
-                        _writer.WriteLine(logEntry);
-                        await _writer.FlushAsync();
+                        writer.WriteLine(logEntry);
+                        await writer.FlushAsync();
                     }
                     catch (Exception writeEx) {
                         Console.WriteLine($"Log write failed: {writeEx.Message}");
@@ -65,7 +63,7 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
                 }
             }
             finally {
-                await _writer.FlushAsync();
+                await writer.FlushAsync();
             }
         }
 
@@ -80,16 +78,16 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
         };
 
         public void Dispose() {
-            _logChannel.Writer.Complete();
+            logChannel.Writer.Complete();
 
             try {
-                _processingTask.Wait(TimeSpan.FromSeconds(5));
+                processingTask.Wait(TimeSpan.FromSeconds(5));
             }
             catch (AggregateException ae) {
                 ae.Handle(ex => ex is TaskCanceledException);
             }
-            _writer.Dispose();
-            _fileStream.Dispose();
+            writer.Dispose();
+            fileStream.Dispose();
 
             GC.SuppressFinalize(this);
         }

@@ -470,6 +470,9 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                     case Code.Callvirt:
                         var methodCall = (MethodReference)instruction.Operand;
                         return IL.GetMethodReturnType(methodCall, method);
+                    case Code.Calli:
+                        var sig = (CallSite)instruction.Operand;
+                        return sig.ReturnType;
                     case Code.Newobj:
                         var ctor = (MethodReference)instruction.Operand;
                         return ctor.DeclaringType;
@@ -807,12 +810,11 @@ namespace OTAPI.UnifiedServerProcess.Commons {
             }
 
             private static int GetConditionalBranchArgCount(MethodBody body, Instruction instruction) {
-                // 条件跳转指令的特殊处理
                 // Special handling for conditional branch instructions
                 return instruction.OpCode.Code switch {
-                    Code.Brtrue or Code.Brtrue_S => 1,  // 需要1个布尔值 // need 1 boolean
+                    Code.Brtrue or Code.Brtrue_S => 1,  // need 1 boolean
                     Code.Brfalse or Code.Brfalse_S => 1,
-                    Code.Beq or Code.Beq_S => 2,        // 需要两个比较值 // need 2 comparison values
+                    Code.Beq or Code.Beq_S => 2,        // need 2 comparison values
                     Code.Bge or Code.Bge_S => 2,
                     Code.Bge_Un or Code.Bge_Un_S => 2,
                     Code.Bgt or Code.Bgt_S => 2,
@@ -831,7 +833,6 @@ namespace OTAPI.UnifiedServerProcess.Commons {
 
                 var argsCount = GetInstructionArgCount(caller.Body, target);
 
-                // 初始化分析队列
                 // initialize analysis queue
                 var workQueue = new Queue<ReverseAnalysisContext>();
                 var initialDemand = new StackDemand(argsCount, GetPushCount(caller.Body, target));
@@ -893,7 +894,6 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                         }
                     }
 
-                    // 线性回溯
                     // Linear backtracking
                     if (ctx.Previous != null) {
                         if (!IsTerminatorInstruction(ctx.Previous)) {
@@ -1125,6 +1125,9 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                                 count++;
                             return count;
                         }
+                        else if (instruction.OpCode == OpCodes.Calli) {
+                            return ((CallSite)instruction.Operand).Parameters.Count + 1;
+                        }
                         else if (instruction.OpCode == OpCodes.Ret) {
                             var method = instruction.Operand as MethodReference ?? instruction.Operand as MethodDefinition;
                             return method != null && method.ReturnType.FullName != "System.Void" ? 1 : 0;
@@ -1157,6 +1160,10 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                         if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) {
                             var method = (MethodReference)instruction.Operand;
                             return method.ReturnType.FullName == "System.Void" ? 0 : 1;
+                        }
+                        else if (instruction.OpCode == OpCodes.Calli) {
+                            var sig = (CallSite)instruction.Operand;
+                            return sig.ReturnType.FullName == "System.Void" ? 0 : 1;
                         }
                         else if (instruction.OpCode == OpCodes.Newobj) {
                             return 1;

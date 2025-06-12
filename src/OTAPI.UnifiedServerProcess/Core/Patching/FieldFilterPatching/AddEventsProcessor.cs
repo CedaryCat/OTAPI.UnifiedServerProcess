@@ -1,4 +1,6 @@
-﻿using OTAPI.UnifiedServerProcess.Loggers;
+﻿using Mono.Cecil.Rocks;
+using OTAPI.UnifiedServerProcess.Extensions;
+using OTAPI.UnifiedServerProcess.Loggers;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
@@ -7,8 +9,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
     /// </summary>
     public class AddEventsProcessor() : IFieldFilterArgProcessor {
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
-            foreach (var type in raw.MainModule.GetTypes()) {
-                if (type.Namespace.StartsWith("HookEvents.")) {
+            foreach (var type in raw.MainModule.GetAllTypes()) {
+                if (type.GetRootDeclaringType().Namespace.StartsWith("HookEvents.")) {
                     continue;
                 }
                 foreach (var theEvent in type.Events) {

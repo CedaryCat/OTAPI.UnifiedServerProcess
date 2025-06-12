@@ -43,7 +43,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
 
             var storedFields = new Dictionary<string, FieldDefinition>();
 
-
             int iteration = 0;
             while (workQueue.Count > 0) {
                 iteration++;
@@ -164,15 +163,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                 }
                             }
 
-                            // Multidimensional array does not exist a method definition that can be resolved
-                            if ((resolvedCallee is null
-                                && methodRef.DeclaringType is ArrayType arrayType
-                                && methodRef.Name is "Address" or "Set")
+                            if (
+                                // Multidimensional array does not exist a method definition that can be resolved
+                                (resolvedCallee is null && methodRef.DeclaringType is ArrayType arrayType && methodRef.Name is "Address" or "Set")
 
-                                ||
+                                // The called method is a collection method
+                                || (resolvedCallee is not null && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, caller, instruction)) 
 
-                                (resolvedCallee is not null
-                                && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, caller, instruction))) {
+                                // The called method return a reference
+                                || (methodRef.ReturnType is ByReferenceType && methodRef.Name is "get_Item")) {
 
                                 foreach (var paramGroup in loadParamsInEveryPaths) {
                                     var loadInstance = paramGroup[0];

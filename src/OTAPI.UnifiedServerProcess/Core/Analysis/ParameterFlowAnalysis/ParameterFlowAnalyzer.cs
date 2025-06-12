@@ -130,7 +130,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
 
             var methodKey = method.GetIdentifier();
 
-            // 初始化数据容器
             if (!stackTraces.TryGetValue(methodKey, out var stackTrace)) {
                 stackTrace = new ParameterTraceCollection<string>();
                 stackTraces[methodKey] = stackTrace;
@@ -146,7 +145,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
                 localVariableTraces[methodKey] = localTrace;
             }
 
-            // 构建跳转源映射
+            // Build jump sites table
             var jumpSitess = this.GetMethodJumpSites(method);
             bool hasInnerChange;
 

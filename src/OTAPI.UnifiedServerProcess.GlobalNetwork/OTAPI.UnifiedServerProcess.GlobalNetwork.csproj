@@ -8,17 +8,53 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
-  <ItemGroup>
-    <Reference Include="ModFramework">
-      <HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\ModFramework.dll</HintPath>
-    </Reference>
-    <Reference Include="OTAPI">
-      <HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\output\OTAPI.dll</HintPath>
-    </Reference>
-    <Reference Include="OTAPI.Runtime">
-      <HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\output\OTAPI.Runtime.dll</HintPath>
-    </Reference>
-  </ItemGroup>
+	<ItemGroup>
+		<Reference Include="ModFramework">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\ModFramework.dll</HintPath>
+		</Reference>
+		<Reference Include="Mono.Cecil">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.dll</HintPath>
+		</Reference>
+		<Reference Include="Mono.Cecil.Mdb">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.Mdb.dll</HintPath>
+		</Reference>
+		<Reference Include="Mono.Cecil.Pdb">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.Pdb.dll</HintPath>
+		</Reference>
+		<Reference Include="Mono.Cecil.Rocks">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.Rocks.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod.Backports">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Backports.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod.Core">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Core.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod.Iced">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Iced.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod.ILHelpers">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.ILHelpers.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod.RuntimeDetour">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.RuntimeDetour.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod.RuntimeDetour.HookGen">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.RuntimeDetour.HookGen.dll</HintPath>
+		</Reference>
+		<Reference Include="MonoMod.Utils">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Utils.dll</HintPath>
+		</Reference>
+		<Reference Include="OTAPI">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\output\OTAPI.dll</HintPath>
+		</Reference>
+		<Reference Include="OTAPI.Runtime">
+			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\output\OTAPI.Runtime.dll</HintPath>
+		</Reference>
+	</ItemGroup>
 
   <ItemGroup>
     <Compile Update="TestWorlds.Designer.cs">

@@ -5,6 +5,7 @@
 		<TargetFramework>net9.0</TargetFramework>
 		<ImplicitUsings>disable</ImplicitUsings>
 		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -16,9 +17,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="OTAPI.Upcoming" Version="3.2.5" />
+	  <PackageReference Include="OTAPI.Upcoming" Version="3.2.6" />
 	  <PackageReference Include="MonoMod.RuntimeDetour.HookGen" Version="22.7.31.1" />
-	  <PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.13" />
+	  <PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.15" />
 	</ItemGroup>
 
 	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">

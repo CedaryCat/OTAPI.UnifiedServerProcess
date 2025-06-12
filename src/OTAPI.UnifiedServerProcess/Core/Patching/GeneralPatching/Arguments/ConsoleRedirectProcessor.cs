@@ -24,7 +24,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
 
             var consoleSystem = source.MainModule.GetType("UnifiedServerProcess.ConsoleSystemContext");
 
-            var predefined = ContextTypeData.Predefine(console, consoleSystem, [source.RootContextDef.Field("Console")]);
+            var predefined = ContextTypeData.Predefine(console, consoleSystem, [source.RootContextDef.GetField("Console")]);
 
             foreach (var kv in predefined.PredefinedMethodMap) {
                 var method = kv.Value;

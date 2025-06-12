@@ -5,7 +5,7 @@ using System.Text;
 
 [Modification(ModType.PreRead, "Add RootContext", ModPriority.Early)]
 [MonoMod.MonoModIgnore]
-void PatchTileProvider(ModFwModder modder) {
+void MergeRootContext(ModFwModder modder) {
     Console.WriteLine(modder.Module.GetType("UnifiedServerProcess.RootContext").FullName);
 }
 

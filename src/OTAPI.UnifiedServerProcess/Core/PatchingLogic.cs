@@ -62,6 +62,7 @@ namespace OTAPI.UnifiedServerProcess.Core {
                 .Then(new TrivialDefaultValuePatcher(logger))
                 .Finalize()
 
+                .Then(new AdjustAutoPropertiesPatcher(logger, module))
                 .Then(new RemoveUnusedCodePatcherAtEnd(logger, module))
                 .Then(new OptimizeMacrosPatcher(logger, module))
 

@@ -5,9 +5,9 @@ using System.Threading.Tasks;
 namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
 
     public class ConsoleLogger : Logger, IDisposable {
-        private readonly int _minLevel;
-        private readonly Channel<LogMessage> _channel;
-        private readonly Task _processingTask;
+        private readonly int minLevel;
+        private readonly Channel<LogMessage> channel;
+        private readonly Task processingTask;
 
         private readonly record struct LogMessage(
             int Level,
@@ -16,15 +16,15 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
         );
 
         public ConsoleLogger(int minLevel = DEBUG) : base() {
-            _minLevel = minLevel;
-            _channel = Channel.CreateBounded<LogMessage>(new BoundedChannelOptions(1000) {
+            this.minLevel = minLevel;
+            channel = Channel.CreateBounded<LogMessage>(new BoundedChannelOptions(1000) {
                 FullMode = BoundedChannelFullMode.DropOldest
             });
-            _processingTask = Task.Run(ProcessLogMessagesAsync);
+            processingTask = Task.Run(ProcessLogMessagesAsync);
         }
 
         private async Task ProcessLogMessagesAsync() {
-            await foreach (var message in _channel.Reader.ReadAllAsync()) {
+            await foreach (var message in channel.Reader.ReadAllAsync()) {
                 var originalFg = Console.ForegroundColor;
                 var originalBg = Console.BackgroundColor;
 
@@ -45,18 +45,18 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
         }
 
         public override void LogSegments(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            if (level < _minLevel) return;
-            _channel.Writer.TryWrite(new LogMessage(level, segments, false));
+            if (level < minLevel) return;
+            channel.Writer.TryWrite(new LogMessage(level, segments, false));
         }
 
         public override void LogSegmentsLine(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            if (level < _minLevel) return;
-            _channel.Writer.TryWrite(new LogMessage(level, segments, true));
+            if (level < minLevel) return;
+            channel.Writer.TryWrite(new LogMessage(level, segments, true));
         }
 
         public void Dispose() {
-            _channel.Writer.Complete();
-            _processingTask.GetAwaiter().GetResult();
+            channel.Writer.Complete();
+            processingTask.GetAwaiter().GetResult();
 
             GC.SuppressFinalize(this);
         }

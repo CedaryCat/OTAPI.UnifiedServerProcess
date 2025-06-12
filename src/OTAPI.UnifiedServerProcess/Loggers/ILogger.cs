@@ -2,8 +2,6 @@
 
 namespace OTAPI.UnifiedServerProcess.Loggers {
     public interface ILogger {
-
-        // 功能方法
         void Progress(ILoggedComponent sender, int iteration, int progress, int total, string message, int indent = 0);
         void Progress(ILoggedComponent sender, int progress, int total, string message, int indent = 0);
         void Progress(ILoggedComponent sender, int iteration, int progress, int total, string message, int indent = 0, params object[] args);

@@ -9,7 +9,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
     partial class ConsoleClientLauncher
     {
 
-        #region Command Core Implementation
+        #region Command Implementation
 
         ConsoleColor cachedBackgroundColor = Console.BackgroundColor;
         ConsoleColor cachedForegroundColor = Console.ForegroundColor;
@@ -107,7 +107,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
         }
         #endregion
 
-        #region Read Core Implementation
+        #region Read Implementation
         class CurrentWaitingData
         {
             public SEND_READ_FLAG packet;

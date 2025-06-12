@@ -4,29 +4,30 @@ using System.Text;
 using System.Threading;
 
 namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
+    [Obsolete("Not support")]
     public class MarkdownLogger : Logger, IDisposable {
-        private readonly string _filePath;
-        private static readonly Lock _mdLock = new();
+        private readonly string filePath;
+        private static readonly Lock mdLock = new();
 
         public MarkdownLogger(string filePrefix = "Log", string? folder = null) {
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             if (folder is not null) {
-                _filePath = Path.Combine(folder, $"{filePrefix}_{timestamp}.md");
+                filePath = Path.Combine(folder, $"{filePrefix}_{timestamp}.md");
             }
             else {
-                _filePath = $"{filePrefix}_{timestamp}.md";
+                filePath = $"{filePrefix}_{timestamp}.md";
             }
         }
 
         public override void LogSegments(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            lock (_mdLock) {
-                File.AppendAllText(_filePath, ProcessSegments(segments));
+            lock (mdLock) {
+                File.AppendAllText(filePath, ProcessSegments(segments));
             }
         }
 
         public override void LogSegmentsLine(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            lock (_mdLock) {
-                File.AppendAllText(_filePath, ProcessSegments(segments) + "\n");
+            lock (mdLock) {
+                File.AppendAllText(filePath, ProcessSegments(segments) + "\n");
             }
         }
 
@@ -63,7 +64,7 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
         };
 
         public void Dispose() {
-            File.AppendAllText(_filePath, "\n```"); // 关闭代码块
+            File.AppendAllText(filePath, "\n```"); 
             GC.SuppressFinalize(this);
         }
     }

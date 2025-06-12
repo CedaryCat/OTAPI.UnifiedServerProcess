@@ -1,4 +1,5 @@
-﻿using Mono.Cecil;
+﻿using Extensions;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.CompilerServices.SymbolWriter;
 using MonoMod.Cil;
@@ -8,8 +9,89 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Extensions {
-    public static class MonoModExtensions {
+namespace OTAPI.UnifiedServerProcess.Extensions
+{
+    public static class MonoModExtensions
+    {
+        [MonoMod.MonoModIgnore]
+        public static void MakeMethodVirtual(this TypeDefinition type, params MethodDefinition[] ignores) {
+            var methods = type.Methods.Where(m => !m.IsConstructor && !m.IsStatic && m.Name != "cctor" && m.Name != "ctor").ToList();
+            methods.AddRange(type.Properties.Select(p => p.SetMethod).Where(m => m != null && !m.IsStatic));
+            methods.AddRange(type.Properties.Select(p => p.GetMethod).Where(m => m != null && !m.IsStatic));
+            foreach (var method in methods) {
+                if (ignores.Contains(method)) continue;
+
+                method.IsVirtual = true;
+                method.IsNewSlot = true;
+            }
+        }
+
+        [MonoMod.MonoModIgnore]
+        public static void MakeDirect(this TypeDefinition type, out (MethodDefinition wrapped, MethodDefinition origin)[] wrappedMap, params MethodDefinition[] modifies) {
+            List<(MethodDefinition from, MethodDefinition to)> maps = new();
+
+            foreach (var method in modifies.Where(m => !m.IsConstructor && !m.IsStatic && m.DeclaringType.FullName == type.FullName)) {
+                if (method.Name != "cctor" && method.Name != "ctor"/* && !method.IsVirtual*/) {
+                    //CreateForThisType the new replacement method that will take place of the current method.
+                    //So we must ensure we clone to meet the signatures.
+                    var wrapped = new MethodDefinition(method.Name, method.Attributes.Remove(Mono.Cecil.MethodAttributes.Virtual), method.ReturnType);
+                    wrapped.IsVirtual = false;
+                    wrapped.IsNewSlot = false;
+                    var instanceMethod = (method.Attributes & Mono.Cecil.MethodAttributes.Static) == 0;
+
+
+                    //Clone the parameters for the new method
+                    if (method.HasParameters) {
+                        foreach (var prm in method.Parameters) {
+                            wrapped.Parameters.Add(prm);
+                        }
+                    }
+
+                    //Rename the existing method, and replace all references to it so that the new 
+                    //method receives the calls instead.
+                    method.Name += "_Direct";
+
+                    maps.Add((wrapped, method));
+
+                    //Get the il processor instance so we can modify IL
+                    var il = wrapped.Body.GetILProcessor();
+
+                    //If the callback expects the instance, emit 'this'
+                    if (instanceMethod)
+                        il.Emit(OpCodes.Ldarg_0);
+
+                    //If there are parameters, add each of them to the stack for the callback
+                    if (wrapped.HasParameters) {
+                        for (var i = 0; i < wrapped.Parameters.Count; i++) {
+                            //Here we are looking at the callback to see if it wants a reference parameter.
+                            //If it does, and it also expects an instance to be passed, we must move the offset
+                            //by one to skip the previous ldarg_0 we added before.
+                            //var offset = instanceMethod ? 1 : 0;
+                            if (method.Parameters[i /*+ offset*/].ParameterType.IsByReference) {
+                                il.Emit(OpCodes.Ldarga, wrapped.Parameters[i]);
+                            }
+                            else il.Emit(OpCodes.Ldarg, wrapped.Parameters[i]);
+                        }
+                    }
+
+                    //Execute the callback
+                    il.Emit(OpCodes.Call, method);
+
+                    //If the end call has a value, pop it for the time being.
+                    //In the case of begin callbacks, we use this value to determine
+                    //a cancel.
+                    //if (method.ReturnType.Name != method.Module.TypeSystem.Void.Name)
+                    //    il.Emit(OpCodes.Pop);
+
+                    il.Emit(OpCodes.Ret);
+
+                    //Place the new method in the declaring type of the method we are cloning
+                    method.DeclaringType.Methods.Add(wrapped);
+                }
+            }
+
+            wrappedMap = maps.ToArray();
+        }
         private static readonly ConcurrentDictionary<string, bool> _cache = new ConcurrentDictionary<string, bool>();
 
         public static bool IsTruelyValueType(this TypeReference type) {
@@ -114,40 +196,8 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
             return method.Parameters.IndexOf(parameter) + 1;
         }
 
-        public static string GetIdentifier(this MethodReference method, bool withTypeName = true) {
-            var originalType = method.DeclaringType;
-            if (method.DeclaringType is null && withTypeName) {
-                throw new ArgumentException("DeclaringType is null", nameof(method));
-            }
-            ResolveGenericParam(method, out var methodToString, out var typeToString);
+        public static string GetIdentifier(this FieldReference field) => field.DeclaringType.FullName + "." + field.Name;
 
-            var typeName = withTypeName ? typeToString?.FullName + "." : "";
-
-            // Handle anonymous type constructors, they may have a same overload but different parameter names
-            IEnumerable<string> paramStrs;
-            if (originalType is not null
-                && originalType.Name.StartsWith("<>f__AnonymousType")
-                && method.Name == ".ctor"
-                && originalType.Resolve().Methods.Count(m => m.IsConstructor && !m.IsStatic) > 1) {
-
-                var innerParamStrs = new List<string>();
-
-                var anonymousCtorDef = method.Resolve();
-                for (int i = 0; i < anonymousCtorDef.Parameters.Count; i++) {
-                    var paramName = anonymousCtorDef.Parameters[i].Name;
-                    var paramType = methodToString.Parameters[i].ParameterType;
-                    innerParamStrs.Add(paramName + ":" + paramType.FullName);
-                }
-                paramStrs = innerParamStrs;
-            }
-            else {
-                paramStrs = methodToString.Parameters.Select(p => p.ParameterType.FullName);
-            }
-
-            return typeName + method.Name +
-                (methodToString.HasGenericParameters ? "<" + string.Join(",", methodToString.GenericParameters.Select(p => "")) + ">" : "") +
-                "(" + string.Join(",", paramStrs) + ")";
-        }
 
         private static void ResolveGenericParam(MethodReference method, out MethodReference resolved, out TypeReference typeToString) {
             if (method is GenericInstanceMethod genericInstanceMethod) {
@@ -194,6 +244,40 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
             }
             resolved = method;
         }
+        public static string GetIdentifier(this MethodReference method, bool withTypeName = true) {
+            var originalType = method.DeclaringType;
+            if (method.DeclaringType is null && withTypeName) {
+                throw new ArgumentException("DeclaringType is null", nameof(method));
+            }
+            ResolveGenericParam(method, out var methodToString, out var typeToString);
+
+            var typeName = withTypeName ? typeToString?.FullName + "." : "";
+
+            // Handle anonymous type constructors, they may have a same overload but different parameter names
+            IEnumerable<string> paramStrs;
+            if (originalType is not null
+                && originalType.Name.StartsWith("<>f__AnonymousType")
+                && method.Name == ".ctor"
+                && originalType.Resolve().Methods.Count(m => m.IsConstructor && !m.IsStatic) > 1) {
+
+                var innerParamStrs = new List<string>();
+
+                var anonymousCtorDef = method.Resolve();
+                for (int i = 0; i < anonymousCtorDef.Parameters.Count; i++) {
+                    var paramName = anonymousCtorDef.Parameters[i].Name;
+                    var paramType = methodToString.Parameters[i].ParameterType;
+                    innerParamStrs.Add(paramName + ":" + paramType.FullName);
+                }
+                paramStrs = innerParamStrs;
+            }
+            else {
+                paramStrs = methodToString.Parameters.Select(p => p.ParameterType.FullName);
+            }
+
+            return typeName + method.Name +
+                (methodToString.HasGenericParameters ? "<" + string.Join(",", methodToString.GenericParameters.Select(p => "")) + ">" : "") +
+                "(" + string.Join(",", paramStrs) + ")";
+        }
 
         public static string GetIdentifier(this MethodReference method, bool withTypeName = true, params TypeDefinition[] ignoreParams) {
             var originalType = method.DeclaringType;
@@ -208,8 +292,8 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
             List<string> paramStrs = [];
 
             // Handle anonymous type constructors, they may have a same overload but different parameter names
-            if (originalType is not null 
-                && originalType.Name.StartsWith("<>f__AnonymousType") 
+            if (originalType is not null
+                && originalType.Name.StartsWith("<>f__AnonymousType")
                 && method.Name == ".ctor"
                 && originalType.Resolve().Methods.Count(m => m.IsConstructor && !m.IsStatic) > 1) {
 
@@ -237,6 +321,73 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
                 (methodToString.HasGenericParameters ? "<" + string.Join(",", methodToString.GenericParameters.Select(p => "")) + ">" : "") +
                 "(" + string.Join(",", paramStrs) + ")";
         }
+        public static string GetIdentifier(this MethodReference method, bool withTypeName, Dictionary<string, string> typeNameMap, HashSet<int>? forceRefParams = null) {
+            var originalType = method.DeclaringType;
+            if (method.DeclaringType is null && withTypeName) {
+                throw new ArgumentException("DeclaringType is null", nameof(method));
+            }
+
+            typeNameMap ??= [];
+            forceRefParams ??= [];
+
+            ResolveGenericParam(method, out var methodToString, out var typeToString);
+
+            string typeName = "";
+
+            if (withTypeName) {
+                if (typeNameMap.TryGetValue(method.DeclaringType!.FullName, out var alias)) {
+                    typeName = alias;
+                }
+                else if (typeToString is not null) {
+                    typeName = typeToString.FullName;
+                }
+                else {
+                    typeName = method.DeclaringType.FullName;
+                }
+                typeName += ".";
+            }
+
+            List<string> paramStrs = [];
+
+            // Handle anonymous type constructors, they may have a same overload but different parameter names
+            if (originalType is not null
+                && originalType.Name.StartsWith("<>f__AnonymousType")
+                && method.Name == ".ctor"
+                && originalType.Resolve().Methods.Count(m => m.IsConstructor && !m.IsStatic) > 1) {
+
+                var anonymousCtorDef = method.Resolve();
+                for (int i = 0; i < anonymousCtorDef.Parameters.Count; i++) {
+                    var paramName = anonymousCtorDef.Parameters[i].Name;
+                    var paramType = methodToString.Parameters[i].ParameterType;
+                    paramStrs.Add(paramName + ":" + (typeNameMap.TryGetValue(paramType.FullName, out var alise) ? alise : paramType.FullName));
+                }
+            }
+            else {
+                for (int i = 0; i < methodToString.Parameters.Count; i++) {
+
+                    var paramType = methodToString.Parameters[i].ParameterType;
+
+                    if (typeNameMap.TryGetValue(paramType.FullName, out var alias)) {
+                        if (forceRefParams.Contains(i)) {
+                            paramStrs.Add(alias + "&");
+                        }
+                        else {
+                            paramStrs.Add(alias);
+                        }
+                    }
+                    else if (paramType is ByReferenceType referenceType && typeNameMap.TryGetValue(referenceType.ElementType.FullName, out var refAlias)) {
+                        paramStrs.Add(refAlias + "&");
+                    }
+                    else {
+                        paramStrs.Add(paramType.FullName);
+                    }
+                }
+            }
+
+            return typeName + method.Name +
+                (methodToString.HasGenericParameters ? "<" + string.Join(",", methodToString.GenericParameters.Select(p => "")) + ">" : "") +
+                "(" + string.Join(",", paramStrs) + ")";
+        }
         public static string GetDebugName(this MethodReference method, bool fullTypeName = false) {
             return (fullTypeName ? method.DeclaringType.FullName : method.DeclaringType.Name) + "." + method.Name +
                 (method.HasGenericParameters ? "<" + string.Join(",", method.GenericParameters.Select(p => "")) + ">" : "") +
@@ -245,6 +396,13 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
         public static bool IsDelegate(this TypeReference type) =>
             type.Name == nameof(MulticastDelegate) ||
             type?.Resolve()?.BaseType?.Name == nameof(MulticastDelegate);
+
+        public static TypeDefinition GetRootDeclaringType(this TypeDefinition type) {
+            while (type.DeclaringType is not null) {
+                type = type.DeclaringType;
+            }
+            return type;
+        }
 
         public static TypeDefinition? TryResolve(this TypeReference type) {
             try {
@@ -270,19 +428,19 @@ namespace OTAPI.UnifiedServerProcess.Extensions {
                 return null;
             }
         }
-        public static FieldDefinition Field(this TypeDefinition type, string name) {
+        public static FieldDefinition GetField(this TypeDefinition type, string name) {
             return type.Fields.Single((FieldDefinition x) => x.Name == name);
         }
 
-        public static MethodDefinition Method(this TypeDefinition type, string name) {
+        public static MethodDefinition GetMethod(this TypeDefinition type, string name) {
             return type.Methods.Single((MethodDefinition x) => x.Name == name);
         }
 
-        public static EventDefinition Event(this TypeDefinition type, string name) {
+        public static EventDefinition GetEvent(this TypeDefinition type, string name) {
             return type.Events.Single((EventDefinition x) => x.Name == name);
         }
 
-        public static PropertyDefinition Property(this TypeDefinition type, string name) {
+        public static PropertyDefinition GetProperty(this TypeDefinition type, string name) {
             return type.Properties.Single((PropertyDefinition x) => x.Name == name);
         }
 

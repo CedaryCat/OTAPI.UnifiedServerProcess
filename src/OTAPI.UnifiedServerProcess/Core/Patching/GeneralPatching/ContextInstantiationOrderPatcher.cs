@@ -40,7 +40,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
             rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
             rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
-            rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, rootContextDef.Field("Name")));
+            rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, rootContextDef.GetField("Name")));
 
             foreach (var context in order) {
                 rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));

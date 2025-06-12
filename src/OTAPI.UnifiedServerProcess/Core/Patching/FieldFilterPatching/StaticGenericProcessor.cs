@@ -43,14 +43,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
             var netManager = argument.MainModule.GetType("Terraria.Net.NetManager");
             var packetTypeStorage = argument.MainModule.GetType("Terraria.Net.NetManager/PacketTypeStorage`1");
 
-            var netManager_moduleCount = netManager.Field(nameof(Terraria.Net.NetManager._moduleCount))
+            var netManager_moduleCount = netManager.GetField(nameof(Terraria.Net.NetManager._moduleCount))
                 ?? throw new Exception("Terraria.Net.NetManager._moduleCount not found");
-            var netManager_modules = netManager.Field(nameof(Terraria.Net.NetManager._modules))
+            var netManager_modules = netManager.GetField(nameof(Terraria.Net.NetManager._modules))
                 ?? throw new Exception("Terraria.Net.NetManager._modules not found");
 
-            var packetTypeStorage_Id = packetTypeStorage.Field(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Id))
+            var packetTypeStorage_Id = packetTypeStorage.GetField(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Id))
                 ?? throw new Exception("Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Id not found");
-            var packetTypeStorage_Module = packetTypeStorage.Field(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module))
+            var packetTypeStorage_Module = packetTypeStorage.GetField(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module))
                 ?? throw new Exception("Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module not found");
 
             RefactorFieldOperate_DictionaryStorage(netManager, packetTypeStorage);
@@ -58,8 +58,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Id);
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Module);
 
-            argument.ModifiedStaticFields.Add(netManager.Field("Instance"));
-            argument.ModifiedStaticFields.Add(netManager.Field("PacketTypeStorageInstance"));
+            argument.ModifiedStaticFields.Add(netManager.GetField("Instance"));
+            argument.ModifiedStaticFields.Add(netManager.GetField("PacketTypeStorageInstance"));
         }
 
         void ProcessTerraria_GameContent_Creative_CreativePowerManager(FilterArgumentSource argument) {
@@ -67,18 +67,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
             var creativePowerManager = argument.MainModule.GetType("Terraria.GameContent.Creative.CreativePowerManager");
             var powerTypeStorage = argument.MainModule.GetType("Terraria.GameContent.Creative.CreativePowerManager/PowerTypeStorage`1");
 
-            var creativePowerManager_powersCount = creativePowerManager.Field(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersCount))
+            var creativePowerManager_powersCount = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersCount))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager._powersCount not found");
-            var creativePowerManager_powersById = creativePowerManager.Field(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersById))
+            var creativePowerManager_powersById = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersById))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager._powersById not found");
-            var creativePowerManager_powersByName = creativePowerManager.Field(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersByName))
+            var creativePowerManager_powersByName = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersByName))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager._powersByName not found");
 
-            var powerTypeStorage_Id = powerTypeStorage.Field(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Id))
+            var powerTypeStorage_Id = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Id))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Id not found");
-            var powerTypeStorage_Name = powerTypeStorage.Field(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Name))
+            var powerTypeStorage_Name = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Name))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Name not found");
-            var powerTypeStorage_Power = powerTypeStorage.Field(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power))
+            var powerTypeStorage_Power = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power not found");
 
             RefactorFieldOperate_DictionaryStorage(creativePowerManager, powerTypeStorage);
@@ -86,7 +86,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Id);
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Name);
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Power);
-            argument.ModifiedStaticFields.Add(creativePowerManager.Field("PowerTypeStorageInstance"));
+            argument.ModifiedStaticFields.Add(creativePowerManager.GetField("PowerTypeStorageInstance"));
         }
 
         public readonly struct TypeInitializationParams {

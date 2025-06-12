@@ -13,8 +13,6 @@ namespace OTAPI.UnifiedServerProcess.Loggers {
 
         public abstract void LogSegments(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments);
         public abstract void LogSegmentsLine(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments);
-
-        // 核心日志方法
         public void Log(ILoggedComponent sender, int level, ConsoleColor prefixColor, params ColoredSegment[] segments) {
             ColoredSegment[] content = [
                 new ColoredSegment("[", ConsoleColor.Cyan),

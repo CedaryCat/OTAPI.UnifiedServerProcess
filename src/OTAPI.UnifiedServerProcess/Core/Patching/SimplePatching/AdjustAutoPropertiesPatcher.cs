@@ -1,0 +1,64 @@
+﻿using Mono.Cecil;
+using Mono.Cecil.Rocks;
+using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
+using OTAPI.UnifiedServerProcess.Extensions;
+using OTAPI.UnifiedServerProcess.Loggers;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
+{
+    public class AdjustAutoPropertiesPatcher(ILogger logger, ModuleDefinition module) : Patcher(logger)
+    {
+        public override string Name => nameof(AdjustAutoPropertiesPatcher);
+
+        public override void Patch() {
+
+            Dictionary<string, string> nameMap = new Dictionary<string, string>();
+
+            foreach (var type in module.GetAllTypes()) {
+                foreach (var method in type.Methods) {
+                    if (!method.HasBody) {
+                        continue;
+                    }
+
+                    if (!method.CustomAttributes.Any(ca => ca.AttributeType.FullName == "System.Runtime.CompilerServices.CompilerGeneratedAttribute")) {
+                        continue;
+                    }
+
+                    if (!method.Name.StartsWith("get_") && !method.Name.StartsWith("set_")) {
+                        continue;
+                    }
+
+                    if (!method.Body.Instructions.Any(inst => inst.Operand is MethodReference mr && mr.Name.StartsWith("mfwh_"))) {
+                        continue;
+                    }
+
+                    var propertyName = method.Name.Substring(4);
+
+                    var autoField = type.Fields.FirstOrDefault(f => f.Name == string.Concat("<", propertyName, ">k__BackingField"));
+                    if (autoField == null) {
+                        continue;
+                    }
+
+                    var newName = string.Concat("__", propertyName);
+                    nameMap.Add(autoField.GetIdentifier(), newName);
+                    autoField.Name = newName;
+                }
+            }
+            foreach (var type in module.GetAllTypes()) {
+                foreach (var method in type.Methods) {
+                    if (!method.HasBody) {
+                        continue;
+                    }
+
+                    foreach (var inst in method.Body.Instructions) { 
+                        if (inst.Operand is FieldReference fr && nameMap.TryGetValue(fr.GetIdentifier(), out string? value)) {
+                            fr.Name = value;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

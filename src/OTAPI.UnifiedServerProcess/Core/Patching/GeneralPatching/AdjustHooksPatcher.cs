@@ -25,7 +25,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
 
             foreach (var type in arguments.MainModule.GetAllTypes()) {
-                if (!type.Namespace.StartsWith("HookEvents.")) {
+                if (!type.GetRootDeclaringType().Namespace.StartsWith("HookEvents.")) {
                     continue;
                 }
                 if (type.BaseType?.Name == "MulticastDelegate") {
@@ -64,8 +64,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 }
                 var delegateDef = ctor.DeclaringType;
 
-                var invokeDef = delegateDef.Method("Invoke");
-                var beginInvoke = delegateDef.Method("BeginInvoke");
+                var invokeDef = delegateDef.GetMethod("Invoke");
+                var beginInvoke = delegateDef.GetMethod("BeginInvoke");
                 for (int i = 0; i < containingMethod.Parameters.Count; i++) {
                     invokeDef.Parameters[i].Attributes = containingMethod.Parameters[i].Attributes;
                     beginInvoke.Parameters[i].Attributes = containingMethod.Parameters[i].Attributes;

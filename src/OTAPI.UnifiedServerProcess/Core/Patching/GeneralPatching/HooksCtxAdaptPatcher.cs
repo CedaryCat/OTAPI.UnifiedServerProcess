@@ -28,7 +28,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
 
             foreach (var type in arguments.MainModule.GetAllTypes()) {
-                if (!type.Namespace.StartsWith("HookEvents.")) {
+                if (!type.GetRootDeclaringType().Namespace.StartsWith("HookEvents.")) {
                     continue;
                 }
                 if (type.BaseType?.Name == "MulticastDelegate") {
@@ -117,7 +117,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 if (ldInstanceForInvoke.OpCode == OpCodes.Ldnull && arguments.OriginalToContextType.TryGetValue(ldftnMethod.DeclaringType.FullName, out var convertedType)) {
 
                     var eventFieldName = invokeMethod.Name["Invoke".Length..];
-                    var eventField = invokeMethod.DeclaringType.Field(eventFieldName);
+                    var eventField = invokeMethod.DeclaringType.GetField(eventFieldName);
                     var oldFieldType = (GenericInstanceType)eventField.FieldType;
                     var oldFieldFullName = eventField.FullName;
 
@@ -127,11 +127,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
                     eventField.FieldType = eventTypeWithContext;
 
-                    var theEvent = invokeMethod.DeclaringType.Event(eventFieldName);
+                    var theEvent = invokeMethod.DeclaringType.GetEvent(eventFieldName);
                     theEvent.EventType = eventTypeWithContext;
 
-                    CastEventMethod(invokeMethod.DeclaringType.Method("add_" + eventFieldName));
-                    CastEventMethod(invokeMethod.DeclaringType.Method("remove_" + eventFieldName));
+                    CastEventMethod(invokeMethod.DeclaringType.GetMethod("add_" + eventFieldName));
+                    CastEventMethod(invokeMethod.DeclaringType.GetMethod("remove_" + eventFieldName));
 
                     void CastEventMethod(MethodDefinition method) {
                         method.Parameters[0].ParameterType = eventTypeWithContext;
@@ -203,8 +203,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 // context-bound by add root context
                 else {
                     var delegateDef = createDelegateCtor.DeclaringType.Resolve();
-                    var invokeDef = delegateDef.Method("Invoke");
-                    var beginInvokeDef = delegateDef.Method("BeginInvoke");
+                    var invokeDef = delegateDef.GetMethod("Invoke");
+                    var beginInvokeDef = delegateDef.GetMethod("BeginInvoke");
 
                     invokeDef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                     beginInvokeDef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
