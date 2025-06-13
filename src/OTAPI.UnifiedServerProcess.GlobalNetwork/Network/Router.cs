@@ -1,19 +1,47 @@
-﻿using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
+﻿using Microsoft.Xna.Framework;
+using OTAPI.UnifiedServerProcess.ConsoleClient.Protocol;
+using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
+using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
-using Terraria.Net.Sockets;
-using Terraria;
-using UnifiedServerProcess;
-using Terraria.Localization;
-using Microsoft.Xna.Framework;
 using System.Reflection;
+using Terraria;
+using Terraria.Localization;
+using Terraria.Net.Sockets;
+using UnifiedServerProcess;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 {
     public class Router
     {
+        public static readonly RemoteClient[] globalClients = new RemoteClient[256];
+        public static readonly MessageBuffer[] globalMsgBuffers = new MessageBuffer[257];
+        public readonly ServerContext[] clientCurrentlyServers = new ServerContext[256];
+        static Router() {
+            const int maxTilesX = 8400;
+            const int maxTilesY = 2400;
+            var tmp = new RootContext("tmp");
+            tmp.Main.maxTilesX = maxTilesX;
+            tmp.Main.maxTilesY = maxTilesY;
+
+            for (int i = 0; i < 256; i++) {
+                globalClients[i] = new RemoteClient(tmp) {
+                    Id = i,
+                    ReadBuffer = new byte[1024]
+                };
+            }
+            for (int i = 0; i < 257; i++) {
+                globalMsgBuffers[i] = new MessageBuffer() { 
+                    whoAmI = i 
+                };
+            }
+        }
         public Router(int listenPort, ServerContext main, params ServerContext[] allServers) {
-            On.Terraria.Chat.Commands.SayChatCommand.ProcessIncomingMessage += ProcessIncomingMessage;
+            Array.Fill(clientCurrentlyServers, main);
+
+            On.Terraria.NetMessageSystemContext.mfwh_CheckBytes += ProcessBytes;
+            On.Terraria.NetplaySystemContext.mfwh_UpdateServerInMainThread += UpdateServerInMainThread;
 
             this.main = main;
             this.servers = allServers;
@@ -27,23 +55,153 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             listenThread.Start();
         }
 
+        private void UpdateServerInMainThread(On.Terraria.NetplaySystemContext.orig_mfwh_UpdateServerInMainThread orig, NetplaySystemContext self) {
+            var server = self.root;
+            for (int i = 0; i < 256; i++) {
+                if (server != clientCurrentlyServers[i]) {
+                    continue;
+                }
+                if (server.NetMessage.buffer[i].checkBytes) {
+                    server.NetMessage.CheckBytes(i);
+                }
+            }
+        }
+
+        private void ProcessBytes(On.Terraria.NetMessageSystemContext.orig_mfwh_CheckBytes _, NetMessageSystemContext netMsg, int clientIndex) {
+            var server = netMsg.root;
+            var buffer = globalMsgBuffers[clientIndex];
+            lock (buffer) {
+                if (server.Main.dedServ && server.Netplay.Clients[clientIndex].PendingTermination) {
+                    server.Netplay.Clients[clientIndex].PendingTerminationApproved = true;
+                    buffer.checkBytes = false;
+                    return;
+                }
+                int readPosition = 0;
+                int unreadLength = buffer.totalData;
+                try {
+                    while (unreadLength >= 2) {
+                        int packetLength = BitConverter.ToUInt16(buffer.readBuffer, readPosition);
+                        if (unreadLength >= packetLength && packetLength != 0) {
+                            long position = buffer.reader.BaseStream.Position;
+                            buffer.GetData(server, readPosition + 2, packetLength - 2, out var _);
+
+                            if (server.Main.dedServ && server.Netplay.Clients[clientIndex].PendingTermination) {
+                                server.Netplay.Clients[clientIndex].PendingTerminationApproved = true;
+                                buffer.checkBytes = false;
+                                break;
+                            }
+
+                            buffer.reader.BaseStream.Position = position + packetLength;
+                            unreadLength -= packetLength;
+                            readPosition += packetLength;
+
+                            if (clientCurrentlyServers[clientIndex] != server) {
+                                // If there is unprocessed data remaining, copy it to the beginning of the buffer for the next processing round.
+                                // Update buffer.totalData with the remaining byte count to prevent reprocessing of this data.
+                                for (int i = 0; i < unreadLength; i++) {
+                                    buffer.readBuffer[i] = buffer.readBuffer[readPosition + i];
+                                }
+                                buffer.totalData = unreadLength;
+                                // Make sure remaining data will be processed in the next round on the next server
+                                buffer.checkBytes = true;
+                                return;
+                            }
+
+                            continue;
+                        }
+                        break;
+                    }
+                }
+                catch (Exception exception) {
+                    if (server.Main.dedServ && readPosition < globalMsgBuffers.Length - 100) {
+                        server.Console.WriteLine(Language.GetTextValue("Error.NetMessageError", globalMsgBuffers[readPosition + 2]));
+                    }
+                    unreadLength = 0;
+                    readPosition = 0;
+                    server.Hooks.NetMessage.InvokeCheckBytesException(exception);
+                }
+                if (unreadLength != buffer.totalData) {
+                    for (int i = 0; i < unreadLength; i++) {
+                        buffer.readBuffer[i] = buffer.readBuffer[i + readPosition];
+                    }
+                    buffer.totalData = unreadLength;
+                }
+                buffer.checkBytes = false;
+            }
+        }
+
         public readonly ServerContext main;
         public readonly ServerContext[] servers;
 
         readonly TcpListener listener;
         volatile bool isListening;
+
+        public event Func<TcpClient, ISocket>? CreateSocket;
+        public event Action? Started;
+
+
         void ServerLoop() {
+            while (!main.IsRunning) {
+                Thread.Sleep(10);
+            }
+            int sleepStep = 0;
+            Started?.Invoke();
             while (true) { 
                 StartListeningIfNeeded();
-                foreach (var server in servers) {
-                    if (server.IsRunning) {
-                        server.Netplay.UpdateConnectedClients();
-                    }
-                }
+                UpdateConnectedClients();
+                sleepStep = (sleepStep + 1) % 10;
+                Thread.Sleep(sleepStep == 0 ? 1 : 0);
             }
         }
+
+        private void UpdateConnectedClients() {
+            for (int i = 0; i < 256; i++) {
+                var client = globalClients[i];
+                var server = clientCurrentlyServers[i];
+
+                if (client.PendingTermination) {
+                    if (client.PendingTerminationApproved) {
+                        client.Reset(main);
+                        server.NetMessage.SyncDisconnectedPlayer(i);
+
+                        bool active = server.Main.player[i].active;
+                        server.Main.player[i].active = false;
+                        if (active) {
+                            server.Player.Hooks.PlayerDisconnect(i);
+                        }
+
+                        clientCurrentlyServers[i] = main;
+                    }
+                    continue;
+                }
+                if (client.IsConnected()) {
+                    lock (client) {
+                        client.Update(server);
+                        server.Netplay.HasClients = true;
+                    }
+                    continue;
+                }
+                if (client.IsActive) {
+                    client.PendingTermination = true;
+                    client.PendingTerminationApproved = true;
+                    continue;
+                }
+                client.StatusText2 = "";
+            }
+        }
+
+        static int GetClientSpace() {
+            int space = 255;
+            for (int i = 0; i < 255; i++) {
+                if (globalClients[i].IsActive) {
+                    space -= 1;
+                }
+            }
+            return space;
+        }
+
         void StartListeningIfNeeded() {
-            if (isListening || !main.IsRunning || main.GetClientSpace() <= 0) {
+            if (isListening || !main.IsRunning || GetClientSpace() <= 0) {
                 return;
             }
             isListening = true;
@@ -51,11 +209,11 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             Task.Run(ListenLoop);
         }
         void ListenLoop() {
-            while (main.IsRunning && main.GetClientSpace() > 0) {
+            while (main.IsRunning && GetClientSpace() > 0) {
                 try {
                     var client = listener.AcceptTcpClient();
                     var socket = CreateSocket?.Invoke(client) ?? new TcpSocket(client);
-                    main.Netplay.OnConnectionAccepted(socket);
+                    OnConnectionAccepted(socket);
                 }
                 catch {
                 }
@@ -63,128 +221,64 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             listener.Stop();
             isListening = false;
         }
-        public event Func<TcpClient, ISocket>? CreateSocket;
-        void ProcessIncomingMessage(On.Terraria.Chat.Commands.SayChatCommand.orig_ProcessIncomingMessage orig, Terraria.Chat.Commands.SayChatCommand self,
-            RootContext root, string text, byte clientId) {
 
-            if (ProcessUSPCommandText(root, text, clientId)) {
+        void OnConnectionAccepted(ISocket client) {
+            int id = FindNextEmptyClientSlot();
+            if (id != -1) {
+                clientCurrentlyServers[id] = main;
+                globalClients[id].Reset(main);
+                globalClients[id].Socket = client;
+            }
+            else {
+                lock (main.Netplay.fullBuffer) {
+                    main.Netplay.KickClient(client, NetworkText.FromKey("CLI.ServerIsFull"));
+                }
+            }
+            if (FindNextEmptyClientSlot() == -1) {
+                listener.Stop();
+                isListening = false;
+            }
+        }
+        int FindNextEmptyClientSlot() {
+            for (int i = 0; i < main.Main.maxNetPlayers; i++) {
+                if (!globalClients[i].IsConnected()) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        public void ServerWarp(byte plr, ServerContext to) {
+            var from = clientCurrentlyServers[plr];
+
+            if (from == to) {
+                return;
+            }
+            if (!to.IsRunning) {
                 return;
             }
 
-            orig(self, root, text, clientId);
-        }
-        bool ProcessUSPCommandText(RootContext root, string text, byte clientId) {
-            if (root is not ServerContext currentServer) {
-                return false;
-            }
-            text = text.Trim();
+            var client = globalClients[plr];
+            lock (client) {
+                SyncHelper.SyncPlayerLeaveToOthers(from, plr);
+                SyncHelper.SyncServerOfflineToPlayer(from, plr);
+                from.Console.WriteLine($"[USP] Player {plr} warped to {to.Name}, current players: {to.NPC.GetActivePlayerCount()}");
 
-            if (!text.StartsWith('/')) {
-                return false;
-            }
+                var inactivePlayer = to.Main.player[plr];
+                var activePlayer = from.Main.player[plr];
 
-            var textArgs = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var command = textArgs[0].TrimStart('/');
-            var args = textArgs.Skip(1).ToArray();
+                from.Main.player[plr] = inactivePlayer;
+                to.Main.player[plr] = activePlayer;
 
-            ProcessUSPCommand(currentServer, clientId, command, args);
-            return true;
-        }
+                inactivePlayer.active = false;
+                activePlayer.active = true;
 
-        ServerContext? FindServer(string name) {
-            for (int i = 0; i < servers.Length; i++) {
-                ServerContext server = servers[i];
-                if (!server.IsRunning) {
-                    continue;
-                }
-                if (server.Name == name) {
-                    return server;
-                }
-            }
-            if (int.TryParse(name, out int id)) {
-                var index = id - 1;
-                if (index >= 0 && index < servers.Length && servers[index].IsRunning) {
-                    return servers[index];
-                }
-            }
-            return null;
-        }
-        void ProcessUSPCommand(ServerContext currentServer, byte clientId, string command, string[] args) {
-            switch (command) {
-                case "connect":
-                case "warp": {
-                        var target = FindServer(args[0]);
+                clientCurrentlyServers[plr] = to;
+                client.ResetSections(to);
 
-                        if (target is null) {
-                            currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral($"Server '{args[0]}' not found"), Color.Orange, clientId);
-                            return;
-                        }
-
-                        if (ReferenceEquals(target, currentServer)) {
-                            currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral("You are already on this server."), Color.Orange, clientId);
-                            return;
-                        }
-
-                        ServerWarp(clientId, currentServer, target);
-                        return;
-                    }
-                case "current":
-                case "servers":
-                case "list": {
-                        currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral($"Server List: "), Color.Yellow, clientId);
-                        for (int i = 0; i < servers.Length; i++) {
-                            var server = servers[i];
-                            if (!server.IsRunning) {
-                                continue;
-                            }
-                            currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral($"{i + 1}: {server.Name}"), Color.Yellow, clientId);
-                        }
-                        currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral($"Current Server: {currentServer.Name}"), Color.Yellow, clientId);
-                    }
-                    break;
-                case "?":
-                case "help": {
-                        currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral("Unified Server Process is a program that allows multiple Terraria servers running on the same process."), Color.Yellow, clientId);
-                        currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral($"Current version: {Assembly.GetExecutingAssembly().GetName().Version}"), Color.Yellow, clientId);
-                        currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral("Usable Commands: "), Color.Yellow, clientId);
-                        currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral("- Show server list: /current, /servers, /list"), Color.Yellow, clientId);
-                        currentServer.ChatHelper.SendChatMessageToClient(NetworkText.FromLiteral("- Warp to a server: /connect <name|id>, /warp <name|id>"), Color.Yellow, clientId);
-                    }
-                    break;
-            }
-        }
-
-        public static void ServerWarp(byte client, ServerContext from, ServerContext to) {
-            lock (from.Netplay.fullBuffer) {
-                var player = from.Main.player[client];
-                var buffer = from.NetMessage.buffer[client];
-                var remote = from.Netplay.Clients[client];
-
-                var packed = new ClientPackedData(player, remote, buffer);
-
-                if (to.TryAcceptClient(packed)) {
-                    from.Main.player[client] = new Player(from) {
-                        whoAmI = client,
-                    };
-                    from.NetMessage.buffer[client] = new MessageBuffer() {
-                        whoAmI = client,
-                    };
-                    from.Netplay.Clients[client] = new RemoteClient(from) {
-                        Id = client,
-                        ReadBuffer = new byte[1024],
-                    };
-                    from.Netplay.Clients[client].Reset(from);
-
-                    // If there is unprocessed data remaining, copy it to the beginning of the buffer for the next processing round.
-                    // Update buffer.totalData with the remaining byte count to prevent reprocessing of this data.
-                    var restDataBytesCount = (int)(buffer.totalData - buffer.readerStream.Position);
-                    for (int i = 0; i < restDataBytesCount; i++) {
-                        buffer.readBuffer[i] = buffer.readBuffer[buffer.readerStream.Position + i];
-                    }
-                    buffer.totalData = restDataBytesCount;
-
-                    from.ClientLeave(packed);
-                }
+                SyncHelper.SyncServerOnlineToPlayer(to, plr);
+                SyncHelper.SyncPlayerJoinToOthers(to, plr);
+                to.Console.WriteLine($"[USP] Player {plr} warped from {from.Name}, current players: {to.NPC.GetActivePlayerCount()}");
             }
         }
     }
