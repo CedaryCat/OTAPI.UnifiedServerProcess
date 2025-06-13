@@ -4,19 +4,17 @@ using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
+{
     /// <summary>
     /// Even if some static fields have never been modified during runtime, they still need to be contextualized because their instance constructors use context-dependent content.
     /// </summary>
     /// <param name="callGraph"></param>
     /// <param name="rootContextDef"></param>
-    public class ContextRequiredFieldsProcessor(MethodCallGraph callGraph, TypeDefinition rootContextDef) : IFieldFilterArgProcessor, IMethodCheckCacheFeature {
+    public class ContextRequiredFieldsProcessor(MethodCallGraph callGraph, TypeDefinition rootContextDef) : IFieldFilterArgProcessor, IMethodCheckCacheFeature
+    {
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {

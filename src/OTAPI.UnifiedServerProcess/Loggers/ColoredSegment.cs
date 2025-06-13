@@ -1,7 +1,9 @@
 ﻿using System;
 
-namespace OTAPI.UnifiedServerProcess.Loggers {
-    public readonly struct ColoredSegment {
+namespace OTAPI.UnifiedServerProcess.Loggers
+{
+    public readonly struct ColoredSegment
+    {
         public readonly string Text;
         public readonly ConsoleColor ForegroundColor;
         public readonly ConsoleColor BackgroundColor;

@@ -1,5 +1,4 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
@@ -14,9 +13,11 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
+{
 
-    public sealed class ParameterFlowAnalyzer : Analyzer, IMethodBehaivorFeature {
+    public sealed class ParameterFlowAnalyzer : Analyzer, IMethodBehaivorFeature
+    {
         public readonly ImmutableDictionary<string, ParameterReferenceData> AnalyzedMethods;
         public sealed override string Name => "ParamFlowAnalyzer";
 

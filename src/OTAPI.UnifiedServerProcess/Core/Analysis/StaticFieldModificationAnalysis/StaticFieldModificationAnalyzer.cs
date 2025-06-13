@@ -14,8 +14,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalysis {
-    class FieldModificationState() {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalysis
+{
+    class FieldModificationState()
+    {
         public readonly Stack<MethodDefinition> works = [];
         public readonly HashSet<FieldDefinition> fields = [];
     }
@@ -26,7 +28,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
         MethodCallGraph callGraph,
         DelegateInvocationGraph invocationGraph,
         MethodInheritanceGraph inheritanceGraph,
-        TypeInheritanceGraph typeInheritanceGraph) : Analyzer(logger), IMethodBehaivorFeature {
+        TypeInheritanceGraph typeInheritanceGraph) : Analyzer(logger), IMethodBehaivorFeature
+    {
         public DelegateInvocationGraph DelegateInvocationGraph => invocationGraph;
         public MethodInheritanceGraph MethodInheritanceGraph => inheritanceGraph;
 
@@ -168,7 +171,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                 (resolvedCallee is null && methodRef.DeclaringType is ArrayType arrayType && methodRef.Name is "Address" or "Set")
 
                                 // The called method is a collection method
-                                || (resolvedCallee is not null && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, caller, instruction)) 
+                                || (resolvedCallee is not null && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, caller, instruction))
 
                                 // The called method return a reference
                                 || (methodRef.ReturnType is ByReferenceType && methodRef.Name is "get_Item")) {

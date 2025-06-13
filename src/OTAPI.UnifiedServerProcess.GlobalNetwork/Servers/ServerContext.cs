@@ -1,13 +1,4 @@
-﻿using Microsoft.Xna.Framework;
-using OTAPI.UnifiedServerProcess.GlobalNetwork.IO;
-using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Net;
-using Terraria;
-using Terraria.ID;
-using Terraria.Localization;
-using Terraria.Utilities;
+﻿using OTAPI.UnifiedServerProcess.GlobalNetwork.IO;
 using UnifiedServerProcess;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Servers

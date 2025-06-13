@@ -5,12 +5,14 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// Similar to <see cref="AdjustPropertiesPatcher"/>, events also require corresponding contextualization adaptations.
     /// </summary>
     /// <param name="logger"></param>
-    public class AdjustEventsPatcher(ILogger logger) : GeneralPatcher(logger) {
+    public class AdjustEventsPatcher(ILogger logger) : GeneralPatcher(logger)
+    {
         public override string Name => nameof(AdjustPropertiesPatcher);
 
         public override void Patch(PatcherArguments arguments) {

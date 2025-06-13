@@ -1,8 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
-    public class StaticFieldTraceCollection<TKey> where TKey : notnull {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
+{
+    public class StaticFieldTraceCollection<TKey> where TKey : notnull
+    {
         private readonly Dictionary<TKey, CompositeStaticFieldTracking> _traces = [];
         public bool TryGetTrace(TKey key, [NotNullWhen(true)] out CompositeStaticFieldTracking? trace) =>
             _traces.TryGetValue(key, out trace);

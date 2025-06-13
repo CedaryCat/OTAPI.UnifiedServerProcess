@@ -1,9 +1,11 @@
 ﻿using OTAPI.UnifiedServerProcess.Loggers;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
+{
     public class ArgumentConfigurator<TSource, TResult>(ILogger logger, PatchPipelineBuilder owner, TSource raw)
         where TSource : Argument, IArgumentSource<TSource, TResult>
-        where TResult : Argument {
+        where TResult : Argument
+    {
 
         readonly ArgumentPipelineBuilder<TSource, TResult> argumentBuilder = new(logger);
 

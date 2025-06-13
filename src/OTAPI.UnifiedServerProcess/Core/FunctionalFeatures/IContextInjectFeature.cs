@@ -1,6 +1,5 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
-using NuGet.Packaging.Signing;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
@@ -12,9 +11,11 @@ using System.Data;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
+namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
+{
     public interface IContextInjectFeature : IJumpSitesCacheFeature { }
-    public static class ContextInjectFeatureExtensions {
+    public static class ContextInjectFeatureExtensions
+    {
         public static bool AdjustMethodReferences(
             this IContextInjectFeature _,
             PatcherArguments arguments,
@@ -80,16 +81,16 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
 
         public static void InjectContextParameterLoads(
             this IContextInjectFeature point,
-            PatcherArguments arguments, 
+            PatcherArguments arguments,
             ref Instruction methodCallInstruction,
             out Instruction insertedFirstInstr,
-            MethodDefinition modifyMethod, 
+            MethodDefinition modifyMethod,
             MethodDefinition contextBound,
             MethodReference calleeRef,
             MethodReference vanillaCalleeRef,
             ContextTypeData? contextTypeData,
             Instruction[] loads) {
-            
+
             TypeDefinition contextTypeDef;
             int contextParamInsertIndex;
 
@@ -197,13 +198,13 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
         }
 
         public static void InjectContextFieldStoreInstanceLoads(
-            this IContextInjectFeature point, 
-            PatcherArguments arguments, 
+            this IContextInjectFeature point,
+            PatcherArguments arguments,
             ref Instruction fieldStoreInstruction,
             out Instruction insertedFirstInstr,
             MethodDefinition modifyMethod,
-            FieldDefinition contextBoundFieldDef, 
-            FieldReference origFieldRef, 
+            FieldDefinition contextBoundFieldDef,
+            FieldReference origFieldRef,
             Instruction[] loads) {
 
             var paths = MonoModCommon.Stack.AnalyzeInstructionArgsSources(modifyMethod, fieldStoreInstruction, point.GetMethodJumpSites(modifyMethod));
@@ -265,8 +266,8 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
         /// <param name="rootContextDef"></param>
         /// <param name="ctor"></param>
         public static void AdjustConstructorLoadRoot(this IContextInjectFeature point, TypeDefinition rootContextDef, MethodDefinition ctor, bool shouldMoveSelfStore) {
-            if (ctor.Name != ".ctor" 
-                || ctor.Parameters.Count == 0 
+            if (ctor.Name != ".ctor"
+                || ctor.Parameters.Count == 0
                 || ctor.Parameters[0].ParameterType.FullName != rootContextDef.FullName) {
                 return;
             }
@@ -337,8 +338,8 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
                 i is { OpCode.Code: Code.Stfld, Operand: FieldReference field } && field.FieldType.FullName == ctor.DeclaringType.FullName);
             var storeRootField = ctor.Body.Instructions.FirstOrDefault(
                 i =>
-                i is { OpCode.Code: Code.Stfld, Operand: FieldReference field } && field.FieldType.FullName == rootContextDef.FullName 
-                && i.Previous.OpCode == OpCodes.Ldarg_1 
+                i is { OpCode.Code: Code.Stfld, Operand: FieldReference field } && field.FieldType.FullName == rootContextDef.FullName
+                && i.Previous.OpCode == OpCodes.Ldarg_1
                 && i.Previous.Previous.OpCode == OpCodes.Ldarg_0);
 
             if (shouldMoveSelfStore && storeSelf is not null) {
@@ -362,7 +363,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
                 return;
             }
 
-            foreach (var instr in movedInstructions) { 
+            foreach (var instr in movedInstructions) {
                 ctor.Body.RemoveInstructionSeamlessly(jumpSite, instr);
             }
 

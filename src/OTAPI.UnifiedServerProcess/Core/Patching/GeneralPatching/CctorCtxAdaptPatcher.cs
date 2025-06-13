@@ -1,7 +1,6 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
-using MonoMod.Cil;
 using NuGet.Packaging;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
@@ -9,19 +8,18 @@ using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// Analyzes and collects parts requiring contextualization from original static constructors, splits them for de-staticization and redirection, 
     /// <para>and merges the processed logic into constructors of corresponding contextualized entity classes.</para>
     /// </summary>
     /// <param name="logger"></param>
-    public sealed class CctorCtxAdaptPatcher(ILogger logger) : GeneralPatcher(logger), IContextInjectFeature, IJumpSitesCacheFeature {
+    public sealed class CctorCtxAdaptPatcher(ILogger logger) : GeneralPatcher(logger), IContextInjectFeature, IJumpSitesCacheFeature
+    {
         public sealed override string Name => nameof(CctorCtxAdaptPatcher);
         public sealed override void Patch(PatcherArguments arguments) {
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
@@ -36,7 +34,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 }
                 cctors.Add(cctor);
             }
-            for (int progress = 0; progress < cctors.Count; progress++) { 
+            for (int progress = 0; progress < cctors.Count; progress++) {
                 var cctor = cctors[progress];
                 if (cctor.DeclaringType.Name.StartsWith('<')) {
                     continue;
@@ -213,7 +211,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 Stack<Instruction> works = [];
                 works.Push(inst);
 
-                while (works.Count > 0) { 
+                while (works.Count > 0) {
                     var current = works.Pop();
                     var usages = MonoModCommon.Stack.AnalyzeStackTopValueUsage(cctor, current);
                     ExtractSources(feature, cctor, transformInsts, localMap, usages);
@@ -530,7 +528,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             List<Instruction> rootFieldLoads = [];
             foreach (var instruction in newCtor.Body.Instructions) {
                 if (instruction.OpCode != OpCodes.Ldfld
-                    || instruction.Operand is not FieldReference fieldRef 
+                    || instruction.Operand is not FieldReference fieldRef
                     || fieldRef.FieldType.FullName != arguments.RootContextDef.FullName) {
                     continue;
                 }

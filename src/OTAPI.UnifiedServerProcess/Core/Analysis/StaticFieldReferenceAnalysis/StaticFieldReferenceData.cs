@@ -4,13 +4,15 @@ using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
+{
     public class StaticFieldReferenceData(
         MethodDefinition methodDefinition,
         CompositeStaticFieldTracking? returnValueTrace,
         StaticFieldTraceCollection<string> parameterTraces,
         StaticFieldTraceCollection<VariableDefinition> localVariableTraces,
-        StaticFieldTraceCollection<string> stackValueTraces) {
+        StaticFieldTraceCollection<string> stackValueTraces)
+    {
         public MethodDefinition MethodDefinition { get; } = methodDefinition ?? throw new ArgumentNullException(nameof(methodDefinition));
         public CompositeStaticFieldTracking? ReturnValueTrace { get; } = returnValueTrace;
         public StaticFieldTraceCollection<string> StaticFieldTraces { get; } = parameterTraces ?? new StaticFieldTraceCollection<string>();

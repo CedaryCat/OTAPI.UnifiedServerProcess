@@ -1,9 +1,11 @@
 ﻿using ModFramework;
 using System.IO;
 
-namespace OTAPI.UnifiedServerProcess.Extensions {
+namespace OTAPI.UnifiedServerProcess.Extensions
+{
     [MonoMod.MonoModIgnore]
-    public static class ModContextExt {
+    public static class ModContextExt
+    {
         [MonoMod.MonoModIgnore]
         public static string ExtractResources(this ModContext modcontext, string fileinput) {
             var dir = GetEmbeddedResourcesDirectory(modcontext, fileinput);

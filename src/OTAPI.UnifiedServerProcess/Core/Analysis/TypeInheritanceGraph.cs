@@ -1,11 +1,12 @@
 ﻿using Mono.Cecil;
-using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis {
-    public class TypeInheritanceGraph {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis
+{
+    public class TypeInheritanceGraph
+    {
         public TypeInheritanceGraph(ModuleDefinition module) {
             TypeInheritanceChains = [];
             foreach (var type in GetTypesInInheritanceOrder(module)) {
@@ -36,7 +37,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis {
             return result;
         }
 
-        readonly Dictionary<string, ImmutableDictionary<string, TypeDefinition>> TypeInheritanceChains; 
+        readonly Dictionary<string, ImmutableDictionary<string, TypeDefinition>> TypeInheritanceChains;
         private static List<TypeDefinition> GetTypesInInheritanceOrder(ModuleDefinition module) {
             var allTypes = new HashSet<TypeDefinition>();
             var sorted = new List<TypeDefinition>();

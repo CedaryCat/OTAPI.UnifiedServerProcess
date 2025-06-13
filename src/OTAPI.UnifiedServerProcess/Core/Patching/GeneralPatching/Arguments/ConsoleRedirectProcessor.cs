@@ -6,12 +6,14 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
+{
     /// <summary>
     /// Redirects System.Console.* to UnifiedServerProcess.ConsoleSystem to achieve better console IO expansion
     /// </summary>
     /// <param name="callGraph"></param>
-    public class ConsoleRedirectProcessor(MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature {
+    public class ConsoleRedirectProcessor(MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature
+    {
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {

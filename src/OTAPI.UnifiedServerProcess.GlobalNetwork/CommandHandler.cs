@@ -34,7 +34,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
 
             orig(self, root, text, clientId);
         }
-        bool ProcessConsoleMessage(On.OTAPI.HooksSystemContext.MainSystemContext.orig_InvokeCommandProcess orig, HooksSystemContext.MainSystemContext self, 
+        bool ProcessConsoleMessage(On.OTAPI.HooksSystemContext.MainSystemContext.orig_InvokeCommandProcess orig, HooksSystemContext.MainSystemContext self,
             string lowered, string raw) {
 
             if (ProcessUSPCommandText(self.root, raw, byte.MaxValue)) {
@@ -90,7 +90,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             }
             return null;
         }
-        record Excutor(ServerContext? TriggerServer, byte UserId) {
+        record Excutor(ServerContext? TriggerServer, byte UserId)
+        {
             public ServerContext? TriggerServer = TriggerServer;
             public bool IsServer => TriggerServer is null || UserId == byte.MaxValue;
             [MemberNotNullWhen(true, nameof(TriggerServer))]

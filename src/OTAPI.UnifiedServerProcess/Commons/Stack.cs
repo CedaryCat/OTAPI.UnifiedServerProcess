@@ -6,11 +6,15 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Commons {
-    public static partial class MonoModCommon {
+namespace OTAPI.UnifiedServerProcess.Commons
+{
+    public static partial class MonoModCommon
+    {
         [MonoMod.MonoModIgnore]
-        public static class Stack {
-            private struct AnalysisContext {
+        public static class Stack
+        {
+            private struct AnalysisContext
+            {
                 public Instruction CurrentInstruction;
                 public int TargetPosition;
 
@@ -656,13 +660,16 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                         throw new NotSupportedException($"Instruction {instruction.OpCode} not supported.");
                 }
             }
-            public abstract class ArgumentSource {
+            public abstract class ArgumentSource
+            {
                 public Instruction[] Instructions { get; set; } = [];
             }
-            public class FlowPath<TSource>(TSource[] parametersSources) where TSource : ArgumentSource {
+            public class FlowPath<TSource>(TSource[] parametersSources) where TSource : ArgumentSource
+            {
                 public TSource[] ParametersSources { get; set; } = parametersSources;
             }
-            public class StackTopTypePath(TypeReference? type, Instruction actual) : ArgumentSource, IEquatable<StackTopTypePath> {
+            public class StackTopTypePath(TypeReference? type, Instruction actual) : ArgumentSource, IEquatable<StackTopTypePath>
+            {
                 public TypeReference? StackTopType { get; } = type;
                 /// <summary>
                 /// <para> The instruction that pushed the value onto the stack. </para>
@@ -690,12 +697,14 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                     return Instructions.First() == other.Instructions.First() && Instructions.Last() == other.Instructions.Last();
                 }
             }
-            public class ParameterSource(ParameterDefinition parameter) : ArgumentSource {
+            public class ParameterSource(ParameterDefinition parameter) : ArgumentSource
+            {
                 public ParameterDefinition Parameter { get; } = parameter;
 
                 public override string ToString() => $"[{Parameter.Name}:{Parameter.ParameterType.Name}] (inst: {Instructions.Length})";
             }
-            public class InstructionArgsSource(int index) : ArgumentSource {
+            public class InstructionArgsSource(int index) : ArgumentSource
+            {
                 public int Index { get; } = index;
 
                 public override string ToString() => $"[{Index}] (inst: {Instructions.Length})";
@@ -1181,7 +1190,8 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                 int push = GetPushCount(body, instruction);
                 return push - pop;
             }
-            private class ReverseAnalysisContext {
+            private class ReverseAnalysisContext
+            {
                 public Instruction Current { get; }
                 public Instruction Previous { get; }
                 public StackDemand StackDemand { get; }
@@ -1197,7 +1207,8 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                     IsBranch = isBranch;
                 }
             }
-            private class StackDemand {
+            private class StackDemand
+            {
                 public int ParametersToResolve { get; private set; }
                 public int PushCount { get; private set; }
                 public int StackBalance { get; private set; }

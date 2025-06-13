@@ -7,8 +7,8 @@ using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using MonoMod.Cil;
 using MonoMod.Utils;
-using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -148,7 +148,7 @@ class TileSystemPatchLogic
     private void Adjust_UseRefTileModel(ModFwModder modder,
         Dictionary<string, HashSet<int>> modifiedTileParameters,
         Dictionary<string, Dictionary<string, MethodDefinition>> fieldReferences,
-        Dictionary<string, Dictionary<string, MethodDefinition>> methodsReferences, 
+        Dictionary<string, Dictionary<string, MethodDefinition>> methodsReferences,
         MethodDefinition[] tileOperateMethodsArray) {
 
         Dictionary<string, FieldDefinition> refTileFields = new();
@@ -289,8 +289,8 @@ class TileSystemPatchLogic
                     }
                     rawLoadTile = previous;
                 }
-                if (MonoModCommon.IL.TryGetReferencedParameter(currentMethod, rawLoadTile, out var parameter) 
-                    && IsTileType(parameter.ParameterType) 
+                if (MonoModCommon.IL.TryGetReferencedParameter(currentMethod, rawLoadTile, out var parameter)
+                    && IsTileType(parameter.ParameterType)
                     && parameter.ParameterType.FullName != refTileTypeDef.FullName) {
 
                     paramOriginalType[parameter.Index] = parameter.ParameterType;
@@ -460,10 +460,10 @@ class TileSystemPatchLogic
         }
     }
 
-    private void Adjust_RefFeature(ModFwModder modder, 
-        Dictionary<string, HashSet<int>> modifiedTileParameters, 
+    private void Adjust_RefFeature(ModFwModder modder,
+        Dictionary<string, HashSet<int>> modifiedTileParameters,
         Dictionary<string, MethodDefinition> methodShouldAdjust,
-        Dictionary<string, MethodDefinition> allMethods, 
+        Dictionary<string, MethodDefinition> allMethods,
         MethodDefinition[] tileOperateMethodsArray) {
 
         int progress = 0;
@@ -1295,8 +1295,8 @@ class TileSystemPatchLogic
         }
     }
 
-    private void EachMethod_Adjust_MakeRefModifiedLocals(MethodDefinition method, 
-        Dictionary<Instruction, List<Instruction>> jumpTargets, 
+    private void EachMethod_Adjust_MakeRefModifiedLocals(MethodDefinition method,
+        Dictionary<Instruction, List<Instruction>> jumpTargets,
         HashSet<VariableDefinition> notReadonlyVariables) {
 
         bool anyVariableEdit = false;
@@ -1338,8 +1338,8 @@ class TileSystemPatchLogic
         }
     }
 
-    private void EachMethod_Analyze_WillModifyLocals(MethodDefinition method, 
-        Dictionary<string, HashSet<int>> modifiedTileParameters, 
+    private void EachMethod_Analyze_WillModifyLocals(MethodDefinition method,
+        Dictionary<string, HashSet<int>> modifiedTileParameters,
         Dictionary<Instruction, List<Instruction>> jumpTargets,
         out HashSet<VariableDefinition> notReadonlyVariables) {
 
@@ -1379,10 +1379,10 @@ class TileSystemPatchLogic
         }
     }
 
-    private void Adjust_RelinkModifiedComponets(ModFwModder modder, 
+    private void Adjust_RelinkModifiedComponets(ModFwModder modder,
         Dictionary<string, HashSet<int>> modifiedTileParameters,
         Dictionary<string, MethodDefinition> allMethods,
-        Dictionary<string, FieldDefinition> fieldShouldAdjust, 
+        Dictionary<string, FieldDefinition> fieldShouldAdjust,
         Dictionary<string, MethodDefinition> methodShouldAdjust,
         out Dictionary<string, Dictionary<string, MethodDefinition>> fieldReferences,
         out Dictionary<string, Dictionary<string, MethodDefinition>> methodsReferences) {
@@ -1611,7 +1611,7 @@ class TileSystemPatchLogic
     }
 
     private void Analyze_ComponentsNeedAdjust(ModFwModder modder,
-        Dictionary<string, HashSet<int>> modifiedTileParameters, 
+        Dictionary<string, HashSet<int>> modifiedTileParameters,
         out Dictionary<string, FieldDefinition> fieldShouldAdjust,
         out Dictionary<string, MethodDefinition> methodShouldAdjust) {
         fieldShouldAdjust = [];
@@ -2403,7 +2403,8 @@ class TileSystemPatchLogic
 
 namespace Terraria
 {
-    public abstract class TileCollection : IDisposable {
+    public abstract class TileCollection : IDisposable
+    {
         public abstract int Width { get; }
         public abstract int Height { get; }
         public abstract ref TileData this[int x, int y] {
@@ -2418,17 +2419,18 @@ namespace Terraria
         }
         public abstract void Dispose();
 
-        public class DefaultTileCollection(int width, int height) : TileCollection {
+        public class DefaultTileCollection(int width, int height) : TileCollection
+        {
             static unsafe readonly delegate*<object?, nint, ref TileData> cached_RefTileData_GetTileRef = &RefTileData_GetTileRef;
             static ref TileData RefTileData_GetTileRef(object? managedData, nint unmanagedData) {
                 return ref ((TileData[,])managedData!)[(short)((uint)(unmanagedData) >> 16), (short)((uint)(unmanagedData) & 0xFFFF)];
             }
 
             readonly int
-                width = width, 
+                width = width,
                 height = height;
 
-            readonly TileData[,] 
+            readonly TileData[,]
                 data = new TileData[width, height];
             public sealed override ref TileData this[int x, int y] => ref data[x, y];
             public unsafe sealed override RefTileData GetRefTile(int x, int y) => new(data, (nint)((uint)((ushort)x << 16) | (ushort)y), cached_RefTileData_GetTileRef);
@@ -2443,7 +2445,7 @@ namespace Terraria
             static ref TileData RefTileData_GetTileRef(object? _, nint unmanagedData) {
                 return ref *(TileData*)unmanagedData;
             }
-            readonly int 
+            readonly int
                 width = width,
                 height = height;
 
@@ -2456,14 +2458,14 @@ namespace Terraria
 
             public sealed override void Dispose() {
                 Dispose(true);
-                GC.SuppressFinalize(this); 
+                GC.SuppressFinalize(this);
             }
 
             protected virtual void Dispose(bool disposing) {
-                if (data is null) return; 
+                if (data is null) return;
 
                 NativeMemory.Free(data);
-                data = null; 
+                data = null;
             }
 
             ~UnsafeTileCollection() => Dispose(false);

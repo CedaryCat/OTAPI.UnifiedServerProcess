@@ -1,7 +1,9 @@
 ﻿using System;
 
-namespace OTAPI.UnifiedServerProcess.Loggers {
-    public interface ILogger {
+namespace OTAPI.UnifiedServerProcess.Loggers
+{
+    public interface ILogger
+    {
         void Progress(ILoggedComponent sender, int iteration, int progress, int total, string message, int indent = 0);
         void Progress(ILoggedComponent sender, int progress, int total, string message, int indent = 0);
         void Progress(ILoggedComponent sender, int iteration, int progress, int total, string message, int indent = 0, params object[] args);

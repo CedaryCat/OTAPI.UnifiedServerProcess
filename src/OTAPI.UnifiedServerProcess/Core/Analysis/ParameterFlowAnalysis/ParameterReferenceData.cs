@@ -4,13 +4,15 @@ using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
+{
     public sealed class ParameterReferenceData(
         MethodDefinition methodDefinition,
         CompositeParameterTracking? returnValueTrace,
         ParameterTraceCollection<string> parameterTraces,
         ParameterTraceCollection<VariableDefinition> localVariableTraces,
-        ParameterTraceCollection<string> stackValueTraces) {
+        ParameterTraceCollection<string> stackValueTraces)
+    {
         public MethodDefinition MethodDefinition { get; } = methodDefinition ?? throw new ArgumentNullException(nameof(methodDefinition));
         public CompositeParameterTracking? ReturnValueTrace { get; } = returnValueTrace;
         public ParameterTraceCollection<string> ParameterTraces { get; } = parameterTraces ?? new ParameterTraceCollection<string>();

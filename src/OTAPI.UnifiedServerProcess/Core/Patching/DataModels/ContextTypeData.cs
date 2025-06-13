@@ -3,7 +3,6 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
-using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
@@ -11,8 +10,10 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
-    public class ContextTypeData {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
+{
+    public class ContextTypeData
+    {
         public readonly TypeDefinition originalType;
         public readonly TypeDefinition ContextTypeDef;
         public readonly MethodDefinition constructor;
@@ -352,7 +353,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
             }
             else {
                 int collisionCount = 0;
-                foreach (var existingField in declaringType.Fields) { 
+                foreach (var existingField in declaringType.Fields) {
                     if (existingField.Name == fieldName || existingField.Name.StartsWith(fieldName + "_")) {
                         collisionCount++;
                     }
@@ -373,8 +374,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
             var declaringTypeConstructor = declaringType.Methods.Single(m => m.IsConstructor && !m.IsStatic);
             var instanceConvdTypeConstructor = instanceConvdType.Methods.Single(m => m.IsConstructor && !m.IsStatic);
 
-            Instruction insertTarget; 
-            
+            Instruction insertTarget;
+
             if (declaringInOtherContext is null) {
                 insertTarget = declaringTypeConstructor.Body.Instructions.Single(inst => inst.OpCode == OpCodes.Ret);
             }

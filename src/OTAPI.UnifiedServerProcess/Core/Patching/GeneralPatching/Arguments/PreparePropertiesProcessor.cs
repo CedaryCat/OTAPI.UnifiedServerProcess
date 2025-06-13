@@ -7,12 +7,14 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
+{
     /// <summary>
     /// If some static properties use content that needs to be contextualized, it is better to change them to context-aware properties than to break them down into ordinary static functions containing RootContext.
     /// </summary>
     /// <param name="callGraph"></param>
-    public class PreparePropertiesProcessor(MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature {
+    public class PreparePropertiesProcessor(MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature
+    {
         public MethodCallGraph MethodCallGraph => callGraph;
         public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {
 

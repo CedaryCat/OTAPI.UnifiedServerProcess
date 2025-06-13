@@ -4,8 +4,10 @@ using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis {
-    public class DelegateInvocationData {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
+{
+    public class DelegateInvocationData
+    {
         public DelegateInvocationData(MethodDefinition method, Instruction pushDelegateInstruction) {
             Method = method;
             PushDelegateInstruction = pushDelegateInstruction;

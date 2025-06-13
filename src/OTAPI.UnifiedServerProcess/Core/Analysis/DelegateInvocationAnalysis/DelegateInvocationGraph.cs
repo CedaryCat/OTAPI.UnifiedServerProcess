@@ -11,8 +11,10 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis {
-    public class DelegateInvocationGraph : Analyzer {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
+{
+    public class DelegateInvocationGraph : Analyzer
+    {
         public override string Name => "DelegateInvocation";
         /// <summary>
         /// The delegate traces, use <see cref="DelegateInvocationData.GenerateStackKey(MethodDefinition, Instruction)"/> to generate the key

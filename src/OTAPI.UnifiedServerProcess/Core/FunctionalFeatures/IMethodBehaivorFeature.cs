@@ -9,12 +9,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
-    public interface IMethodBehaivorFeature : ILoggedComponent {
+namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
+{
+    public interface IMethodBehaivorFeature : ILoggedComponent
+    {
         DelegateInvocationGraph DelegateInvocationGraph { get; }
         MethodInheritanceGraph MethodInheritanceGraph { get; }
     }
-    public static class MethodBehaivorFeatureExtensions {
+    public static class MethodBehaivorFeatureExtensions
+    {
         public static MethodDefinition[] GetMethodImplementations<TFeature>(this TFeature point,
             MethodDefinition caller,
             Instruction callInstruction,

@@ -1,7 +1,6 @@
 ﻿using Extensions;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using Mono.CompilerServices.SymbolWriter;
 using MonoMod.Cil;
 using OTAPI.UnifiedServerProcess.Commons;
 using System;

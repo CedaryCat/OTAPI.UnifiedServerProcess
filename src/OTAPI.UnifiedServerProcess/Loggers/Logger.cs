@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Loggers {
+namespace OTAPI.UnifiedServerProcess.Loggers
+{
 
-    public abstract class Logger : ILogger {
+    public abstract class Logger : ILogger
+    {
         public const int DEBUG = 0;
         public const int PROGRESS = 1;
         public const int INFO = 2;

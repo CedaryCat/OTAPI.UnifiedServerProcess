@@ -1,7 +1,8 @@
 ﻿using Mono.Cecil;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
+{
     /// <summary>
     /// Represents the tracing information of a single parameter that may exist in multiple parts
     /// within an object structure due to encapsulation or component access.

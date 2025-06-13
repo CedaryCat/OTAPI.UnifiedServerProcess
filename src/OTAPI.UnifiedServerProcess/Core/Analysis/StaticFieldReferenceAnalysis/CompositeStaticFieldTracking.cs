@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
-    public class CompositeStaticFieldTracking {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
+{
+    public class CompositeStaticFieldTracking
+    {
         public readonly Dictionary<string, SingleStaticFieldTrace> TrackedStaticField = [];
 
         public CompositeStaticFieldTracking() { }

@@ -12,8 +12,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis {
-    public class MethodCallGraph : Analyzer, IMethodBehaivorFeature {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
+{
+    public class MethodCallGraph : Analyzer, IMethodBehaivorFeature
+    {
         public override string Name => "MethodCallGraph";
 
         public readonly ImmutableDictionary<string, MethodCallData> MediatedCallGraph;
@@ -129,12 +131,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis {
             Dictionary<string, MethodDefinition> allMethods = [];
 
             foreach (var type in module.GetAllTypes()) {
-                foreach (var method in type.Methods) { 
+                foreach (var method in type.Methods) {
                     allMethods.TryAdd(method.GetIdentifier(), method);
                 }
             }
             foreach (var useds in usedMethodsDict.Values) {
-                foreach (var used in useds) { 
+                foreach (var used in useds) {
                     allMethods.TryAdd(used.DirectlyCalledMethod.GetIdentifier(), used.DirectlyCalledMethod);
                     foreach (var implicitCall in used.ImplicitlyCalledMethods) {
                         allMethods.TryAdd(implicitCall.GetIdentifier(), implicitCall);

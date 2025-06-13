@@ -1,17 +1,18 @@
 ﻿using Mono.Cecil;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis {
-    public class MethodCallData(MethodDefinition method, MethodReferenceData[] usedMethods, MethodDefinition[] usedByMethods) {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
+{
+    public class MethodCallData(MethodDefinition method, MethodReferenceData[] usedMethods, MethodDefinition[] usedByMethods)
+    {
         public readonly MethodDefinition method = method;
         public readonly MethodReferenceData[] UsedMethods = usedMethods;
         public readonly MethodDefinition[] UsedByMethods = usedByMethods;
     }
-    public readonly struct MethodReferenceData(MethodDefinition directlyCalledMethod, MethodDefinition[] implicitlyCalledMethods, ImplicitCallMode implicitCallMode) : IEquatable<MethodReferenceData> {
+    public readonly struct MethodReferenceData(MethodDefinition directlyCalledMethod, MethodDefinition[] implicitlyCalledMethods, ImplicitCallMode implicitCallMode) : IEquatable<MethodReferenceData>
+    {
         public readonly MethodDefinition DirectlyCalledMethod = directlyCalledMethod;
         public readonly MethodDefinition[] ImplicitlyCalledMethods = implicitlyCalledMethods;
         public readonly ImplicitCallMode implicitCallMode = implicitCallMode;
@@ -37,7 +38,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis {
         }
         public readonly bool Equals(MethodReferenceData other) => DirectlyCalledMethod.GetIdentifier() == other.DirectlyCalledMethod.GetIdentifier();
     }
-    public enum ImplicitCallMode {
+    public enum ImplicitCallMode
+    {
         None,
         Inheritance,
         Delegate

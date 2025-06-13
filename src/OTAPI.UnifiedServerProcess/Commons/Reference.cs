@@ -2,9 +2,12 @@
 using System;
 using System.Linq.Expressions;
 
-namespace OTAPI.UnifiedServerProcess.Commons {
-    public static partial class MonoModCommon {
-        public static class Reference {
+namespace OTAPI.UnifiedServerProcess.Commons
+{
+    public static partial class MonoModCommon
+    {
+        public static class Reference
+        {
             [MonoMod.MonoModIgnore]
             public static System.Reflection.MethodBase Method(Expression expression) {
                 if (expression is LambdaExpression lambdaExp) {

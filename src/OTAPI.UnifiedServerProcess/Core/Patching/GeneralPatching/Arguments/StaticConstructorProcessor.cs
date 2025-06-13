@@ -11,8 +11,10 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
-    public class StaticConstructorProcessor(MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature, IJumpSitesCacheFeature {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
+{
+    public class StaticConstructorProcessor(MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature, IJumpSitesCacheFeature
+    {
         public MethodCallGraph MethodCallGraph => callGraph;
         public string Name => nameof(StaticConstructorProcessor);
 

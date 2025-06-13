@@ -1,25 +1,21 @@
-﻿using Microsoft.VisualBasic;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// After contextualization transformation of static types, the original static types are retained (as they may still contain non-convertible static members) but require cross-type access permission adjustments, particularly for accessing internal backing fields of events.
     /// <para>For non-event members, access modifiers can be directly adjusted.</para>
     /// <para>For event backing field access, we implement controlled exposure methods to either modify/return internal delegate objects or provide reference pointers through safe memory access patterns.</para>
     /// </summary>
     /// <param name="logger"></param>
-    public class AdjustAccessModifiersPatcher(ILogger logger) : GeneralPatcher(logger) {
+    public class AdjustAccessModifiersPatcher(ILogger logger) : GeneralPatcher(logger)
+    {
         public override string Name => nameof(AdjustAccessModifiersPatcher);
 
         public override void Patch(PatcherArguments arguments) {
@@ -118,7 +114,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                                         continue;
                                     }
                                     if (!CheckCanAccess(caller, fieldDef)) {
-                                        if (fieldDef.IsPrivate 
+                                        if (fieldDef.IsPrivate
                                             && fieldDef.CustomAttributes.Any(a => a.Constructor.DeclaringType.Name == "CompilerGeneratedAttribute")
                                             && fieldDef.FieldType.TryResolve()?.BaseType?.Name == "MulticastDelegate") {
 
@@ -225,8 +221,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             return false;
         }
 
-        private static bool IsTypeVisibleTo(TypeDefinition callerType, TypeDefinition calleeType)
-        {
+        private static bool IsTypeVisibleTo(TypeDefinition callerType, TypeDefinition calleeType) {
             // Public types are always visible
             if (calleeType.IsPublic)
                 return true;
@@ -239,11 +234,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             bool sameAssembly = callerType.Module.Assembly.Name.FullName == calleeType.Module.Assembly.Name.FullName;
 
             // Handle the visibility of nested types
-            if (calleeType.IsNested)
-            {
+            if (calleeType.IsNested) {
                 TypeDefinition current = calleeType;
-                while (current.IsNested)
-                {
+                while (current.IsNested) {
                     TypeDefinition declaringType = current.DeclaringType.Resolve();
 
                     if (declaringType is null)
@@ -261,8 +254,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             return sameAssembly;
         }
 
-        private static bool IsNestedTypeVisibleTo(TypeDefinition declaringType, TypeDefinition nestedType, TypeDefinition callerType, bool sameAssembly)
-        {
+        private static bool IsNestedTypeVisibleTo(TypeDefinition declaringType, TypeDefinition nestedType, TypeDefinition callerType, bool sameAssembly) {
             if (nestedType.IsNestedPublic)
                 return true;
 
@@ -281,11 +273,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             return false;
         }
 
-        private static bool IsSubclassOf(TypeDefinition type, TypeDefinition baseType)
-        {
+        private static bool IsSubclassOf(TypeDefinition type, TypeDefinition baseType) {
             TypeDefinition current = type;
-            while (current != null)
-            {
+            while (current != null) {
                 if (current.BaseType is null)
                     return false;
 
@@ -301,11 +291,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             return false;
         }
 
-        private static bool AreTypesNestedWithin(TypeDefinition callerType, TypeDefinition targetType)
-        {
+        private static bool AreTypesNestedWithin(TypeDefinition callerType, TypeDefinition targetType) {
             TypeDefinition? current = callerType;
-            while (current != null)
-            {
+            while (current != null) {
                 if (current.FullName == targetType.FullName)
                     return true;
 

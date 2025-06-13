@@ -1,10 +1,5 @@
-﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
+﻿using System.Buffers;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol
 {
@@ -16,7 +11,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol
         public static TPacket Read<TPacket>(Span<byte> content) where TPacket : struct, IPacket<TPacket> {
             return TPacket.Read(content);
         }
-        public static TPacket ReadUnmanaged<TPacket>(Span<byte> content) where TPacket : unmanaged, IUnmanagedPacket<TPacket> { 
+        public static TPacket ReadUnmanaged<TPacket>(Span<byte> content) where TPacket : unmanaged, IUnmanagedPacket<TPacket> {
             return IUnmanagedPacket<TPacket>.ReadUnmanaged(content);
         }
         public static TPacket ReadEmpty<TPacket>(Span<byte> content) where TPacket : unmanaged, IEmptyPacket<TPacket> {
@@ -51,7 +46,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol
 
                     stream.Write(buffer, 0, len);
                 }
-            } 
+            }
             finally {
                 ArrayPool<byte>.Shared.Return(buffer);
             }

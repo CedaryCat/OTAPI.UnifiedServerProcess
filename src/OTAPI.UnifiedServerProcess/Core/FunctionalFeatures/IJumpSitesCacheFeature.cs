@@ -5,9 +5,11 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
+namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
+{
     public interface IJumpSitesCacheFeature : ILoggedComponent { }
-    public static class JumpSitesCacheFeatureExtensions {
+    public static class JumpSitesCacheFeatureExtensions
+    {
 
         static readonly Dictionary<string, Dictionary<Instruction, List<Instruction>>> cachedJumpSites = [];
 

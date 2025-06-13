@@ -7,19 +7,18 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// Adjusts instantiation order for contextualized types converted from static types. Their constructors contain logic transformed from static initialization (processed by <see cref="CctorCtxAdaptPatcher"/>),
     /// <para>which preserves original static dependency relationships. Instantiation must strictly follow dependency order using Kahn's topological sorting algorithm to ensure initialization integrity.</para>
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
-    public class ContextInstantiationOrderPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger) {
+    public class ContextInstantiationOrderPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger)
+    {
         public override string Name => nameof(ContextInstantiationOrderPatcher);
 
         public override void Patch(PatcherArguments arguments) {
@@ -114,7 +113,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 if (callGraph.MediatedCallGraph.TryGetValue(body.Method.GetIdentifier(), out var callData)) {
                     callGraphRecorded = true;
                     foreach (var used in callData.UsedMethods) {
-                        if(used.implicitCallMode is ImplicitCallMode.Delegate) {
+                        if (used.implicitCallMode is ImplicitCallMode.Delegate) {
                             continue;
                         }
                         if (used.DirectlyCalledMethod.HasBody && visitedMethod.TryAdd(used.DirectlyCalledMethod.GetIdentifier(), used.DirectlyCalledMethod)) {
@@ -156,13 +155,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
             return visitedContext.Values.ToArray();
         }
-        static class CycleTool {
+        static class CycleTool
+        {
             public static List<List<ContextTypeData>> FindAllCycles(
                 Dictionary<ContextTypeData, ContextTypeData[]> dependencies,
                 List<ContextTypeData> unresolvedNodes) {
 
                 // for cycle detection
-                var allCycles = new HashSet<string>(); 
+                var allCycles = new HashSet<string>();
                 var cycles = new List<List<ContextTypeData>>();
 
                 foreach (var node in unresolvedNodes) {
@@ -196,7 +196,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
                     if (cycleStartIndex != -1) {
                         var cycleNodes = pathList.Skip(cycleStartIndex).ToList();
-                        cycleNodes.Add(node); 
+                        cycleNodes.Add(node);
 
                         var normalizedCycle = NormalizeCycle(cycleNodes);
                         string hash = GetCycleHash(normalizedCycle);

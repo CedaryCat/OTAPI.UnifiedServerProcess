@@ -1,8 +1,10 @@
 ﻿using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
-    public class PatchChain(ILogger logger, PatchPipelineBuilder? previous = null) : PatchPipelineBuilder(logger) {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
+{
+    public class PatchChain(ILogger logger, PatchPipelineBuilder? previous = null) : PatchPipelineBuilder(logger)
+    {
         private readonly PatchPipelineBuilder? previous = previous;
         private readonly ILogger logger = logger;
         public override string Name => nameof(PatchChain);
@@ -21,17 +23,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
             Info($"Adding patcher: {next.Name}");
             return new LinkedPatchChain(logger, this, new SinglePatchProcessor(logger, next));
         }
-        class SinglePatchProcessor(ILogger logger, Patcher patcher) : PatchChain(logger) {
+        class SinglePatchProcessor(ILogger logger, Patcher patcher) : PatchChain(logger)
+        {
             private readonly Patcher patcher = patcher;
             public sealed override string Name => patcher.Name;
             public override void Execute() {
                 Info("Patching...");
-                patcher.Patch(); 
+                patcher.Patch();
             }
             public override string Print() => $"[Patch:{patcher.Name}]";
             public override string ToString() => Print();
         }
-        class LinkedPatchChain(ILogger logger, PatchChain first, PatchChain next) : PatchChain(logger) {
+        class LinkedPatchChain(ILogger logger, PatchChain first, PatchChain next) : PatchChain(logger)
+        {
             private readonly PatchChain current = first;
             private readonly PatchChain next = next;
             public sealed override string Name => current.Name;
@@ -45,7 +49,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
         }
     }
     public class PatchingChain<TArgument>(ILogger logger, ArgumentProvider<TArgument> argument, PatchPipelineBuilder? previous = null) : PatchPipelineBuilder(logger)
-        where TArgument : Argument {
+        where TArgument : Argument
+    {
         protected readonly ArgumentProvider<TArgument> argument = argument;
         private readonly PatchPipelineBuilder? previous = previous;
         private readonly ILogger logger = logger;
@@ -88,7 +93,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
             Info($"Adding patcher: {next.Name}");
             return new LinkedPatchChain(logger, this, new SinglePatchProcessor(logger, next, argument), argument);
         }
-        class FinalizeCallbackInvoker(ILogger logger, PatchingChain<TArgument> insertAfterExec, Action<TArgument>? callback, ArgumentProvider<TArgument> argument) : PatchChain(logger) {
+        class FinalizeCallbackInvoker(ILogger logger, PatchingChain<TArgument> insertAfterExec, Action<TArgument>? callback, ArgumentProvider<TArgument> argument) : PatchChain(logger)
+        {
             private readonly ArgumentProvider<TArgument> argument = argument;
             private readonly PatchingChain<TArgument> insertAfterExec = insertAfterExec;
             public sealed override string Name => $"[CALLBACK|Args:{typeof(TArgument).Name}]";
@@ -104,7 +110,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
             }
             public sealed override string ToString() => Print();
         }
-        class SinglePatchProcessor(ILogger logger, Patcher<TArgument> patcher, ArgumentProvider<TArgument> argument) : PatchingChain<TArgument>(logger, argument) {
+        class SinglePatchProcessor(ILogger logger, Patcher<TArgument> patcher, ArgumentProvider<TArgument> argument) : PatchingChain<TArgument>(logger, argument)
+        {
             private readonly Patcher<TArgument> patcher = patcher;
             public sealed override string Name => patcher.Name;
             public sealed override void Execute() {
@@ -122,7 +129,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
             }
             public sealed override string ToString() => Print();
         }
-        class LinkedPatchChain(ILogger logger, PatchingChain<TArgument> first, PatchingChain<TArgument> next, ArgumentProvider<TArgument> argument) : PatchingChain<TArgument>(logger, argument) {
+        class LinkedPatchChain(ILogger logger, PatchingChain<TArgument> first, PatchingChain<TArgument> next, ArgumentProvider<TArgument> argument) : PatchingChain<TArgument>(logger, argument)
+        {
             private readonly PatchingChain<TArgument> current = first;
             private readonly PatchingChain<TArgument> next = next;
             public sealed override string Name => current.Name;

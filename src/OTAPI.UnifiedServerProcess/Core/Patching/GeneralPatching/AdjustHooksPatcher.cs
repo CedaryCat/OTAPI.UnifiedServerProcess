@@ -9,14 +9,16 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// Fix the problem that the OriginalDelegate of HookEvents does not have the same ParameterAttributes as the corresponding method
     /// <para>It is an optional step that is not a necessary step for contextualization</para>
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
-    public class AdjustHooksPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger) {
+    public class AdjustHooksPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger)
+    {
         public override string Name => nameof(AdjustHooksPatcher);
 
         public override void Patch(PatcherArguments arguments) {

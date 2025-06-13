@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
-    public class CompositeLogger(params Logger[] loggers) : Logger, IDisposable {
+namespace OTAPI.UnifiedServerProcess.Loggers.Implements
+{
+    public class CompositeLogger(params Logger[] loggers) : Logger, IDisposable
+    {
 
         public void Dispose() {
             foreach (var logger in loggers.OfType<IDisposable>()) {

@@ -1,7 +1,6 @@
 ﻿using OTAPI.UnifiedServerProcess.ConsoleClient.Protocol;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
-using System.Text;
 
 namespace OTAPI.UnifiedServerProcess.ConsoleClient
 {
@@ -28,7 +27,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient
                 const int packetLenSize = sizeof(int);
                 const int packetIdSize = 1;
                 const int packetHeaderSize = packetLenSize + packetIdSize;
-                const int maxPacketSize = 1024 * 1024; 
+                const int maxPacketSize = 1024 * 1024;
 
                 while (_pipeClient.IsConnected) {
                     var count = _pipeClient.Read(readBuffer, bufferWritePosition, readBuffer.Length - bufferWritePosition);

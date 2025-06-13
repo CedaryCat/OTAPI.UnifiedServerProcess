@@ -2,8 +2,10 @@
 using Mono.Cecil.Cil;
 using System;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
-    public struct ClosureCaptureData {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
+{
+    public struct ClosureCaptureData
+    {
         /// <summary>
         /// If capture the 'this' parameter, this will be method.Body.ThisParameter
         /// <para>If capture the other parameter, this will be the target parameter</para>

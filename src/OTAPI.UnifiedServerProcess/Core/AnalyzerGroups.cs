@@ -9,8 +9,10 @@ using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
 using OTAPI.UnifiedServerProcess.Loggers;
 
-namespace OTAPI.UnifiedServerProcess.Core {
-    public class AnalyzerGroups {
+namespace OTAPI.UnifiedServerProcess.Core
+{
+    public class AnalyzerGroups
+    {
         readonly ILogger logger;
         readonly ModuleDefinition module;
 

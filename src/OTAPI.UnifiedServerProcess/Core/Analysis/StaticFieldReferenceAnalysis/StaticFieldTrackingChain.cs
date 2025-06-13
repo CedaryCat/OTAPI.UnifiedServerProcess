@@ -7,7 +7,8 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
+{
     public class StaticFieldTrackingChain : IEquatable<StaticFieldTrackingChain>
     {
         /// <summary>

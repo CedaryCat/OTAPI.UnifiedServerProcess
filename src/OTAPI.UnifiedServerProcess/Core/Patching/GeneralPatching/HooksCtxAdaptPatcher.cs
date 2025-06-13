@@ -12,7 +12,8 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// Two scenarios exist for contextualizing functions, requiring HookEvents to implement two corresponding adaptations:
     /// <para>1. Specific static functions will be transformed into instance methods of contextualized entity classes, requiring the sender to be updated from null to the contextual instance.</para>
@@ -20,7 +21,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
-    public class HooksCtxAdaptPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger), IJumpSitesCacheFeature {
+    public class HooksCtxAdaptPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger), IJumpSitesCacheFeature
+    {
         public override string Name => nameof(HooksCtxAdaptPatcher);
         public override void Patch(PatcherArguments arguments) {
             var hookEventDelegate = arguments.MainModule.GetType("HookEvents.HookDelegate")

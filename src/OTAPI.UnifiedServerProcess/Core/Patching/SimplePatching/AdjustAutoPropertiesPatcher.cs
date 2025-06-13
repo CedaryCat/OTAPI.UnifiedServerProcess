@@ -52,7 +52,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
                         continue;
                     }
 
-                    foreach (var inst in method.Body.Instructions) { 
+                    foreach (var inst in method.Body.Instructions) {
                         if (inst.Operand is FieldReference fr && nameMap.TryGetValue(fr.GetIdentifier(), out string? value)) {
                             fr.Name = value;
                         }

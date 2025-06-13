@@ -3,9 +3,11 @@ using System.IO;
 using System.Text;
 using System.Threading;
 
-namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
+namespace OTAPI.UnifiedServerProcess.Loggers.Implements
+{
     [Obsolete("Not support")]
-    public class MarkdownLogger : Logger, IDisposable {
+    public class MarkdownLogger : Logger, IDisposable
+    {
         private readonly string filePath;
         private static readonly Lock mdLock = new();
 
@@ -64,7 +66,7 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
         };
 
         public void Dispose() {
-            File.AppendAllText(filePath, "\n```"); 
+            File.AppendAllText(filePath, "\n```");
             GC.SuppressFinalize(this);
         }
     }

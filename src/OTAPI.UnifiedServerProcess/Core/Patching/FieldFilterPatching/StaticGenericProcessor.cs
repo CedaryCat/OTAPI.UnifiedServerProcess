@@ -9,13 +9,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
+{
     /// <summary>
     /// Handle static generic classes based on specific circumstances.
     /// <para>If they can be set as global, try not to modify them.</para>
     /// <para>If they are used as type key-value pair storers and it is necessary to allocate an instantiated storer for each server context, then modify them to dictionaries.</para>
     /// </summary>
-    public class StaticGenericProcessor() : IFieldFilterArgProcessor, IJumpSitesCacheFeature {
+    public class StaticGenericProcessor() : IFieldFilterArgProcessor, IJumpSitesCacheFeature
+    {
 
         public string Name => "StaticGenericPatcher";
 
@@ -89,7 +91,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
             argument.ModifiedStaticFields.Add(creativePowerManager.GetField("PowerTypeStorageInstance"));
         }
 
-        public readonly struct TypeInitializationParams {
+        public readonly struct TypeInitializationParams
+        {
             public readonly string Prefix;
 
             public readonly TypeDefinition containingType;
@@ -139,7 +142,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
                 dictTypePatten.GenericParameters.Add(genericParamValue);
             }
         }
-        public readonly ref struct MethodReferenceParams {
+        public readonly ref struct MethodReferenceParams
+        {
             public readonly MethodReference TypeOfT;
             public readonly MethodReference CreateInstancePatten;
             readonly TypeInitializationParams typeParams;
@@ -187,7 +191,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
                 var rtHandleType = typeParams.rtHandleType;
                 var activatorType = typeParams.activatorType;
 
-                TypeOfT = module.ImportReference(sysType.Resolve().Methods.Single(m => m.Name == nameof(Type.GetTypeFromHandle))); 
+                TypeOfT = module.ImportReference(sysType.Resolve().Methods.Single(m => m.Name == nameof(Type.GetTypeFromHandle)));
 
                 CreateInstancePatten = new MethodReference(nameof(Activator.CreateInstance), module.TypeSystem.Object, activatorType) {
                     HasThis = false,
@@ -197,7 +201,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
                 CreateInstancePatten.ReturnType = createInstanceGenericParam;
             }
         }
-        public readonly struct ItemParams(TypeDefinition itemType, MethodDefinition itemCtor, Dictionary<FieldDefinition, FieldDefinition> fieldMap) {
+        public readonly struct ItemParams(TypeDefinition itemType, MethodDefinition itemCtor, Dictionary<FieldDefinition, FieldDefinition> fieldMap)
+        {
             public readonly Dictionary<FieldDefinition, FieldDefinition> FieldMap = fieldMap;
             public readonly TypeDefinition ItemType = itemType;
             public readonly MethodDefinition ItemCtor = itemCtor;
@@ -214,7 +219,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching {
                 return method;
             }
         }
-        public readonly struct ContainerParams(FieldDefinition containerField, TypeDefinition containerType, FieldDefinition innerContainerField, TypeReference innerContainerType) {
+        public readonly struct ContainerParams(FieldDefinition containerField, TypeDefinition containerType, FieldDefinition innerContainerField, TypeReference innerContainerType)
+        {
             public readonly FieldDefinition containerField = containerField;
             public readonly TypeDefinition containerType = containerType;
             public readonly FieldDefinition innerContainerField = innerContainerField;

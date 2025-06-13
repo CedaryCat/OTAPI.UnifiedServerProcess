@@ -7,8 +7,10 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
-    public sealed class ParameterTrackingChain : IEquatable<ParameterTrackingChain> {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
+{
+    public sealed class ParameterTrackingChain : IEquatable<ParameterTrackingChain>
+    {
         /// <summary>
         /// The original parameter definition being tracked
         /// </summary>

@@ -1,14 +1,15 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Commons {
-    public static partial class MonoModCommon {
+namespace OTAPI.UnifiedServerProcess.Commons
+{
+    public static partial class MonoModCommon
+    {
         [MonoMod.MonoModIgnore]
-        public static class IL {
+        public static class IL
+        {
             /// <summary>
             /// The name of the "this" parameter is an empty string rather than "this".
             /// </summary>
@@ -115,7 +116,7 @@ namespace OTAPI.UnifiedServerProcess.Commons {
             }
             public static bool TryGetReferencedParameter(MethodDefinition method, Instruction instruction, out int paramInnerIndex, [NotNullWhen(true)] out ParameterDefinition? parameter) {
                 ParameterDefinition? tmpCheck = null;
-                
+
                 paramInnerIndex = instruction.OpCode.Code switch {
                     Code.Ldarg_0 => 0,
                     Code.Ldarg_1 => 1,

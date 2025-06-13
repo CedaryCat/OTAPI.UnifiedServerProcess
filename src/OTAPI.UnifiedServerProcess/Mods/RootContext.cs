@@ -9,8 +9,10 @@ void MergeRootContext(ModFwModder modder) {
     Console.WriteLine(modder.Module.GetType("UnifiedServerProcess.RootContext").FullName);
 }
 
-namespace UnifiedServerProcess {
-    public class RootContext {
+namespace UnifiedServerProcess
+{
+    public class RootContext
+    {
         public readonly string Name;
         public ConsoleSystemContext Console;
         public RootContext(string name) {
@@ -19,7 +21,8 @@ namespace UnifiedServerProcess {
             Console = new ConsoleSystemContext(this);
         }
     }
-    public class ConsoleSystemContext(RootContext root) : IDisposable {
+    public class ConsoleSystemContext(RootContext root) : IDisposable
+    {
         public readonly RootContext root = root;
         protected virtual void Dispose(bool disposing) { }
         public void Dispose() {

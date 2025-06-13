@@ -2,9 +2,11 @@
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
+namespace OTAPI.UnifiedServerProcess.Loggers.Implements
+{
 
-    public class ConsoleLogger : Logger, IDisposable {
+    public class ConsoleLogger : Logger, IDisposable
+    {
         private readonly int minLevel;
         private readonly Channel<LogMessage> channel;
         private readonly Task processingTask;

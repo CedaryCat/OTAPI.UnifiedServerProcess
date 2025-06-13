@@ -4,8 +4,10 @@ using System.Linq;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-namespace OTAPI.UnifiedServerProcess.Loggers.Implements {
-    public class FileLogger : Logger, IDisposable {
+namespace OTAPI.UnifiedServerProcess.Loggers.Implements
+{
+    public class FileLogger : Logger, IDisposable
+    {
         private readonly string filePath;
         private readonly FileStream fileStream;
         private readonly StreamWriter writer;

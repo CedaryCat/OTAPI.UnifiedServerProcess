@@ -6,15 +6,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Commons {
-    public partial class MonoModCommon {
-        public static class Structure {
+namespace OTAPI.UnifiedServerProcess.Commons
+{
+    public partial class MonoModCommon
+    {
+        public static class Structure
+        {
             public static TypeReference CreateTypeReference(TypeDefinition type, ModuleDefinition module) {
-                var result = new TypeReference(type.Namespace, type.Name, module, type.Scope) { 
+                var result = new TypeReference(type.Namespace, type.Name, module, type.Scope) {
                     IsValueType = type.IsValueType,
                 };
                 if (result.HasGenericParameters) {
-                    foreach (var param in type.GenericParameters) { 
+                    foreach (var param in type.GenericParameters) {
                         result.GenericParameters.Add(new GenericParameter(param.Name, result));
                     }
                 }
@@ -34,7 +37,8 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                     throw new InvalidOperationException("Unknown generic parameter");
                 }
             }
-            public readonly struct MapOption {
+            public readonly struct MapOption
+            {
                 public MapOption() {
                     this.MethodReplaceMap = [];
                     this.TypeReplaceMap = [];
@@ -195,8 +199,8 @@ namespace OTAPI.UnifiedServerProcess.Commons {
                         return DeepMapGenericInstanceMethod(genericInstanceMethod, option);
                     }
                     var declaringType = method.DeclaringType;
-                    if (option.TypeReplaceMap.TryGetValue(declaringType.Resolve(), out var mappedDeclaringType) 
-                        && mappedDeclaringType.Methods.Any(m => m.GetIdentifier(false) == method.GetIdentifier(false) 
+                    if (option.TypeReplaceMap.TryGetValue(declaringType.Resolve(), out var mappedDeclaringType)
+                        && mappedDeclaringType.Methods.Any(m => m.GetIdentifier(false) == method.GetIdentifier(false)
                         && m.HasThis == method.HasThis)) {
                         declaringType = DeepMapTypeReference(method.DeclaringType, option);
                     }

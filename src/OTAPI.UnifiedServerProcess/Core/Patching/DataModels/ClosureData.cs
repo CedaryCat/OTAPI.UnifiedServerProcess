@@ -9,8 +9,10 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
-    public class ClosureData {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
+{
+    public class ClosureData
+    {
         public TypeDefinition ClosureType;
         public MethodDefinition ClosureConstructor;
         public ClosureCaptureData[] Captures;
@@ -143,7 +145,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
             closureTypeDef = new TypeDefinition("", closureTypeName, TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) {
                 DeclaringType = declaringType
             };
-            foreach (var genericParam in declaringType.GenericParameters) { 
+            foreach (var genericParam in declaringType.GenericParameters) {
                 closureTypeDef.GenericParameters.Add(genericParam.Clone());
             }
 
@@ -161,7 +163,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
             if (declaringType.HasGenericParameters) {
                 foreach (var capture in captures) {
                     capture.CaptureField.FieldType = MonoModCommon.Structure.DeepMapTypeReference(
-                        capture.CaptureField.FieldType, 
+                        capture.CaptureField.FieldType,
                         MonoModCommon.Structure.MapOption.Create(providers: [(declaringType, closureTypeDef)]));
                     closureTypeDef.Fields.Add(capture.CaptureField);
                 }

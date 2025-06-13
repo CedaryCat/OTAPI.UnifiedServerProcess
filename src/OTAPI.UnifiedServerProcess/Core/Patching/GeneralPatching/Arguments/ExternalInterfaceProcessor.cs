@@ -13,7 +13,8 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
+{
     /// <summary>
     /// If the implementation of a function that implements a certain interface uses context-related content,
     /// <para>we need to evaluate whether to modify the interface definition to add a RootContext parameter to achieve context attachment</para>
@@ -23,7 +24,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
     /// <para>2. Ensuring the consistency of all implementations of the interface in the current module.</para>
     /// </summary>
     /// <param name="methodCallGraph"></param>
-    public class ExternalInterfaceProcessor(MethodCallGraph methodCallGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature {
+    public class ExternalInterfaceProcessor(MethodCallGraph methodCallGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature
+    {
         readonly MethodInheritanceGraph inheritanceGraph = methodCallGraph.MethodInheritanceGraph;
         public MethodCallGraph MethodCallGraph => methodCallGraph;
 

@@ -1,8 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
-    public sealed class ParameterTraceCollection<TKey> where TKey : notnull {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
+{
+    public sealed class ParameterTraceCollection<TKey> where TKey : notnull
+    {
         private readonly Dictionary<TKey, CompositeParameterTracking> _traces = [];
 
         public bool TryGetTrace(TKey key, [NotNullWhen(true)] out CompositeParameterTracking? trace) =>

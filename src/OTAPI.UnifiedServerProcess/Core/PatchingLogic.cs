@@ -3,14 +3,16 @@ using Mono.Cecil;
 using OTAPI.UnifiedServerProcess.Core.Infrastructure;
 using OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
-using OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
+using OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Core {
-    public static class PatchingLogic {
+namespace OTAPI.UnifiedServerProcess.Core
+{
+    public static class PatchingLogic
+    {
         public static void Patch(ILogger logger, ModuleDefinition module) {
 
             var analyzers = new AnalyzerGroups(logger, module);

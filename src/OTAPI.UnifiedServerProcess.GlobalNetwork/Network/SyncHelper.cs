@@ -1,8 +1,8 @@
 ﻿using Microsoft.Xna.Framework;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
+using Terraria;
 using Terraria.ID;
 using Terraria.Localization;
-using Terraria;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 {
@@ -117,7 +117,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 
             onlineServer.NetMessage.SendData(MessageID.PlayerSpawn, whoAmI, -1, null, whoAmI, (byte)PlayerSpawnContext.SpawningIntoWorld);
             player.position = new(
-                onlineServer.Main.spawnTileX * 16 + 8 - player.width / 2, 
+                onlineServer.Main.spawnTileX * 16 + 8 - player.width / 2,
                 onlineServer.Main.spawnTileY * 16 - player.height);
             player.velocity = default;
             onlineServer.NetMessage.SendData(MessageID.TeleportEntity, -1, -1, null, 0, whoAmI, player.position.X, player.position.Y, -1);

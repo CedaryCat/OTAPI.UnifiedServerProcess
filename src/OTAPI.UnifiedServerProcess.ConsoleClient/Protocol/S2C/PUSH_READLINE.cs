@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Runtime.InteropServices;
 
 namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.S2C
 {
@@ -17,7 +12,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.S2C
 
         public static PUSH_READLINE Read(Span<byte> content) {
             var offset = IPacket.ReadString(content, out var str);
-            fixed (byte* p = content) { 
+            fixed (byte* p = content) {
                 var order = *(long*)(p + offset);
                 return new(str, order);
             }

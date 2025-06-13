@@ -2,7 +2,8 @@
 using ReLogic.OS;
 using UnifiedServerProcess;
 
-namespace OTAPI.UnifiedServerProcess.Test {
+namespace OTAPI.UnifiedServerProcess.Test
+{
     internal class Program
     {
         static void Main(string[] args) {
@@ -15,7 +16,7 @@ namespace OTAPI.UnifiedServerProcess.Test {
                 Console.WriteLine("[USP] Player joined: " + test.Main.player[e.Plr].name);
             };
 
-            test.Main.SkipAssemblyLoad = true; 
+            test.Main.SkipAssemblyLoad = true;
             test.Program.LaunchGame(args);
         }
     }

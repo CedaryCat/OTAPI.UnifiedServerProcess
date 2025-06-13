@@ -7,14 +7,16 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// After contextualization and cleanup, property accessors with added RootContext parameters should be decomposed into standalone methods since they no longer qualify as property members.
     /// <para>Additionally, properties/accessors partially removed during cleanup require full removal.</para>
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
-    public class AdjustPropertiesPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger) {
+    public class AdjustPropertiesPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger)
+    {
         public override string Name => nameof(AdjustPropertiesPatcher);
 
         public override void Patch(PatcherArguments arguments) {

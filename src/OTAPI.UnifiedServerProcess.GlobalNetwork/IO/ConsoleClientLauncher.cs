@@ -80,7 +80,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
             }
         }
         public ConsoleClientLauncher(ServerContext server) : base(server) {
-            _pipeName = $"USP_Console_{server.Name}_{server.UniqueId}"; 
+            _pipeName = $"USP_Console_{server.Name}_{server.UniqueId}";
             waiting = new WaitingData(this);
             RestartCommunication();
         }
@@ -102,7 +102,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
                 try {
                     StartListeningThread();
                 }
-                catch (ObjectDisposedException) { 
+                catch (ObjectDisposedException) {
                     // Is manually disposed, not need to restart
                 }
                 catch {

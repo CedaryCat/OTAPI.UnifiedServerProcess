@@ -3,8 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis {
-    public sealed class CompositeParameterTracking {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
+{
+    public sealed class CompositeParameterTracking
+    {
         public readonly Dictionary<string, ParameterTrackingManifest> ReferencedParameters = [];
 
 

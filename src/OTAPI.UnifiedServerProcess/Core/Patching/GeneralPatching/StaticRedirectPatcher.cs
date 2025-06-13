@@ -15,7 +15,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// <para>Attaches context parameters to specific static methods, redirects their accesses to static fields by binding field versions to the context,</para>
     /// <para>and incrementally processes callers to propagate context parameters through invocations.</para>
@@ -27,7 +28,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
     public class StaticRedirectPatcher(ILogger logger,
         DelegateInvocationGraph delegateInvocationGraph,
         MethodInheritanceGraph methodInheritanceGraph,
-        MethodCallGraph callGraph) : GeneralPatcher(logger), IContextInjectFeature, IMethodBehaivorFeature, IJumpSitesCacheFeature, IMethodCheckCacheFeature {
+        MethodCallGraph callGraph) : GeneralPatcher(logger), IContextInjectFeature, IMethodBehaivorFeature, IJumpSitesCacheFeature, IMethodCheckCacheFeature
+    {
 
         public override string Name => nameof(StaticRedirectPatcher);
         public DelegateInvocationGraph DelegateInvocationGraph => delegateInvocationGraph;
@@ -147,11 +149,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             return null;
         }
         void AddNextIterationMethod(
-            PatcherArguments arguments, 
+            PatcherArguments arguments,
             Dictionary<string, MethodDefinition> workQueue,
             ContextBoundMethodMap mappedMethods,
-            MethodDefinition processedMethod, 
-            MethodModifyMode modifyMode, 
+            MethodDefinition processedMethod,
+            MethodModifyMode modifyMode,
             int iteration, int progress, int total) {
 
             var module = arguments.MainModule;
@@ -289,7 +291,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 }
             }
         }
-        enum MethodModifyMode {
+        enum MethodModifyMode
+        {
             None = 0,
             /// <summary>
             /// Context-bound by static-to-instance conversion (implicit-context-bound)

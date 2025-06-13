@@ -1,17 +1,18 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
-using Mono.CompilerServices.SymbolWriter;
-using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
-    public interface IMethodCheckCacheFeature {
+namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
+{
+    public interface IMethodCheckCacheFeature
+    {
         MethodCallGraph MethodCallGraph { get; }
     }
-    public static class MethodCheckCacheFeatureExtension {
+    public static class MethodCheckCacheFeatureExtension
+    {
         public static bool AddPredefineMethodUsedContext<TFeature>(
             this TFeature _,
             MethodDefinition method) {
@@ -23,8 +24,8 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
             return PredefineMethodUsedContext.Add(methodId);
         }
         public static bool CheckUsedContextBoundField<TFeature>(
-            this TFeature point, 
-            TypeDefinition rootContextDef, 
+            this TFeature point,
+            TypeDefinition rootContextDef,
             IDictionary<string, FieldDefinition> instanceConvdFieldOrigMap,
             MethodDefinition checkMethod,
             bool useCache = true)
@@ -83,12 +84,12 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
                     }
                 }
 
-                if (currentCheck.Body.Instructions.Count == 1 
+                if (currentCheck.Body.Instructions.Count == 1
                     && (currentCheck.Body.Instructions[0].OpCode == OpCodes.Ret || currentCheck.Body.Instructions[0].OpCode == OpCodes.Throw)) {
                     continue;
                 }
-                if (currentCheck.Body.Instructions.Count == 2 && 
-                    currentCheck.Body.Instructions[0].OpCode == OpCodes.Ldnull && 
+                if (currentCheck.Body.Instructions.Count == 2 &&
+                    currentCheck.Body.Instructions[0].OpCode == OpCodes.Ldnull &&
                     currentCheck.Body.Instructions[1].OpCode == OpCodes.Ret) {
                     continue;
                 }
@@ -154,7 +155,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures {
         public static bool CheckUsedContextBoundField<TFeature>(
             this TFeature point,
             TypeDefinition rootContextDef,
-            HashSet<FieldDefinition> modifiedFields, 
+            HashSet<FieldDefinition> modifiedFields,
             MethodDefinition checkMethod,
             bool useCache = true)
             where TFeature : IMethodCheckCacheFeature {

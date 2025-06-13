@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using System.Text;
 
 namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.C2S
 {

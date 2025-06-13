@@ -14,8 +14,10 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis {
-    public class ParamModificationAnalyzer : Analyzer, IMethodBehaivorFeature {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
+{
+    public class ParamModificationAnalyzer : Analyzer, IMethodBehaivorFeature
+    {
         public sealed override string Name => "ParamModificationAnalyzer";
         public readonly ImmutableDictionary<string, ImmutableDictionary<int, ParamModifications>> ModifiedParameters;
         readonly TypeInheritanceGraph typeInheritanceGraph;
@@ -162,7 +164,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis {
             dataChanged = hasExternalChange;
 
             static bool CheckAndAddModifications(Dictionary<string, Dictionary<int, ParamModifications>> modifiedParametersAllMethods, string processingMethodId, MethodDefinition method, ParameterTrackingManifest modified) {
-                
+
                 if (!modifiedParametersAllMethods.TryGetValue(processingMethodId, out var modifiedParametersCurrentMethod)) {
                     modifiedParametersCurrentMethod = [];
                 }
@@ -193,7 +195,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis {
             }
 
             static bool TryAddModifications(Dictionary<string, Dictionary<int, ParamModifications>> modifiedParametersAllMethods, string processingMethodId, MethodDefinition method, ParameterDefinition parameter, IEnumerable<MemberAccessStep[]> modifications) {
-                
+
                 if (!modifiedParametersAllMethods.TryGetValue(processingMethodId, out var modifiedParametersCurrentMethod)) {
                     modifiedParametersCurrentMethod = [];
                 }

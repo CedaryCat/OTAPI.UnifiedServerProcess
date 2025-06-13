@@ -3,9 +3,6 @@ using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels;
 using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 {
@@ -14,7 +11,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
         public readonly ParameterDefinition parameter = parameter;
         public HashSet<ModifiedComponent> modifications = [];
     }
-    public class ModifiedComponent(IEnumerable<MemberAccessStep> accessChain) : IEquatable<ModifiedComponent> {
+    public class ModifiedComponent(IEnumerable<MemberAccessStep> accessChain) : IEquatable<ModifiedComponent>
+    {
         public readonly ImmutableArray<MemberAccessStep> modificationAccessChain = [.. accessChain];
         public override string ToString() => string.Join(".", modificationAccessChain);
         public override int GetHashCode() => ToString().GetHashCode();

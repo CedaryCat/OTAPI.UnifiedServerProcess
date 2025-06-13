@@ -11,8 +11,10 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching {
-    public static class PatchingCommon {
+namespace OTAPI.UnifiedServerProcess.Core.Patching
+{
+    public static class PatchingCommon
+    {
         public static MethodDefinition CreateInstanceConvdMethod(MethodDefinition staticMethod, ContextTypeData instanceConvdType, ImmutableDictionary<string, FieldDefinition> instanceConvdFieldOrgiMap) {
             if (!staticMethod.IsStatic) {
                 throw new ArgumentException("Method must be static", nameof(staticMethod));
@@ -71,7 +73,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching {
             }
             return newMethod;
         }
-        public enum InsertParamMode {
+        public enum InsertParamMode
+        {
             MakeInstance,
             Insert,
         }
@@ -217,7 +220,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching {
                 }
             }
         }
-        public enum RemoveParamMode {
+        public enum RemoveParamMode
+        {
             MakeStatic,
             Remove,
         }

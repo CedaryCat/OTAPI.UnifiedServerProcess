@@ -12,8 +12,10 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 
-namespace OTAPI.UnifiedServerProcess {
-    public class PatchExecutor {
+namespace OTAPI.UnifiedServerProcess
+{
+    public class PatchExecutor
+    {
         static PatchExecutor() => PatchMonoMod();
         /// <summary>
         /// Current MonoMod is outdated, and the new reorg is not ready yet, however we need v25 RD for NET9, yet Patcher v22 is the latest, and is not compatible with v25.

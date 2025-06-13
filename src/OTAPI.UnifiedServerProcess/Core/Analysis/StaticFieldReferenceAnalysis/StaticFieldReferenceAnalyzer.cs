@@ -13,8 +13,10 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis {
-    public sealed class StaticFieldReferenceAnalyzer : Analyzer, IMethodBehaivorFeature {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
+{
+    public sealed class StaticFieldReferenceAnalyzer : Analyzer, IMethodBehaivorFeature
+    {
         public readonly ImmutableDictionary<string, StaticFieldReferenceData> AnalyzedMethods;
         public sealed override string Name => "StaticFieldReferenceAnalyzer";
         readonly TypeInheritanceGraph typeInheritance;

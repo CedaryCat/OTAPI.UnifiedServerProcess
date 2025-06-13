@@ -3,9 +3,11 @@ using ModFramework.Relinker;
 using Mono.Cecil;
 using System.IO;
 
-namespace OTAPI.UnifiedServerProcess.Extensions {
+namespace OTAPI.UnifiedServerProcess.Extensions
+{
     [MonoMod.MonoModIgnore]
-    public static class ModFwModderExt {
+    public static class ModFwModderExt
+    {
         [MonoMod.MonoModIgnore]
         public static void CreateRuntimeHooks(this ModFwModder modder, string output) {
             modder.Log("[OTAPI-ProC] Generating OTAPI.Runtime.dll");

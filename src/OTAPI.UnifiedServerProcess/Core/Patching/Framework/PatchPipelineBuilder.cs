@@ -1,7 +1,9 @@
 ﻿using OTAPI.UnifiedServerProcess.Loggers;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
-    public abstract class PatchPipelineBuilder(ILogger logger) : LoggedComponent(logger) {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
+{
+    public abstract class PatchPipelineBuilder(ILogger logger) : LoggedComponent(logger)
+    {
         private readonly ILogger logger = logger;
         public abstract void Execute();
         public abstract string Print();

@@ -3,10 +3,12 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
+{
     public class ArgumentPipelineBuilder<TSource, TResult> : LoggedComponent
         where TSource : Argument, IArgumentSource<TSource, TResult>
-        where TResult : Argument {
+        where TResult : Argument
+    {
         public ArgumentPipelineBuilder(ILogger logger) : base(logger) {
             currentName = GetType().Name;
         }

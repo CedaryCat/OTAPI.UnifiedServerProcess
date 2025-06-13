@@ -1,16 +1,16 @@
 ﻿using Microsoft.CodeAnalysis;
 using Mono.Cecil;
-using Mono.Collections.Generic;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis
+{
 
-    public class MethodInheritanceGraph {
+    public class MethodInheritanceGraph
+    {
         public readonly ImmutableDictionary<string, MethodDefinition[]> RawMethodImplementationChains;
         public readonly ImmutableDictionary<string, MethodDefinition[]> CheckedMethodImplementationChains;
         public readonly ImmutableDictionary<string, MethodDefinition[]> ImmediateInheritanceChains;

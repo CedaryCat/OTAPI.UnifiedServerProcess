@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
+﻿namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
 {
     public class ConsoleSpinner
     {

@@ -1,8 +1,10 @@
 ﻿using Mono.Cecil;
 using System;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels {
-    public abstract class MemberAccessStep : IEquatable<MemberAccessStep> {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
+{
+    public abstract class MemberAccessStep : IEquatable<MemberAccessStep>
+    {
         public abstract string Name { get; }
         public abstract string FullName { get; }
         public abstract TypeReference DeclaringType { get; }

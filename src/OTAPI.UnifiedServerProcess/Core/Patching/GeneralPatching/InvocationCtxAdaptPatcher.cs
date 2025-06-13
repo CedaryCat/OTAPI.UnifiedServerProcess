@@ -16,13 +16,15 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.RegularExpressions;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// Refactors four delegate construction patterns (direct instance/static method delegates, capture-free/capturing closures) into contextualized versions.
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
-    public partial class InvocationCtxAdaptPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger), IContextInjectFeature, IJumpSitesCacheFeature, IMethodCheckCacheFeature {
+    public partial class InvocationCtxAdaptPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger), IContextInjectFeature, IJumpSitesCacheFeature, IMethodCheckCacheFeature
+    {
         public override string Name => nameof(InvocationCtxAdaptPatcher);
 
         public MethodCallGraph MethodCallGraph => callGraph;
@@ -62,7 +64,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
         }
 
         public void ProcessMethod(PatcherArguments arguments, ContextBoundMethodMap mappedMethods, Dictionary<string, ClosureData> cachedClosureObjs, MethodDefinition method) {
-            
+
             Dictionary<Instruction, int> instructionIndexes = [];
             Instruction[] copiedInstructions = [.. method.Body.Instructions];
             for (var i = 0; i < method.Body.Instructions.Count; i++) {
@@ -190,7 +192,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
             ParameterDefinition captureParam;
 
-            if (arguments.ContextTypes.ContainsKey(containingType.FullName) 
+            if (arguments.ContextTypes.ContainsKey(containingType.FullName)
                 || arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(containingType.FullName)
                 || userMethod.DeclaringType.Name.StartsWith("<>c__DisplayClass")) {
                 captureParam = userMethod.Body.ThisParameter;
@@ -529,8 +531,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
 
             bool instanceIsValueType = false;
 
-            if (types.Length == 1 
-                && types[0].FullName == module.TypeSystem.Object.FullName 
+            if (types.Length == 1
+                && types[0].FullName == module.TypeSystem.Object.FullName
                 && paths.Length == 1
                 && loadInstanceIfSinglePath.Length == 3
                 && loadInstanceIfSinglePath[1].OpCode == OpCodes.Ldobj
@@ -1020,8 +1022,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
                 }
             }
             var generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(
-                compilerGeneratedMethodOrig, 
-                MonoModCommon.Structure.MapOption.Create([(compilerGeneratedMethodOrig.DeclaringType.Resolve(), closureObjData.ClosureType)]), 
+                compilerGeneratedMethodOrig,
+                MonoModCommon.Structure.MapOption.Create([(compilerGeneratedMethodOrig.DeclaringType.Resolve(), closureObjData.ClosureType)]),
                 true);
             foreach (var param in generatedMethod.Parameters) {
                 param.HasConstant = false;
@@ -1088,7 +1090,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             }
             return null;
         }
-        
+
         void HandleMethodCall(Instruction methodCallInstruction, MethodDefinition caller, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, ClosureData closureObjData, Dictionary<string, ClosureData> cachedClosureObjs, ref bool anyModified) {
             var calleeRef = (MethodReference)methodCallInstruction.Operand;
 
@@ -1120,7 +1122,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             TypeReference declaringTypeRef = closureData.ClosureType;
             if (closureData.ClosureType.HasGenericParameters) {
                 var genericInstanceTypeRef = new GenericInstanceType(closureData.ClosureType);
-                foreach(var genericParam in closureData.ClosureType.GenericParameters) {
+                foreach (var genericParam in closureData.ClosureType.GenericParameters) {
                     genericInstanceTypeRef.GenericArguments.Add(genericParam);
                 }
                 declaringTypeRef = genericInstanceTypeRef;
@@ -1202,7 +1204,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
             var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextType);
             this.InjectContextFieldLoadInstanceLoads(arguments, ref instruction, out _, isAddress, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
-        static partial class RegexTool {
+        static partial class RegexTool
+        {
             [GeneratedRegex(@"^<(?<MethodName>[^>]+)>b__(?<MethodIndex>\d+)_(?<ScopeIndex>\d+)$", RegexOptions.Compiled)]
             public static partial Regex DefaultClosureMethodNameRegex();
         }

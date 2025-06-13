@@ -1,7 +1,9 @@
 ﻿using System;
 
-namespace OTAPI.UnifiedServerProcess.Loggers {
-    public abstract partial class LoggedComponent(ILogger logger) : ILoggedComponent {
+namespace OTAPI.UnifiedServerProcess.Loggers
+{
+    public abstract partial class LoggedComponent(ILogger logger) : ILoggedComponent
+    {
         readonly ILogger _logger = logger;
         public abstract string Name { get; }
         public void Progress(int iteration, int progress, int total, string message, int indent = 0)

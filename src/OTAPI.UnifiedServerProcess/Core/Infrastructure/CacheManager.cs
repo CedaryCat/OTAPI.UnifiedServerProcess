@@ -4,8 +4,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Infrastructure {
-    public class CacheManager(ILogger logger) : LoggedComponent(logger) {
+namespace OTAPI.UnifiedServerProcess.Core.Infrastructure
+{
+    public class CacheManager(ILogger logger) : LoggedComponent(logger)
+    {
         public sealed override string Name => "CacheHelper";
         const string unmodifiedStaticFieldCacheFile = "UnmodifiedStaticField.AnalysisCache.txt";
         const string modifiedStaticFieldCacheFile = "ModifiedStaticField.AnalysisCache.txt";

@@ -4,8 +4,10 @@ using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
-    public class PatcherArgumentSource(ModuleDefinition module, TypeDefinition rootContextDef) : Argument, IArgumentSource<PatcherArgumentSource, PatcherArguments> {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
+{
+    public class PatcherArgumentSource(ModuleDefinition module, TypeDefinition rootContextDef) : Argument, IArgumentSource<PatcherArgumentSource, PatcherArguments>
+    {
         public ModuleDefinition MainModule = module;
         public TypeDefinition RootContextDef = rootContextDef;
         /// <summary>
@@ -23,8 +25,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
         public Dictionary<string, FieldDefinition> RootContextFieldToAdaptExternalInterface = [];
 
         public PatcherArguments Build() =>
-            new(MainModule, RootContextDef, 
-                OriginalToContextType.ToImmutableDictionary(), 
+            new(MainModule, RootContextDef,
+                OriginalToContextType.ToImmutableDictionary(),
                 OriginalToInstanceConvdField.ToImmutableDictionary(),
                 RootContextFieldToAdaptExternalInterface.ToImmutableDictionary());
     }

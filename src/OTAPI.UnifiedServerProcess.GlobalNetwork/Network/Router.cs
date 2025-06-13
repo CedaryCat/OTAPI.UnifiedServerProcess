@@ -1,11 +1,6 @@
-﻿using Microsoft.Xna.Framework;
-using OTAPI.UnifiedServerProcess.ConsoleClient.Protocol;
-using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
-using System;
-using System.Diagnostics;
+﻿using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
 using System.Net;
 using System.Net.Sockets;
-using System.Reflection;
 using Terraria;
 using Terraria.Localization;
 using Terraria.Net.Sockets;
@@ -32,8 +27,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 };
             }
             for (int i = 0; i < 257; i++) {
-                globalMsgBuffers[i] = new MessageBuffer() { 
-                    whoAmI = i 
+                globalMsgBuffers[i] = new MessageBuffer() {
+                    whoAmI = i
                 };
             }
         }
@@ -146,7 +141,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             }
             int sleepStep = 0;
             Started?.Invoke();
-            while (true) { 
+            while (true) {
                 StartListeningIfNeeded();
                 UpdateConnectedClients();
                 sleepStep = (sleepStep + 1) % 10;

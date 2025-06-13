@@ -3,8 +3,10 @@ using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels {
-    public class EnumeratorLayer(TypeReference collectionType) : MemberAccessStep {
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
+{
+    public class EnumeratorLayer(TypeReference collectionType) : MemberAccessStep
+    {
         public override string Name => "{InnerEnumerable}";
         public override string FullName => Name;
         public override TypeReference DeclaringType => GetEnumeratorType(collectionType.Module);

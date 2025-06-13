@@ -5,12 +5,14 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
+{
     /// <summary>
     /// Removes all original counterparts of contextualized methods and fields after the completion of primary contextualization logic.
     /// </summary>
     /// <param name="logger"></param>
-    public class CleanupCtxUnboundPatcher(ILogger logger) : GeneralPatcher(logger) {
+    public class CleanupCtxUnboundPatcher(ILogger logger) : GeneralPatcher(logger)
+    {
         public override string Name => nameof(CleanupCtxUnboundPatcher);
 
         public override void Patch(PatcherArguments arguments) {

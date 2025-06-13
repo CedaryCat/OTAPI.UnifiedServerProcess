@@ -1,8 +1,10 @@
 ﻿using Mono.Cecil;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels {
-    public class ContextBoundMethodMap {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
+{
+    public class ContextBoundMethodMap
+    {
         /// <summary>
         ///  Key: original method identifier, Value: converted method
         /// </summary>

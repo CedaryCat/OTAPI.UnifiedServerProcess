@@ -1,5 +1,4 @@
 ﻿using Mono.Cecil;
-using Mono.Cecil.Rocks;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
@@ -8,13 +7,15 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
+{
     /// <summary>
     /// Create corresponding context types based on the declaring type of those static fields that need to be contextualized, and create their corresponding fields on that context.
     /// </summary>
     /// <param name="modifiedFields"></param>
     /// <param name="callGraph"></param>
-    public class GenerateContextsProcessor(IReadOnlyList<FieldDefinition> modifiedFields, MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature {
+    public class GenerateContextsProcessor(IReadOnlyList<FieldDefinition> modifiedFields, MethodCallGraph callGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature
+    {
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {

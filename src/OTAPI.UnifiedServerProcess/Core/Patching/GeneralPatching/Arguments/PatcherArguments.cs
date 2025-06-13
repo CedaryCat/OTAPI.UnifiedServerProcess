@@ -1,16 +1,17 @@
 ﻿using Mono.Cecil;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
+{
     public class PatcherArguments(
         ModuleDefinition module,
         TypeDefinition rootContextDef,
         ImmutableDictionary<string, ContextTypeData> instanceConvdTypeOrigMap,
         ImmutableDictionary<string, FieldDefinition> instanceConvdFieldOrigMap,
-        ImmutableDictionary<string, FieldDefinition> rootContextFieldToAdaptExternalInterface) : Argument {
+        ImmutableDictionary<string, FieldDefinition> rootContextFieldToAdaptExternalInterface) : Argument
+    {
 
         public readonly ModuleDefinition MainModule = module;
 

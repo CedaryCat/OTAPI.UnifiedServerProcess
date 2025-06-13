@@ -4,14 +4,16 @@ using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Loggers;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching {
+namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
+{
     /// <summary>
     /// Ensure that all logical branches use the long-form, so that any new IL insertion will not cause an overflow in the calculation of the distance between instructions.
     /// <para>However, since the code extensively uses a large number of judgments related to other short-form instructions (e.g., ldarg.0, ldloc.0), we will not handle the others.</para>
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="module"></param>
-    public class SimplifyMacrosPatcher(ILogger logger, ModuleDefinition module) : Patcher(logger) {
+    public class SimplifyMacrosPatcher(ILogger logger, ModuleDefinition module) : Patcher(logger)
+    {
         public override string Name => nameof(SimplifyMacrosPatcher);
 
         public override void Patch() {
