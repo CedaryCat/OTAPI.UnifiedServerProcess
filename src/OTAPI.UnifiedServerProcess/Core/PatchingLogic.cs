@@ -21,6 +21,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             var main = module.GetType("Terraria.Main");
 
             var unmodifiedStaticFields = cacheHelper.LoadUnmodifiedStaticFields(module, analyzers,
+                [main.Method("Initialize_TileAndNPCData1"), main.Method("Initialize_TileAndNPCData2")],
                 main.Method(".ctor"),
                 main.Method("DedServ"));
 

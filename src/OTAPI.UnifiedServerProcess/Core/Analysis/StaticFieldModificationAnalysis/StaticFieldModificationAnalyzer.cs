@@ -40,7 +40,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
         readonly ParameterFlowAnalyzer parameterFlowAnalyzer = parameterFlowAnalyzer;
         readonly ParamModificationAnalyzer paramModificationAnalyzer = paramModificationAnalyzer;
         readonly StaticFieldReferenceAnalyzer staticFieldReferenceAnalyzer = staticFieldReferenceAnalyzer;
-        public FieldDefinition[] FetchModifiedFields(params MethodDefinition[] entryPoints) {
+        public FieldDefinition[] FetchModifiedFields(MethodDefinition[] ignoredMethods, params MethodDefinition[] entryPoints) {
+            HashSet<string> ignoredMethodSet = [.. ignoredMethods.Select(m => m.GetIdentifier())];
+
             var workQueue = entryPoints.ToDictionary(m => m.GetIdentifier());
             var visited = new Dictionary<string, MethodDefinition>();
 
@@ -66,6 +68,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
 
                     foreach (var callee in addedCallees) {
                         var calleeID = callee.GetIdentifier();
+                        if (ignoredMethodSet.Contains(calleeID)) { 
+                            continue;
+                        }
                         if (visited.ContainsKey(calleeID)) {
                             continue;
                         }

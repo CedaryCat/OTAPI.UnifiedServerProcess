@@ -60,7 +60,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 }
             }
             for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
-                if (server.Main.projectile[i].active && (server.Main.projPet[server.Main.projectile[i].type] || server.Main.projectile[i].netImportant)) {
+                if (server.Main.projectile[i].active && (Main.projPet[server.Main.projectile[i].type] || server.Main.projectile[i].netImportant)) {
                     server.NetMessage.TrySendData(MessageID.SyncProjectile, whoAmI, -1, null, i);
                 }
             }
