@@ -257,7 +257,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             lock (client) {
                 SyncHelper.SyncPlayerLeaveToOthers(from, plr);
                 SyncHelper.SyncServerOfflineToPlayer(from, plr);
-                from.Console.WriteLine($"[USP] Player {plr} warped to {to.Name}, current players: {to.NPC.GetActivePlayerCount()}");
+                from.Console.WriteLine($"[USP] Player '{from.Main.player[plr].name}' warped to {to.Name}, current players: {to.NPC.GetActivePlayerCount()}");
 
                 var inactivePlayer = to.Main.player[plr];
                 var activePlayer = from.Main.player[plr];
@@ -273,7 +273,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 
                 SyncHelper.SyncServerOnlineToPlayer(to, plr);
                 SyncHelper.SyncPlayerJoinToOthers(to, plr);
-                to.Console.WriteLine($"[USP] Player {plr} warped from {from.Name}, current players: {to.NPC.GetActivePlayerCount()}");
+                to.Console.WriteLine($"[USP] Player '{to.Main.player[plr].name}' joined from {from.Name}, current players: {to.NPC.GetActivePlayerCount()}");
             }
         }
     }

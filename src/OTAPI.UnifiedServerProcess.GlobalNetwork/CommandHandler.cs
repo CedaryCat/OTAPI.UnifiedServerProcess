@@ -116,7 +116,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             var servers = router.servers;
             var clientId = excutor.UserId;
 
-            bool success = true;
+            bool match = true;
 
             switch (command) {
                 case "connect":
@@ -205,15 +205,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
                     }
                     break;
                 default:
-                    success = false;
+                    match = false;
                     break;
-            }
-
-            if (excutor.IsClient) {
-                var server = excutor.TriggerServer;
-                if (success) {
-                    server.Console.WriteLine($"Player '{server.Main.player[excutor.UserId].name}' executed command: '/{command}'", Color.Purple);
-                }
             }
         }
     }
