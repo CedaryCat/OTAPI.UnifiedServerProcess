@@ -2419,17 +2419,9 @@ namespace Terraria
         public abstract void Dispose();
 
         public class DefaultTileCollection(int width, int height) : TileCollection {
-            [StructLayout(LayoutKind.Sequential, Pack = 0, Size = 4)]
-            readonly unsafe struct Point(int x, int y) {
-                public readonly ushort X = (ushort)x;
-                public readonly ushort Y = (ushort)y;
-                public static nint Serialize(Point p) => *(nint*)&p;
-                public static Point Deserialize(nint p) => *(Point*)&p;
-            }
             static unsafe readonly delegate*<object?, nint, ref TileData> cached_RefTileData_GetTileRef = &RefTileData_GetTileRef;
             static ref TileData RefTileData_GetTileRef(object? managedData, nint unmanagedData) {
-                var pos = Point.Deserialize(unmanagedData);
-                return ref ((TileData[,])managedData!)[pos.X, pos.Y];
+                return ref ((TileData[,])managedData!)[(short)((uint)(unmanagedData) >> 16), (short)((uint)(unmanagedData) & 0xFFFF)];
             }
 
             readonly int
@@ -2439,7 +2431,7 @@ namespace Terraria
             readonly TileData[,] 
                 data = new TileData[width, height];
             public sealed override ref TileData this[int x, int y] => ref data[x, y];
-            public unsafe sealed override RefTileData GetRefTile(int x, int y) => new(data, Point.Serialize(new(x, y)), cached_RefTileData_GetTileRef);
+            public unsafe sealed override RefTileData GetRefTile(int x, int y) => new(data, (nint)((uint)((ushort)x << 16) | (ushort)y), cached_RefTileData_GetTileRef);
             public sealed override int Width => width;
             public sealed override int Height => height;
 
