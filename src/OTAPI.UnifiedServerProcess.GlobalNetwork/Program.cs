@@ -2,6 +2,7 @@
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
 using ReLogic.OS;
+using System.Diagnostics;
 using UnifiedServerProcess;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork
@@ -19,22 +20,27 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             Console.WriteLine("                       Demonstration For Terraria v{0} & OTAPI v{1}                         ", version.TerrariaVersion, version.OTAPIVersion);
             Console.WriteLine("---------------------------------------------------------------------------------------------------");
 
-            Console.Write("[USP|Info] Initializing... ");
+
+            Console.Write("[USP|Info] Global initialization started... ");
             var spinner = new ConsoleSpinner(100);
             spinner.Start();
 
+            Stopwatch stopwatch = new();
+            stopwatch.Start();
             SynchronizedGuard.Load();
             NetworkPatcher.Load();
             AppDomain.CurrentDomain.AssemblyResolve += ResolveHelpers.ResolveAssembly;
             Terraria.Program.SavePath = Platform.Get<IPathService>().GetStoragePath("Terraria");
             Terraria.Main.SkipAssemblyLoad = true;
             GlobalInitializer.Initialize();
+            stopwatch.Stop();
             spinner.Stop();
-            Console.WriteLine("- done.");
+            Console.WriteLine($"- done. (used {stopwatch.ElapsedMilliseconds:.00}ms)");
 
-            Console.Write("[USP|Info] Waiting for servers instances creation... ");
+            Console.Write("[USP|Info] Creating server instances... ");
             spinner = new ConsoleSpinner(100);
             spinner.Start();
+            stopwatch.Restart();
 
             int port = 7777;
 
@@ -44,8 +50,9 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             var router = new Router(port, server1, [server1, server2]);
             var cmd = new CommandHandler(router);
 
+            stopwatch.Stop();
             spinner.Stop();
-            Console.WriteLine("- done.");
+            Console.WriteLine($"- done. (used {stopwatch.ElapsedMilliseconds:.00}ms)");
 
             Task.Run(() => {
                 server1.Program.LaunchGame(args);
@@ -55,13 +62,15 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             });
 
 
-            Console.Write("[USP|Info] Waiting for main servers to start... ");
+            Console.Write("[USP|Info] Starting main servers... ");
             spinner = new ConsoleSpinner(100);
             spinner.Start();
+            stopwatch.Restart();
 
             router.Started += () => {
+                stopwatch.Stop();
                 spinner.Stop();
-                Console.WriteLine("- done.");
+                Console.WriteLine($"- done. (used {stopwatch.ElapsedMilliseconds:.00}ms)");
                 Console.WriteLine();
                 Console.WriteLine("[USP] Unified Server Process Launched successfully.");
                 Console.WriteLine("[USP] Listening on port: {0}.", port);
