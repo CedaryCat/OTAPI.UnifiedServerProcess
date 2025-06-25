@@ -11,7 +11,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.DataStructures.TileEntity.EntityCreationLock",
             "Terraria.GameContent.PressurePlateHelper.EntityCreationLock",
             "Terraria.GameContent.Creative.CreativePowerManager._initialized",
-            "Terraria.Recipe.numRecipes"
+            "Terraria.Recipe.numRecipes",
+            "Terraria.ID.ContentSamples.NpcBestiarySortingId"
         };
         readonly static string[] types = new string[] {
             "Terraria.ObjectData.TileObjectData",
