@@ -652,6 +652,75 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             HashSet<Instruction> extractedStaticInsts = [];
 
+            if (method.Name == "FillResearchItemOverrides") {
+
+            }
+
+            bool UsedStaticField(MethodDefinition method) {
+                HashSet<string> visited = [];
+                Stack<MethodDefinition> stack = [];
+
+                stack.Push(method);
+                visited.Add(method.GetIdentifier());
+
+                while (stack.Count > 0) {
+                    var caller = stack.Pop();
+
+                    foreach (var inst in caller.Body.Instructions) {
+                        if (inst.OpCode == OpCodes.Ldsflda || inst.OpCode == OpCodes.Stsfld) {
+                            return true;
+                        }
+                        if (inst.OpCode == OpCodes.Ldsfld) {
+                            var field = ((FieldReference)inst.Operand);
+                            if (!field.FieldType.IsTruelyValueType()) {
+                                return true;
+                            }
+                        }
+                        if (inst.OpCode == OpCodes.Call) {
+                            var resolvedCallee = ((MethodReference)inst.Operand).TryResolve();
+                            if (resolvedCallee is not null
+                                && resolvedCallee.IsStatic
+                                && !resolvedCallee.IsConstructor
+                                && resolvedCallee.ReturnType.FullName == source.MainModule.TypeSystem.Void.FullName) {
+                                if (visited.Add(resolvedCallee.GetIdentifier())) {
+                                    stack.Push(resolvedCallee);
+                                }
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            foreach (var inst in method.Body.Instructions) {
+
+                if (inst.OpCode != OpCodes.Call) {
+                    continue;
+                }
+
+                var resolvedCallee = ((MethodReference)inst.Operand).TryResolve();
+                if (resolvedCallee is null
+                    || !resolvedCallee.IsStatic
+                    || resolvedCallee.IsConstructor
+                    || resolvedCallee.ReturnType.FullName != source.MainModule.TypeSystem.Void.FullName) {
+                    continue;
+                }
+
+                if (!UsedStaticField(resolvedCallee)) {
+                    continue;
+                }
+                
+
+                HashSet<Instruction> tmp = [];
+                ExtractSources(this, method, tmp, inst);
+
+                if (IsExtractableStaticPart(source, tmp)) {
+                    foreach (var staticInst in tmp) {
+                        extractedStaticInsts.Add(staticInst);
+                    }
+                }
+            }
+
             foreach (var loopBlock in loopBlocks.Values) {
                 foreach (var fieldModification in loopBlock.FilteredLoopBody) {
                     if (!source.InitialStaticFields.TryGetValue(fieldModification.Key, out var initFieldDef)) {
@@ -921,7 +990,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
             }
 
-            foreach (var key in myCalingMethods.Keys.ToArray()) {
+            foreach (var calleeKV in myCalingMethods.ToArray()) {
+                var key = calleeKV.Key;
+                if (calleeKV.Value.Parameters.Count != 0) {
+                    myCalingMethods.Remove(key);
+                }
                 if (multipleCalls.TryGetValue(key, out var multipleCallCount) && multipleCallCount != 1) {
                     myCalingMethods.Remove(key);
                 }
@@ -1019,6 +1092,51 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 source.InitialStaticFields.Remove(fieldId);
                                 source.UnmodifiedStaticFields.Remove(fieldId);
                                 source.ModifiedStaticFields.TryAdd(fieldId, initFieldDef);
+                                return false;
+                            }
+                        }
+                        break;
+                }
+            }
+            foreach (var inst in instructions) {
+                switch (inst.OpCode.Code) {
+                    case Code.Ldarg_0:
+                    case Code.Ldarg_1:
+                    case Code.Ldarg_2:
+                    case Code.Ldarg_3:
+                    case Code.Ldarg_S:
+                    case Code.Ldarg:
+                    case Code.Ldarga_S:
+                    case Code.Ldarga:
+                    case Code.Starg_S:
+                    case Code.Starg:
+                        return false;
+                }
+            }
+            return true;
+        }
+        private bool IsExtractableStaticPart(FilterArgumentSource source, IEnumerable<Instruction> instructions) {
+            foreach (var inst in instructions) {
+                switch (inst.OpCode.Code) {
+                    case Code.Ldsfld:
+                    case Code.Ldsflda:
+                    case Code.Stsfld: {
+                            var fieldRef = (FieldReference)inst.Operand;
+                            var id = fieldRef.GetIdentifier();
+                            if (source.ModifiedStaticFields.ContainsKey(id)) {
+                                return false;
+                            }
+                        }
+                        break;
+                    case Code.Call:
+                    case Code.Callvirt:
+                    case Code.Newobj: {
+                            var methodRef = (MethodReference)inst.Operand;
+                            var methodDef = methodRef.TryResolve();
+                            if (methodDef is null) {
+                                break;
+                            }
+                            if (this.CheckUsedContextBoundField(source.ModifiedStaticFields, methodDef)) {
                                 return false;
                             }
                         }
