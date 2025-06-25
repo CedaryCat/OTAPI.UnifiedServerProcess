@@ -57,10 +57,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                         }
 
                         int taskRunDeleIndex = -1;
-                        if (calleeDef.DeclaringType.Name.StartsWith(nameof(TaskFactory)) && calleeDef.Name.StartsWith(nameof(TaskFactory.StartNew))) {
+                        if (calleeDef.DeclaringType.Name.OrdinalStartsWith(nameof(TaskFactory)) && calleeDef.Name.OrdinalStartsWith(nameof(TaskFactory.StartNew))) {
                             taskRunDeleIndex = 1;
                         }
-                        else if (calleeDef.DeclaringType.Name.StartsWith(nameof(Task)) && calleeDef.Name.StartsWith(nameof(Task.Run))) {
+                        else if (calleeDef.DeclaringType.Name.OrdinalStartsWith(nameof(Task)) && calleeDef.Name.OrdinalStartsWith(nameof(Task.Run))) {
                             taskRunDeleIndex = 0;
                         }
                         else if (calleeDef.DeclaringType.Name == nameof(ThreadPool) && calleeDef.Name == nameof(ThreadPool.QueueUserWorkItem)) {
@@ -104,7 +104,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                         usedByMethods.Add(method);
 
                         void AddMethod(MethodReferenceData add) {
-                            // Update usedMethodsDict for the current method
+                            // Update usedMethodsDict for the tail method
                             if (!usedMethodsDict.TryGetValue(methodId, out var usedMethods)) {
                                 usedMethods = [];
                                 usedMethodsDict[methodId] = usedMethods;

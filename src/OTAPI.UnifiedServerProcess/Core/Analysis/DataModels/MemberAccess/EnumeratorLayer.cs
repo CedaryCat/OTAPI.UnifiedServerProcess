@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
 {
     public class EnumeratorLayer(TypeReference collectionType) : MemberAccessStep
     {

@@ -7,13 +7,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 {
     public class CompositeStaticFieldTracking
     {
-        public readonly Dictionary<string, SingleStaticFieldTrace> TrackedStaticField = [];
+        public readonly Dictionary<string, SingleStaticFieldTrace> TrackedStaticFields = [];
 
         public CompositeStaticFieldTracking() { }
         public CompositeStaticFieldTracking CreateEncapsulatedInstance(MemberReference newMember) {
             var result = new CompositeStaticFieldTracking();
-            foreach (var origin in TrackedStaticField) {
-                result.TrackedStaticField.Add(
+            foreach (var origin in TrackedStaticFields) {
+                result.TrackedStaticFields.Add(
                     origin.Key,
                     new SingleStaticFieldTrace(
                         origin.Value.TrackingStaticField,
@@ -25,8 +25,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             => CreateEncapsulatedInstance((MemberReference)newMember);
         public CompositeStaticFieldTracking CreateEncapsulatedArrayInstance(ArrayType arrayType) {
             var result = new CompositeStaticFieldTracking();
-            foreach (var origin in TrackedStaticField) {
-                result.TrackedStaticField.Add(
+            foreach (var origin in TrackedStaticFields) {
+                result.TrackedStaticFields.Add(
                     origin.Key,
                     new SingleStaticFieldTrace(
                         origin.Value.TrackingStaticField,
@@ -36,8 +36,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
         }
         public CompositeStaticFieldTracking CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType) {
             var result = new CompositeStaticFieldTracking();
-            foreach (var origin in TrackedStaticField) {
-                result.TrackedStaticField.Add(
+            foreach (var origin in TrackedStaticFields) {
+                result.TrackedStaticFields.Add(
                     origin.Key,
                     new SingleStaticFieldTrace(
                         origin.Value.TrackingStaticField,
@@ -47,8 +47,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
         }
         public CompositeStaticFieldTracking? CreateEncapsulatedEnumeratorInstance() {
             var result = new CompositeStaticFieldTracking();
-            foreach (var origin in TrackedStaticField) {
-                result.TrackedStaticField.Add(
+            foreach (var origin in TrackedStaticFields) {
+                result.TrackedStaticFields.Add(
                     origin.Key,
                     new SingleStaticFieldTrace(
                         origin.Value.TrackingStaticField,
@@ -56,7 +56,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         .Where(chain => chain != null)
                         .OfType<StaticFieldTrackingChain>()));
             }
-            if (result.TrackedStaticField.Count == 0) {
+            if (result.TrackedStaticFields.Count == 0) {
                 return null;
             }
             return result;
@@ -66,7 +66,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             resultTrace = new CompositeStaticFieldTracking();
             bool foundAny = false;
 
-            foreach (var originGroup in TrackedStaticField) {
+            foreach (var originGroup in TrackedStaticFields) {
                 var newChains = new HashSet<StaticFieldTrackingChain>();
 
                 foreach (var chain in originGroup.Value.PartTrackingPaths) {
@@ -77,7 +77,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
 
                 if (newChains.Count > 0) {
-                    resultTrace.TrackedStaticField[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
+                    resultTrace.TrackedStaticFields[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
                 }
             }
 
@@ -91,7 +91,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             resultTrace = new CompositeStaticFieldTracking();
             bool foundAny = false;
 
-            foreach (var originGroup in TrackedStaticField) {
+            foreach (var originGroup in TrackedStaticFields) {
                 var newChains = new HashSet<StaticFieldTrackingChain>();
 
                 foreach (var chain in originGroup.Value.PartTrackingPaths) {
@@ -102,7 +102,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
 
                 if (newChains.Count > 0) {
-                    resultTrace.TrackedStaticField[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
+                    resultTrace.TrackedStaticFields[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
                 }
             }
 
@@ -116,7 +116,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             resultTrace = new CompositeStaticFieldTracking();
             bool foundAny = false;
 
-            foreach (var originGroup in TrackedStaticField) {
+            foreach (var originGroup in TrackedStaticFields) {
                 var newChains = new HashSet<StaticFieldTrackingChain>();
 
                 foreach (var chain in originGroup.Value.PartTrackingPaths) {
@@ -127,7 +127,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
 
                 if (newChains.Count > 0) {
-                    resultTrace.TrackedStaticField[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
+                    resultTrace.TrackedStaticFields[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
                 }
             }
 
@@ -141,7 +141,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             resultTrace = new CompositeStaticFieldTracking();
             bool foundAny = false;
 
-            foreach (var originGroup in TrackedStaticField) {
+            foreach (var originGroup in TrackedStaticFields) {
                 var newChains = new HashSet<StaticFieldTrackingChain>();
 
                 foreach (var chain in originGroup.Value.PartTrackingPaths) {
@@ -152,7 +152,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
 
                 if (newChains.Count > 0) {
-                    resultTrace.TrackedStaticField[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
+                    resultTrace.TrackedStaticFields[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, newChains);
                 }
             }
 

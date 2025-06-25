@@ -63,6 +63,31 @@ namespace OTAPI.UnifiedServerProcess.Core
             MethodInheritanceGraph = new MethodInheritanceGraph(modframework, module);
             DelegateInvocationGraph = new DelegateInvocationGraph(logger, module, MethodInheritanceGraph);
             MethodCallGraph = new MethodCallGraph(logger, module, DelegateInvocationGraph, MethodInheritanceGraph);
+
+            parameterFlowAnalyzer = new ParameterFlowAnalyzer(logger, module,
+                TypeInheritanceGraph,
+                MethodCallGraph,
+                DelegateInvocationGraph,
+                MethodInheritanceGraph);
+            paramModificationAnalyzer = new ParamModificationAnalyzer(logger, module,
+                ParameterFlowAnalyzer,
+                MethodCallGraph,
+                DelegateInvocationGraph,
+                MethodInheritanceGraph,
+                TypeInheritanceGraph);
+            staticFieldReferenceAnalyzer = new StaticFieldReferenceAnalyzer(logger, module,
+                TypeInheritanceGraph,
+                MethodCallGraph,
+                DelegateInvocationGraph,
+                MethodInheritanceGraph);
+            staticFieldModificationAnalyzer = new StaticFieldModificationAnalyzer(logger,
+                StaticFieldReferenceAnalyzer,
+                ParamModificationAnalyzer,
+                ParameterFlowAnalyzer,
+                MethodCallGraph,
+                DelegateInvocationGraph,
+                MethodInheritanceGraph,
+                TypeInheritanceGraph);
         }
     }
 }

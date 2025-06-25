@@ -80,13 +80,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
             }
 
             // Skip event add and remove
-            if (processingMethod.Name.StartsWith("add_")) {
+            if (processingMethod.Name.OrdinalStartsWith("add_")) {
                 var field = processingMethod.DeclaringType.Fields.FirstOrDefault(f => f.Name == processingMethod.Name[4..]);
                 if (field is not null && field.FieldType.IsDelegate()) {
                     return;
                 }
             }
-            else if (processingMethod.Name.StartsWith("remove_")) {
+            else if (processingMethod.Name.OrdinalStartsWith("remove_")) {
                 var field = processingMethod.DeclaringType.Fields.FirstOrDefault(f => f.Name == processingMethod.Name[7..]);
                 if (field is not null && field.FieldType.IsDelegate()) {
                     return;
@@ -202,7 +202,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                     }
                                 }
                                 // Delegate from event add
-                                else if (callingMethod.Name.StartsWith("add_") && (callingMethod.DeclaringType.FindField(callingMethod.Name[4..])?.FieldType.IsDelegate() ?? false)) {
+                                else if (callingMethod.Name.OrdinalStartsWith("add_") && (callingMethod.DeclaringType.FindField(callingMethod.Name[4..])?.FieldType.IsDelegate() ?? false)) {
                                     List<DelegateInvocationData> combinedFroms = new();
 
                                     var field = callingMethod.DeclaringType.FindField(callingMethod.Name[4..])!;
@@ -232,7 +232,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                         }
                                     }
                                 }
-                                else if (callingMethod.Name.StartsWith("remove_") && (callingMethod.DeclaringType.FindField(callingMethod.Name[7..])?.FieldType.IsDelegate() ?? false)) {
+                                else if (callingMethod.Name.OrdinalStartsWith("remove_") && (callingMethod.DeclaringType.FindField(callingMethod.Name[7..])?.FieldType.IsDelegate() ?? false)) {
                                     List<DelegateInvocationData> combinedFroms = new();
 
                                     var field = callingMethod.DeclaringType.FindField(callingMethod.Name[7..])!;
@@ -315,7 +315,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                     for (var i = 0; i < length; i++) {
                                         var paramIndex = i;
 
-                                        // skip 'this' parameter load
+                                        // skip 'this' TrackingParameter load
                                         if (!callingMethod.IsStatic && !isNewObj) {
                                             paramIndex -= 1;
                                         }

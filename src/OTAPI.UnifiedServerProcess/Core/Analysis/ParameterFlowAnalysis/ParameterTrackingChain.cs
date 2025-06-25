@@ -1,5 +1,5 @@
 ﻿using Mono.Cecil;
-using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels;
+using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
@@ -12,27 +12,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
     public sealed class ParameterTrackingChain : IEquatable<ParameterTrackingChain>
     {
         /// <summary>
-        /// The original parameter definition being tracked
+        /// The original TrackingParameter definition being tracked
         /// </summary>
 
         public readonly ParameterDefinition TrackingParameter;
         /// <summary>
-        /// When a parameter is encapsulated within an instance, the storeIn containing the parameter
-        /// is prepended to this hierarchy in the chain replica created by <see cref="CreateEncapsulatedInstance"/>.
+        /// When a TrackingParameter is encapsulated within an instance, the storeIn containing the TrackingParameter
+        /// is prepended to this hierarchy in the tail replica created by <see cref="CreateEncapsulatedInstance"/>.
         /// Subsequent encapsulations will continue prepending members. This hierarchy represents the path
-        /// from outermost container to inner values needed to access the tracked parameter.
+        /// from outermost container to inner values needed to access the tracked TrackingParameter.
         /// 
         /// <para>When accessing members from tracked objects via methods like <see cref="TryExtendTrackingWithMemberAccess"/>:</para>
         /// <para>1. If accessed storeIn matches the first element in the hierarchy, it indicates unwrapping - returns true</para>
         /// <para>2. If storeIn doesn't match hierarchy head - indicates unrelated access - returns false</para>
-        /// <para>3. Empty hierarchy means tracking base parameter. Member accesses are considered part of
-        /// the parameter itself and extend <see cref="ComponentAccessPath"/> instead - returns true</para>
+        /// <para>3. Empty hierarchy means tracking base TrackingParameter. Member accesses are considered part of
+        /// the TrackingParameter itself and extend <see cref="ComponentAccessPath"/> instead - returns true</para>
         /// </summary>
         public readonly ImmutableArray<MemberAccessStep> EncapsulationHierarchy = [];
         /// <summary>
-        /// When directly accessing members of the base parameter (when <see cref="EncapsulationHierarchy"/> is empty),
-        /// these accesses are recorded here. Unlike the encapsulation hierarchy, this chain represents the internal
-        /// structure of the parameter itself and doesn't support unwrapping semantics.
+        /// When directly accessing members of the base TrackingParameter (when <see cref="EncapsulationHierarchy"/> is empty),
+        /// these accesses are recorded here. Unlike the encapsulation hierarchy, this tail represents the internal
+        /// structure of the TrackingParameter itself and doesn't support unwrapping semantics.
         /// </summary>
         public readonly ImmutableArray<MemberAccessStep> ComponentAccessPath = [];
         readonly string Key;
@@ -112,6 +112,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 else if (member is ArrayElementLayer indexer) {
                     isValidReference = !indexer.MemberType.IsTruelyValueType();
                 }
+                else if (member is CollectionElementLayer collection) {
+                    isValidReference = !collection.MemberType.IsTruelyValueType();
+                }
                 else {
                     isValidReference = false;
                 }
@@ -149,7 +152,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 result = null;
                 return false;
             }
-            if (EncapsulationHierarchy[1] is not ArrayElementLayer && EncapsulationHierarchy[1] is not CollectionElementLayer) {
+            if (EncapsulationHierarchy[1] is not CollectionElementLayer) {
                 throw new NotSupportedException("Enumerator layer must be followed by ArrayElementLayer or CollectionElementLayer.");
             }
             result = new ParameterTrackingChain(

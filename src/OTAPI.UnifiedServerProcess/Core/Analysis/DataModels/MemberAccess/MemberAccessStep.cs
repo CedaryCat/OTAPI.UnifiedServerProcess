@@ -1,7 +1,7 @@
 ﻿using Mono.Cecil;
 using System;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
 {
     public abstract class MemberAccessStep : IEquatable<MemberAccessStep>
     {

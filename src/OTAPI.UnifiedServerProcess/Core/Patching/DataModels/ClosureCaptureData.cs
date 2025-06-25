@@ -7,8 +7,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
     public struct ClosureCaptureData
     {
         /// <summary>
-        /// If capture the 'this' parameter, this will be method.Body.ThisParameter
-        /// <para>If capture the other parameter, this will be the target parameter</para>
+        /// If capture the 'this' TrackingParameter, this will be method.Body.ThisParameter
+        /// <para>If capture the other TrackingParameter, this will be the target TrackingParameter</para>
         /// <para>If capture the local variable, this will be the local variable</para>
         /// </summary>
         public object CaptureVariable;

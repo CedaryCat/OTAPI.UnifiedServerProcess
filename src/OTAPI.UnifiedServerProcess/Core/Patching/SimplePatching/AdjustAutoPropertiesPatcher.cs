@@ -26,11 +26,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
                         continue;
                     }
 
-                    if (!method.Name.StartsWith("get_") && !method.Name.StartsWith("set_")) {
+                    if (!method.Name.OrdinalStartsWith("get_") && !method.Name.OrdinalStartsWith("set_")) {
                         continue;
                     }
 
-                    if (!method.Body.Instructions.Any(inst => inst.Operand is MethodReference mr && mr.Name.StartsWith("mfwh_"))) {
+                    if (!method.Body.Instructions.Any(inst => inst.Operand is MethodReference mr && mr.Name.OrdinalStartsWith("mfwh_"))) {
                         continue;
                     }
 

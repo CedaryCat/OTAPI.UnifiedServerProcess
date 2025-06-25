@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using OTAPI.UnifiedServerProcess.Extensions;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
@@ -16,9 +17,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             bool modified = false;
-            foreach (var originGroup in newTrace.TrackedStaticField) {
-                if (!existingTrace.TrackedStaticField.TryGetValue(originGroup.Key, out var existingChains)) {
-                    existingTrace.TrackedStaticField[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, originGroup.Value.PartTrackingPaths);
+            foreach (var originGroup in newTrace.TrackedStaticFields) {
+                if (!existingTrace.TrackedStaticFields.TryGetValue(originGroup.Key, out var existingChains)) {
+                    existingTrace.TrackedStaticFields[originGroup.Key] = new SingleStaticFieldTrace(originGroup.Value.TrackingStaticField, originGroup.Value.PartTrackingPaths);
                     modified = true;
                     continue;
                 }
@@ -38,9 +39,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 _traces[key] = trace;
             }
 
-            if (!trace.TrackedStaticField.TryGetValue(chain.TrackingStaticField.Name, out var singleStaticField)) {
+            if (!trace.TrackedStaticFields.TryGetValue(chain.TrackingStaticField.GetIdentifier(), out var singleStaticField)) {
                 singleStaticField = new(chain.TrackingStaticField, []);
-                trace.TrackedStaticField[chain.TrackingStaticField.Name] = singleStaticField;
+                trace.TrackedStaticFields[chain.TrackingStaticField.GetIdentifier()] = singleStaticField;
             }
 
             return singleStaticField.PartTrackingPaths.Add(chain);

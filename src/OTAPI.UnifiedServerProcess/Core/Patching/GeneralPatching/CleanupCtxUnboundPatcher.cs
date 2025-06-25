@@ -20,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             foreach (var type in arguments.MainModule.GetAllTypes()) {
 
                 foreach (var field in type.Fields.Where(f => !f.Name.EndsWith(Constants.Patching.ConvertedFieldInSingletonSuffix)).ToArray()) {
-                    if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.FullName, out var newField)) {
+                    if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out var newField)) {
                         type.Fields.Remove(field);
                         // keep the original declaring type, because it might be used later
                         field.DeclaringType = type;
@@ -28,7 +28,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             continue;
                         }
                         var contextType = arguments.ContextTypes[newField.DeclaringType.FullName];
-                        if (contextType.IsReusedSingleton && !contextType.ReusedSingletonFields.ContainsKey(field.FullName)) {
+                        if (contextType.IsReusedSingleton && !contextType.ReusedSingletonFields.ContainsKey(field.GetIdentifier())) {
                             newField.Name = field.Name;
                         }
                     }

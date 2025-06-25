@@ -13,12 +13,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
     /// </summary>
     /// <param name="callGraph"></param>
     /// <param name="rootContextDef"></param>
-    public class ContextRequiredFieldsProcessor(MethodCallGraph callGraph, TypeDefinition rootContextDef) : IFieldFilterArgProcessor, IMethodCheckCacheFeature
+    public class ContextRequiredFieldsProcessor(MethodCallGraph callGraph) : IFieldFilterArgProcessor, IMethodCheckCacheFeature
     {
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
-            foreach (var field in source.UnmodifiedStaticFields.ToArray()) {
+            foreach (var field in source.UnmodifiedStaticFields.Values.ToArray()) {
                 ProcessField(field, source);
             }
         }
@@ -33,9 +33,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 if (ctor.IsStatic) {
                     continue;
                 }
-                if (this.CheckUsedContextBoundField(rootContextDef, source.ModifiedStaticFields, ctor, false)) {
-                    source.UnmodifiedStaticFields.Remove(field);
-                    source.ModifiedStaticFields.Add(field);
+                if (this.CheckUsedContextBoundField(source.ModifiedStaticFields, ctor, false)) {
+                    var id = field.GetIdentifier();
+                    source.UnmodifiedStaticFields.Remove(id);
+                    source.ModifiedStaticFields.TryAdd(id, field);
                     return;
                 }
             }

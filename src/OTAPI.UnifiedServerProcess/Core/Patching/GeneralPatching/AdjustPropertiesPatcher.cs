@@ -38,6 +38,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                     var getter = type.Methods.FirstOrDefault(x => x.Name == getterName);
                     var setter = type.Methods.FirstOrDefault(x => x.Name == setterName);
+
                     var innerField = type.Fields.FirstOrDefault(x => x.Name == $"<{prop.Name}>k__BackingField");
 
                     bool shouldRemove = getter is null && setter is null;
@@ -53,12 +54,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         prop.DeclaringType = type;
                     }
                 }
-                foreach (var method in type.Methods) {
+                foreach (var method in type.Methods.ToArray()) {
                     if (!method.IsSpecialName) {
                         continue;
                     }
-                    bool isGetter = method.Name.StartsWith("get_");
-                    bool isSetter = method.Name.StartsWith("set_");
+                    bool isGetter = method.Name.OrdinalStartsWith("get_");
+                    bool isSetter = method.Name.OrdinalStartsWith("set_");
                     if (!isGetter && !isSetter) {
                         continue;
                     }
@@ -66,16 +67,34 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var propName = method.Name[4..];
                     var prop = type.Properties.FirstOrDefault(x => x.Name == propName);
 
-                    if (arguments.ContextTypes.ContainsKey(type.FullName)) {
+                    if (arguments.ContextTypes.TryGetValue(type.FullName, out var contextTypeData) 
+                        && contextTypeData.originalType.FullName != type.FullName
+                        && contextTypeData.originalType.Module == type.Module) {
+
                         if (prop is null) {
                             prop = new PropertyDefinition(propName, PropertyAttributes.None, isGetter ? method.ReturnType : method.Parameters[0].ParameterType);
                             type.Properties.Add(prop);
                         }
+
+                        var originalSetter = contextTypeData.originalType.Methods.FirstOrDefault(x => x.Name == $"set_{propName}");
+                        var originalGetter = contextTypeData.originalType.Methods.FirstOrDefault(x => x.Name == $"get_{propName}");
+                        var originalProp = contextTypeData.originalType.Properties.FirstOrDefault(x => x.Name == propName);
+
                         if (isSetter && prop.SetMethod is null) {
                             prop.SetMethod = method;
+                            if (originalProp is not null) {
+                                originalProp.SetMethod = null;
+                            }
                         }
                         else if (isGetter && prop.GetMethod is null) {
                             prop.GetMethod = method;
+                            if (originalProp is not null) {
+                                originalProp.SetMethod = null;
+                            }
+                        }
+
+                        if (originalProp is not null && originalProp.GetMethod is null && originalProp.SetMethod is null) {
+                            contextTypeData.originalType.Properties.Remove(originalProp);
                         }
                     }
                     else {
@@ -112,7 +131,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             return false;
         }
         private void TransformAccessor(PatcherArguments arguments, ContextBoundMethodMap mappedMethods, TypeDefinition type, MethodDefinition accessor, PropertyDefinition prop) {
-            bool isGetter = accessor.Name.StartsWith("get_");
+            bool isGetter = accessor.Name.OrdinalStartsWith("get_");
 
             string newMethodName = isGetter ? $"Get{prop.Name}" : $"Set{prop.Name}";
 

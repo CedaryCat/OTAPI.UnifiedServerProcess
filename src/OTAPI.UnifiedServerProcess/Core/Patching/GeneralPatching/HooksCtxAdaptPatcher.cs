@@ -17,7 +17,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
     /// <summary>
     /// Two scenarios exist for contextualizing functions, requiring HookEvents to implement two corresponding adaptations:
     /// <para>1. Specific static functions will be transformed into instance methods of contextualized entity classes, requiring the sender to be updated from null to the contextual instance.</para>
-    /// <para>2. Most instance functions will have their parameter lists prepended with a RootContext parameter, necessitating the addition of a RootContext field in EventArgs.</para>
+    /// <para>2. Most instance functions will have their TrackingParameter lists prepended with a RootContext TrackingParameter, necessitating the addition of a RootContext field in EventArgs.</para>
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
@@ -30,14 +30,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
 
             foreach (var type in arguments.MainModule.GetAllTypes()) {
-                if (!type.GetRootDeclaringType().Namespace.StartsWith("HookEvents.")) {
+                if (!type.GetRootDeclaringType().Namespace.OrdinalStartsWith("HookEvents.")) {
                     continue;
                 }
                 if (type.BaseType?.Name == "MulticastDelegate") {
                     continue;
                 }
                 foreach (var invokeMethod in type.Methods) {
-                    if (!invokeMethod.Name.StartsWith("Invoke")) {
+                    if (!invokeMethod.Name.OrdinalStartsWith("Invoke")) {
                         continue;
                     }
                     var methodId = invokeMethod.GetIdentifier();
@@ -199,7 +199,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     // instance method cast to delegate should load 'this'
                     ldInstanceForInvoke.OpCode = loadInstanceForDeleCtor.OpCode = OpCodes.Ldarg_0;
                     ldInstanceForInvoke.Operand = loadInstanceForDeleCtor.Operand = null;
-                    // modify invoke method's first parameter from object to converted type
+                    // modify invoke method's first TrackingParameter from object to converted type
                     invokeMethod.Parameters[0].ParameterType = invokeMethodRef.Parameters[0].ParameterType = convertedType.ContextTypeDef;
                 }
                 // context-bound by add root context

@@ -109,7 +109,7 @@ class TileSystemPatchLogic
 
         Dictionary<string, MethodDefinition> allMethods = modder.Module
             .GetAllTypes()
-            .Where(t => !t.Name.StartsWith("<>f__AnonymousType"))
+            .Where(t => !t.Name.OrdinalStartsWith("<>f__AnonymousType"))
             .SelectMany(x => x.Methods)
             .ToDictionary(x => x.GetIdentifier(), x => x);
 
@@ -175,7 +175,7 @@ class TileSystemPatchLogic
                 if (usage.Length != 1 || !usage[0].MatchCallOrCallvirt(out var methodReference) || !modifiedTileParameters.TryGetValue(methodReference.GetIdentifier(), out var indexes)) {
                     continue;
                 }
-                if (methodReference.Name.StartsWith("mfwh_")) {
+                if (methodReference.Name.OrdinalStartsWith("mfwh_")) {
                     continue;
                 }
                 var fieldDef = field.Resolve();
@@ -194,7 +194,7 @@ class TileSystemPatchLogic
             if (!currentMethod.HasBody) {
                 continue;
             }
-            if (currentMethod.DeclaringType.GetRootDeclaringType().Namespace.StartsWith("HookEvents.")) {
+            if (currentMethod.DeclaringType.GetRootDeclaringType().Namespace.OrdinalStartsWith("HookEvents.")) {
                 continue;
             }
             var ilProcessor = currentMethod.Body.GetILProcessor();
@@ -805,7 +805,7 @@ class TileSystemPatchLogic
 
                                     theseParametersWillBeEdit ??= [];
 
-                                    // When calling an instance method of a struct, the 'this' parameter needs to load the reference address, not the value itself
+                                    // When calling an instance method of a struct, the 'this' TrackingParameter needs to load the reference address, not the value itself
                                     if (calleeDef.HasThis && instruction.OpCode != OpCodes.Newobj && IsTileType(calleeDef.DeclaringType)) {
 
                                         // Avoid repeating the previous logic
@@ -1573,12 +1573,12 @@ class TileSystemPatchLogic
                         }
                         else if (calleeRef.DeclaringType.FullName == oldTileFullName) {
 
-                            if (calleeRef.Name.StartsWith("get_")) {
+                            if (calleeRef.Name.OrdinalStartsWith("get_")) {
                                 var fieldName = calleeRef.Name.Substring(4);
                                 instruction.OpCode = OpCodes.Ldfld;
                                 instruction.Operand = tileTypeDef.FindField(fieldName) ?? throw new NotSupportedException($"Field {fieldName} not found");
                             }
-                            else if (calleeRef.Name.StartsWith("set_")) {
+                            else if (calleeRef.Name.OrdinalStartsWith("set_")) {
                                 var fieldName = calleeRef.Name.Substring(4);
                                 instruction.OpCode = OpCodes.Stfld;
                                 instruction.Operand = tileTypeDef.FindField(fieldName) ?? throw new NotSupportedException($"Field {fieldName} not found");
@@ -1801,7 +1801,7 @@ class TileSystemPatchLogic
                                         anyRefReturn = true;
                                     }
                                     if (retRefTileMethods.TryGetValue(calleeRef.GetIdentifier(), out var retRefTileMethod)) {
-                                        topInstruction.Operand = retRefTileMethod;
+                                        topInstruction.Operand = MonoModCommon.Structure.DeepMapMethodReference(retRefTileMethod, new());
                                         anyRefReturn = true;
                                     }
                                     break;
@@ -1946,7 +1946,7 @@ class TileSystemPatchLogic
                     if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) {
                         var calleeRef = (MethodReference)instruction.Operand!;
 
-                        if (calleeRef.Name.StartsWith("mfwh_")) {
+                        if (calleeRef.Name.OrdinalStartsWith("mfwh_")) {
                             mfwhMethod = calleeRef;
                             mfwhCallInstruction = instruction;
                         }
@@ -2015,28 +2015,28 @@ class TileSystemPatchLogic
                             paramIndexExculdeThis--;
                         }
 
-                        // Exclude the 'this' parameter to make index only indicate the parameters in method.Parameters
+                        // Exclude the 'this' TrackingParameter to make index only indicate the parameters in method.Parameters
                         if (paramIndexExculdeThis == -1) {
                             continue;
                         }
 
                         // The InvokeXXX is a static function, the required parameters for the call are as follows:
-                        // 0. The 'this' object of the current function, or null if the current function is static
-                        // 1. The original method logic delegate of the current function, which is mfwh_XXX
-                        // 2 and more... The parameters of the current function
-                        // Therefore, the mapping relationship from mfwh_XXX input parameter index to InvokeXXX input parameter index is +2
+                        // 0. The 'this' object of the tail function, or null if the tail function is static
+                        // 1. The original method logic delegate of the tail function, which is mfwh_XXX
+                        // 2 and more... The parameters of the tail function
+                        // Therefore, the mapping relationship from mfwh_XXX input TrackingParameter index to InvokeXXX input TrackingParameter index is +2
                         paramIndexExculdeThis += 2;
 
                         var loadParam = invokeCallPath.ParametersSources[paramIndexExculdeThis].Instructions.Single();
 
                         if (!MonoModCommon.IL.TryGetReferencedParameter(method, loadParam, out var parameter)) {
-                            throw new NotSupportedException($"Cannot get the {index + 1}th parameter of Invoke{method.Name}");
+                            throw new NotSupportedException($"Cannot get the {index + 1}th TrackingParameter of Invoke{method.Name}");
                         }
 
                         var iLProcessor = method.Body.GetILProcessor();
 
-                        // Since we expect to modify the parameters of the current method to match the ref parameters of mfwh_XXX,
-                        // we need to extract the value of the ref parameter of the current method when calling the InvokeXXX input parameters
+                        // Since we expect to modify the parameters of the tail method to match the ref parameters of mfwh_XXX,
+                        // we need to extract the value of the ref TrackingParameter of the tail method when calling the InvokeXXX input parameters
                         iLProcessor.InsertAfter(loadParam, Instruction.Create(OpCodes.Ldobj, tileTypeDef));
 
                         // Next, we need to extract the mapping relationship between the parameters and event fields from the input parameters of mfwh_XXX,
@@ -2046,14 +2046,14 @@ class TileSystemPatchLogic
                         var loadField = mfwhCallPath.ParametersSources[paramIndexExculdeThis].Instructions.Last();
 
                         if (loadField.OpCode != OpCodes.Ldfld && loadField.OpCode != OpCodes.Ldflda) {
-                            throw new NotSupportedException($"The {index + 1}th parameter of mfwh_{method.Name} is not a field");
+                            throw new NotSupportedException($"The {index + 1}th TrackingParameter of mfwh_{method.Name} is not a field");
                         }
 
                         var field = (FieldReference)loadField.Operand!;
 
                         loadParam = MonoModCommon.IL.BuildParameterLoad(method, method.Body, method.Parameters[paramIndexExculdeThis]);
 
-                        // Ensure that the ref parameter can get the updated value after the InvokeXXX call
+                        // Ensure that the ref TrackingParameter can get the updated value after the InvokeXXX call
                         iLProcessor.InsertAfter(firstSetLocal!, [
                             loadParam,
                             Instruction.Create(OpCodes.Ldloc_0),
@@ -2102,7 +2102,7 @@ class TileSystemPatchLogic
                 modifiedTileParameter.Add(method.GetIdentifier(), byRefParamIndexesInculdeThis);
             }
         }
-        foreach (var set_method in tileTypeOldDef.Methods.Where(m => m.Name.StartsWith("set_"))) {
+        foreach (var set_method in tileTypeOldDef.Methods.Where(m => m.Name.OrdinalStartsWith("set_"))) {
             modifiedTileParameter.Add(set_method.GetIdentifier(), [0]);
         }
 
@@ -2185,7 +2185,7 @@ class TileSystemPatchLogic
                         if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) {
                             var calleeRef = (MethodReference)instruction.Operand!;
 
-                            if (!calleeRef.Name.StartsWith("mfwh_")) {
+                            if (!calleeRef.Name.OrdinalStartsWith("mfwh_")) {
                                 continue;
                             }
 
@@ -2298,7 +2298,7 @@ class TileSystemPatchLogic
                                 case Code.Ldarg_1:
                                 case Code.Ldarg_2:
                                 case Code.Ldarg_3:
-                                    // Since the 'this' parameter of a constructor does not need to be pushed onto the stack explicitly by the caller,
+                                    // Since the 'this' TrackingParameter of a constructor does not need to be pushed onto the stack explicitly by the caller,
                                     // it will not modify the 'this' variable provided by the caller like other instance methods.
                                     // Therefore, we need to handle this case separately and skip it manually
                                     if (thisInstruction.OpCode == OpCodes.Ldarg_0 && method.IsConstructor) {

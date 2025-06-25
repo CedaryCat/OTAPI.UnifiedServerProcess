@@ -1,7 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Commons;
-using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels;
+using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis;
@@ -28,22 +28,43 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
         MethodCallGraph callGraph,
         DelegateInvocationGraph invocationGraph,
         MethodInheritanceGraph inheritanceGraph,
-        TypeInheritanceGraph typeInheritanceGraph) : Analyzer(logger), IMethodBehaivorFeature
+        TypeInheritanceGraph typeInheritanceGraph) : Analyzer(logger), IMethodBehaivorFeature, IMethodCheckCacheFeature
     {
         public DelegateInvocationGraph DelegateInvocationGraph => invocationGraph;
         public MethodInheritanceGraph MethodInheritanceGraph => inheritanceGraph;
+        public MethodCallGraph MethodCallGraph => callGraph;
 
 
         public sealed override string Name => "FieldModificationAnalyzer";
+
         readonly TypeInheritanceGraph typeInheritanceGraph = typeInheritanceGraph;
         readonly MethodCallGraph callGraph = callGraph;
         readonly ParameterFlowAnalyzer parameterFlowAnalyzer = parameterFlowAnalyzer;
         readonly ParamModificationAnalyzer paramModificationAnalyzer = paramModificationAnalyzer;
         readonly StaticFieldReferenceAnalyzer staticFieldReferenceAnalyzer = staticFieldReferenceAnalyzer;
-        public FieldDefinition[] FetchModifiedFields(MethodDefinition[] ignoredMethods, params MethodDefinition[] entryPoints) {
-            HashSet<string> ignoredMethodSet = [.. ignoredMethods.Select(m => m.GetIdentifier())];
+        public void FetchModifiedFields(MethodDefinition[] entryPoint, MethodDefinition[] initOnlys, out FieldDefinition[] modifiedFields, out FieldDefinition[] initModifiedFields) {
+            HashSet<string> initOnlyMethodSet = [.. initOnlys.Select(m => m.GetIdentifier())];
+            Dictionary<string, FieldDefinition> modifiedFields_ignoredInitOnlys = FetchModifiedFieldInner(entryPoint, initOnlyMethodSet);
+            Dictionary<string, FieldDefinition> modifiedFields_WhenInit = FetchModifiedFieldInner(initOnlys, []);
 
-            var workQueue = entryPoints.ToDictionary(m => m.GetIdentifier());
+            foreach (var field in modifiedFields_ignoredInitOnlys.Keys) {
+                modifiedFields_WhenInit.Remove(field);
+            }
+            foreach (var kv in modifiedFields_WhenInit.ToArray()) {
+                if (kv.Value.DeclaringType.Name.OrdinalStartsWith('<')) {
+                    modifiedFields_WhenInit.Remove(kv.Key);
+                }
+            }
+
+            initModifiedFields = [.. modifiedFields_WhenInit.Values];
+            modifiedFields = [.. modifiedFields_ignoredInitOnlys.Values];
+
+            return;
+        }
+
+        private Dictionary<string, FieldDefinition> FetchModifiedFieldInner(MethodDefinition[] entryPoints, HashSet<string> ignored) {
+            var workQueue = entryPoints.ToDictionary(x => x.GetIdentifier(), x => x);
+
             var visited = new Dictionary<string, MethodDefinition>();
 
             var storedFields = new Dictionary<string, FieldDefinition>();
@@ -68,7 +89,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
 
                     foreach (var callee in addedCallees) {
                         var calleeID = callee.GetIdentifier();
-                        if (ignoredMethodSet.Contains(calleeID)) { 
+                        if (ignored.Contains(calleeID)) {
                             continue;
                         }
                         if (visited.ContainsKey(calleeID)) {
@@ -81,7 +102,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                 }
             }
 
-            return storedFields.Values.ToArray();
+            return storedFields;
         }
 
         private void ProcessMethod(
@@ -98,12 +119,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
             }
 
             static void AddField(Dictionary<string, FieldDefinition> dict, FieldDefinition field) {
-                dict.TryAdd(field.FullName, field);
+                dict.TryAdd(field.GetIdentifier(), field);
             }
 
             staticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(caller.GetIdentifier(), out var staticFieldReferenceData);
 
             var jumpSites = this.GetMethodJumpSites(caller);
+
+            if (callGraph.MediatedCallGraph.TryGetValue(caller.GetIdentifier(), out var calls)) {
+                foreach (var useds in calls.UsedMethods) {
+                    foreach (var call in useds.ImplementedMethods()) {
+                        myCalingMethods.TryAdd(call.GetIdentifier(), call);
+                    }
+                }
+            }
 
             foreach (var instruction in caller.Body.Instructions) {
 
@@ -126,7 +155,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                     continue;
                                 }
 
-                                foreach (var willBeModified in stackValueTrace.TrackedStaticField.Values) {
+                                foreach (var willBeModified in stackValueTrace.TrackedStaticFields.Values) {
                                     foreach (var part in willBeModified.PartTrackingPaths) {
                                         if (part.EncapsulationHierarchy.Length == 0) {
                                             AddField(storedFields, willBeModified.TrackingStaticField);
@@ -143,14 +172,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                             var isNewObj = instruction.OpCode == OpCodes.Newobj;
                             var methodRef = (MethodReference)instruction.Operand;
                             var resolvedCallee = methodRef.TryResolve();
-
-                            if (callGraph.MediatedCallGraph.TryGetValue(caller.GetIdentifier(), out var calls)) {
-                                foreach (var useds in calls.UsedMethods) {
-                                    foreach (var call in useds.ImplementedMethods()) {
-                                        myCalingMethods.TryAdd(call.GetIdentifier(), call);
-                                    }
-                                }
-                            }
 
                             // Get all implementations of the called method
                             var implementations = this.GetMethodImplementations(caller, instruction, jumpSites, out _);
@@ -188,7 +209,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TrackedStaticField.Values) {
+                                    foreach (var willBeModified in stackValueTrace.TrackedStaticFields.Values) {
                                         AddField(storedFields, willBeModified.TrackingStaticField);
                                     }
                                 }
@@ -228,7 +249,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
 
                                         var loadParam = paramGroup[paramIndex];
 
-                                        // If the callMethod do not modify any parameter, skip
+                                        // If the callMethod do not modify any TrackingParameter, skip
                                         if (!paramModificationAnalyzer.ModifiedParameters.TryGetValue(implCallee.GetIdentifier(), out var modifiedParameters)) {
                                             continue;
                                         }
@@ -244,28 +265,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                             continue;
                                         }
 
-                                        foreach (var referencedStaticField in stackValueTrace.TrackedStaticField.Values) {
+                                        foreach (var referencedStaticField in stackValueTrace.TrackedStaticFields.Values) {
                                             List<MemberAccessStep[]> chains = [];
                                             foreach (var part in referencedStaticField.PartTrackingPaths) {
                                                 foreach (var willBeModified in modifiedParameters.Values) {
                                                     foreach (var modification in willBeModified.modifications) {
-                                                        if (part.ComponentAccessPath.Length > 0) {
-                                                            if (modification.modificationAccessChain.Length <= part.ComponentAccessPath.Length) {
+                                                        if (part.EncapsulationHierarchy.Length > 0) {
+                                                            if (modification.ModificationAccessPath.Length <= part.EncapsulationHierarchy.Length) {
                                                                 continue;
                                                             }
                                                             bool isLeadingChain = true;
                                                             for (int i = 0; i < part.ComponentAccessPath.Length; i++) {
-                                                                if (modification.modificationAccessChain[i] != part.ComponentAccessPath[i]) {
+                                                                if (modification.ModificationAccessPath[i] != part.EncapsulationHierarchy[i]) {
                                                                     isLeadingChain = false;
                                                                     break;
                                                                 }
                                                             }
                                                             if (isLeadingChain) {
-                                                                chains.Add([.. modification.modificationAccessChain.Skip(part.ComponentAccessPath.Length)]);
+                                                                chains.Add([.. part.ComponentAccessPath, .. modification.ModificationAccessPath.Skip(part.EncapsulationHierarchy.Length)]);
                                                             }
                                                         }
                                                         else {
-                                                            chains.Add([.. modification.modificationAccessChain.Skip(part.ComponentAccessPath.Length)]);
+                                                            chains.Add([.. part.ComponentAccessPath, .. modification.ModificationAccessPath]);
                                                         }
                                                     }
                                                 }
@@ -316,7 +337,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TrackedStaticField.Values) {
+                                    foreach (var willBeModified in stackValueTrace.TrackedStaticFields.Values) {
                                         foreach (var part in willBeModified.PartTrackingPaths) {
                                             if (part.EncapsulationHierarchy.Length == 0) {
                                                 AddField(storedFields, willBeModified.TrackingStaticField);

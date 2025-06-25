@@ -15,6 +15,79 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 {
     public static class PatchingCommon
     {
+        public static Mono.Cecil.Cil.MethodBody? Clone(this Mono.Cecil.Cil.MethodBody? bo, MethodDefinition m) {
+            Mono.Cecil.Cil.MethodBody bo2 = bo;
+            Helpers.ThrowIfArgumentNull(m, "m");
+            if (bo2 == null) {
+                return null;
+            }
+            Mono.Cecil.Cil.MethodBody bc = new Mono.Cecil.Cil.MethodBody(m);
+            bc.MaxStackSize = bo2.MaxStackSize;
+            bc.InitLocals = bo2.InitLocals;
+            bc.LocalVarToken = bo2.LocalVarToken;
+            bc.Instructions.AddRange(bo2.Instructions.Select(delegate (Instruction o)
+            {
+                Instruction instruction = Instruction.Create(Mono.Cecil.Cil.OpCodes.Nop);
+                instruction.OpCode = o.OpCode;
+                instruction.Operand = o.Operand;
+                instruction.Offset = o.Offset;
+                return instruction;
+            }));
+            bc.ExceptionHandlers.AddRange(bo2.ExceptionHandlers.Select((ExceptionHandler o) => new ExceptionHandler(o.HandlerType) {
+                TryStart = ((o.TryStart == null) ? null : bc.Instructions[bo2.Instructions.IndexOf(o.TryStart)]),
+                TryEnd = ((o.TryEnd == null) ? null : bc.Instructions[bo2.Instructions.IndexOf(o.TryEnd)]),
+                FilterStart = ((o.FilterStart == null) ? null : bc.Instructions[bo2.Instructions.IndexOf(o.FilterStart)]),
+                HandlerStart = ((o.HandlerStart == null) ? null : bc.Instructions[bo2.Instructions.IndexOf(o.HandlerStart)]),
+                HandlerEnd = ((o.HandlerEnd == null) ? null : bc.Instructions[bo2.Instructions.IndexOf(o.HandlerEnd)]),
+                CatchType = o.CatchType
+            }));
+            bc.Variables.AddRange(bo2.Variables.Select((VariableDefinition o) => new VariableDefinition(o.VariableType)));
+            m.CustomDebugInformations.AddRange(bo2.Method.CustomDebugInformations.Select(delegate (CustomDebugInformation o)
+            {
+                if (o is AsyncMethodBodyDebugInformation asyncMethodBodyDebugInformation) {
+                    AsyncMethodBodyDebugInformation asyncMethodBodyDebugInformation2 = new AsyncMethodBodyDebugInformation();
+                    if (asyncMethodBodyDebugInformation.CatchHandler.Offset >= 0) {
+                        asyncMethodBodyDebugInformation2.CatchHandler = (asyncMethodBodyDebugInformation.CatchHandler.IsEndOfMethod ? default(InstructionOffset) : new InstructionOffset(ResolveInstrOff(asyncMethodBodyDebugInformation.CatchHandler.Offset)));
+                    }
+                    asyncMethodBodyDebugInformation2.Yields.AddRange(asyncMethodBodyDebugInformation.Yields.Select((InstructionOffset off) => (!off.IsEndOfMethod) ? new InstructionOffset(ResolveInstrOff(off.Offset)) : default(InstructionOffset)));
+                    asyncMethodBodyDebugInformation2.Resumes.AddRange(asyncMethodBodyDebugInformation.Resumes.Select((InstructionOffset off) => (!off.IsEndOfMethod) ? new InstructionOffset(ResolveInstrOff(off.Offset)) : default(InstructionOffset)));
+                    asyncMethodBodyDebugInformation2.ResumeMethods.AddRange(asyncMethodBodyDebugInformation.ResumeMethods);
+                    return asyncMethodBodyDebugInformation2;
+                }
+                if (o is StateMachineScopeDebugInformation stateMachineScopeDebugInformation) {
+                    StateMachineScopeDebugInformation stateMachineScopeDebugInformation2 = new StateMachineScopeDebugInformation();
+                    stateMachineScopeDebugInformation2.Scopes.AddRange(stateMachineScopeDebugInformation.Scopes.Select((StateMachineScope s) => new StateMachineScope(ResolveInstrOff(s.Start.Offset), s.End.IsEndOfMethod ? null : ResolveInstrOff(s.End.Offset))));
+                    return stateMachineScopeDebugInformation2;
+                }
+                return o;
+            }));
+            m.DebugInformation.SequencePoints.AddRange(bo2.Method.DebugInformation.SequencePoints.Select((SequencePoint o) => new SequencePoint(ResolveInstrOff(o.Offset), o.Document) {
+                StartLine = o.StartLine,
+                StartColumn = o.StartColumn,
+                EndLine = o.EndLine,
+                EndColumn = o.EndColumn
+            }));
+            foreach (Instruction instruction2 in bc.Instructions) {
+                if (instruction2.Operand is Instruction item) {
+                    instruction2.Operand = bc.Instructions[bo2.Instructions.IndexOf(item)];
+                }
+                else if (instruction2.Operand is Instruction[] source) {
+                    instruction2.Operand = source.Select((Instruction i) => bc.Instructions[bo2.Instructions.IndexOf(i)]).ToArray();
+                }
+                else if (instruction2.Operand is VariableDefinition variableDefinition) {
+                    instruction2.Operand = bc.Variables[variableDefinition.Index];
+                }
+            }
+            return bc;
+            Instruction ResolveInstrOff(int off) {
+                for (int j = 0; j < bo2.Instructions.Count; j++) {
+                    if (bo2.Instructions[j].Offset == off) {
+                        return bc.Instructions[j];
+                    }
+                }
+                throw new ArgumentException($"Invalid instruction offset {off}");
+            }
+        }
         public static MethodDefinition CreateInstanceConvdMethod(MethodDefinition staticMethod, ContextTypeData instanceConvdType, ImmutableDictionary<string, FieldDefinition> instanceConvdFieldOrgiMap) {
             if (!staticMethod.IsStatic) {
                 throw new ArgumentException("Method must be static", nameof(staticMethod));
@@ -80,9 +153,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
         }
         public static void InsertParamAt0AndRemapIndices(MethodBody body, InsertParamMode mode, ParameterDefinition? definition = null) {
             if (mode is InsertParamMode.Insert) {
-                if (body.Method.Name == "StripDust") {
-
-                }
                 if (definition is null) {
                     throw new ArgumentNullException($"The {nameof(definition)} is required when {nameof(mode)} is {InsertParamMode.Insert}");
                 }
@@ -125,7 +195,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                         instruction.OpCode = OpCodes.Ldarg_S;
 
                         int index;
-                        // The parameter pointed to by Ldarg_3 is marked by <>
+                        // The TrackingParameter pointed to by Ldarg_3 is marked by <>
                         // based on the following three case, we can infer the value of index.
 
                         if (mode is InsertParamMode.MakeInstance) {
@@ -235,14 +305,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             }
             else {
                 if (body.Method.Parameters.Count == 0) {
-                    throw new ArgumentException($"The {nameof(body)} must have at least one parameter when {nameof(mode)} is {RemoveParamMode.Remove}");
+                    throw new ArgumentException($"The {nameof(body)} must have at least one TrackingParameter when {nameof(mode)} is {RemoveParamMode.Remove}");
                 }
             }
 
             foreach (Instruction instruction in body.Instructions) {
                 switch (instruction.OpCode.Code) {
 
-                    // The parameter will be removed is marked by <>
+                    // The TrackingParameter will be removed is marked by <>
                     // based on the following three case, we can infer the value of index.
 
                     // static -> instance:
@@ -355,7 +425,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
         /// <param name="arguments">patching data</param>
         /// <param name="callerBody">the body of the method that loads the context</param>
         /// <param name="instanceConvdType">null if loading root context</param>
-        /// <param name="addedParam">if a context parameter is added to the method</param>
+        /// <param name="addedParam">if a context TrackingParameter is added to the method</param>
         /// <returns></returns>
         public static Instruction[] BuildInstanceLoadInstrs(
             PatcherArguments arguments,
@@ -405,7 +475,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 }
                 result.Add(MonoModCommon.IL.BuildVariableLoad(callerBody.Method, callerBody, variable));
             }
-            // If we do not create a variable of root context, the first parameter in parameters must be the root context
+            // If we do not create a variable of root context, the first TrackingParameter in parameters must be the root context
             else {
                 if (callerBody.Method.Parameters.Count == 0 || callerBody.Method.Parameters[0].ParameterType.FullName != arguments.RootContextDef.FullName) {
                     InsertParamAt0AndRemapIndices(callerBody, InsertParamMode.Insert, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
@@ -476,7 +546,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             // Clone parameters excluding context parameters
             foreach (var param in method.Parameters) {
                 if (param.ParameterType.FullName == rootContextType.FullName) {
-                    continue; // Skip context parameter for stack integrity
+                    continue; // Skip context TrackingParameter for stack integrity
                 }
                 vanilla.Parameters.Add(param.Clone());
             }

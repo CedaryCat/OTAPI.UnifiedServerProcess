@@ -56,13 +56,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             MethodDefinition caller) {
 
             Dictionary<string, (TypeReference enumeratorRef, FieldReference contextFieldRef)> processedEnumerator = [];
-
             foreach (var instruction in caller.Body.Instructions.ToArray()) {
                 if (instruction.OpCode != OpCodes.Newobj) {
                     continue;
                 }
                 var ctor = (MethodReference)instruction.Operand;
-                if (!ctor.DeclaringType.Name.StartsWith('<')) {
+                if (!ctor.DeclaringType.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
                 var enumeratorDef = ctor.DeclaringType.Resolve();
@@ -77,7 +76,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     if (method.IsConstructor) {
                         continue;
                     }
-                    if (this.CheckUsedContextBoundField(arguments.RootContextDef, arguments.InstanceConvdFieldOrgiMap, method)) {
+                    if (this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, method)) {
                         anyContextUsed = true;
                         break;
                     }
@@ -226,7 +225,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
         void HandleStoreStaticField(Instruction instruction, MethodDefinition generatedMethod, PatcherArguments arguments, FieldDefinition captureContextField, FieldReference captureContextFieldRef) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.FullName, out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
                 return;
             }
 
@@ -241,7 +240,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
         void HandleLoadStaticField(Instruction instruction, MethodDefinition generatedMethod, bool isAddress, PatcherArguments arguments, FieldDefinition captureContextField, FieldReference captureContextFieldRef) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.FullName, out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
                 return;
             }
 

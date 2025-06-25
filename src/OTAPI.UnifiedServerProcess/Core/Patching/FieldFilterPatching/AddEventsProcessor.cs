@@ -12,7 +12,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
     {
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
             foreach (var type in raw.MainModule.GetAllTypes()) {
-                if (type.GetRootDeclaringType().Namespace.StartsWith("HookEvents.")) {
+                if (type.GetRootDeclaringType().Namespace.OrdinalStartsWith("HookEvents.")) {
                     continue;
                 }
                 foreach (var theEvent in type.Events) {
@@ -21,7 +21,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         continue;
                     }
                     if (field.IsStatic) {
-                        raw.ModifiedStaticFields.Add(field);
+                        raw.ModifiedStaticFields.TryAdd(field.GetIdentifier(), field);
                     }
                 }
             }

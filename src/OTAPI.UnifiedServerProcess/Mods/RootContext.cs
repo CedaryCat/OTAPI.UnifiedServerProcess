@@ -1,4 +1,6 @@
-﻿using ModFramework;
+﻿#pragma warning disable CS8321 // Local function is declared but never used
+#pragma warning disable CS0436 // Type conflicts with imported type
+using ModFramework;
 using System;
 using System.IO;
 using System.Text;

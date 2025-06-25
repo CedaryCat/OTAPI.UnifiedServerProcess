@@ -35,7 +35,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             // 2. Preservation of original state (unresolvable method indicates no patches)
             // Only valid candidates will be replaced with context-aware versions
             if (!contextMethodMap.originalToContextBound.TryGetValue(calleeId, out contextBoundMethod)) {
-                // Check if method exists in current assembly (indicates modified)
+                // Check if method exists in tail assembly (indicates modified)
                 if (methodRefToAdjust.TryResolve() is not null) {
                     return false;
                 }
@@ -130,7 +130,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         insertBeforeTargets.Add(path.ParametersSources[contextParamInsertIndex].Instructions.First());
                     }
                     else {
-                        throw new IndexOutOfRangeException($"Invalid context parameter insert index {nameof(contextParamInsertIndex)} value");
+                        throw new IndexOutOfRangeException($"Invalid context TrackingParameter insert index {nameof(contextParamInsertIndex)} value");
                     }
                 }
             }
@@ -260,7 +260,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
         /// <summary>
         /// <para>The field initialization can occur before calling the base class constructor or its own constructor, </para>
         /// <para>while the code that uses parameters must be executed after calling the base class constructor or its own constructor. </para>
-        /// <para>This method is designed to move the call to the base class constructor or its own constructor to before the first loaded context parameter after dependency injection.</para>
+        /// <para>This method is designed to move the call to the base class constructor or its own constructor to before the first loaded context TrackingParameter after dependency injection.</para>
         /// </summary>
         /// <param name="point"></param>
         /// <param name="rootContextDef"></param>

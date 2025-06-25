@@ -23,16 +23,34 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             string methodId) {
             return PredefineMethodUsedContext.Add(methodId);
         }
+        private static bool ParamCheck(MethodReferenceData referenceData, MethodDefinition callee, out bool shouldAddToCheckList) {
+            shouldAddToCheckList = true;
+            if (!callee.HasBody) {
+                return false;
+            }
+            if (referenceData.implicitCallMode is ImplicitCallMode.Inheritance && referenceData.DirectlyCalledMethod.Module.Name != callee.Module.Name) {
+                shouldAddToCheckList = false;
+                return false;
+            }
+            if (callee.Parameters.Count != 0 && callee.Parameters[0].ParameterType.FullName == Constants.RootContextFullName) {
+                return true;
+            }
+            if (callee.DeclaringType.Fields.Any(f => f.FieldType.FullName == Constants.RootContextFullName)) {
+                // It is implicit reference to context and no external effect to interface constraint, so we should not add to check list
+                if (referenceData.DirectlyCalledMethod != callee && referenceData.implicitCallMode is not ImplicitCallMode.None) {
+                    shouldAddToCheckList = false;
+                    return false;
+                }
+                return true;
+            }
+            return false;
+        }
         public static bool CheckUsedContextBoundField<TFeature>(
             this TFeature point,
-            TypeDefinition rootContextDef,
             IDictionary<string, FieldDefinition> instanceConvdFieldOrigMap,
             MethodDefinition checkMethod,
             bool useCache = true)
             where TFeature : IMethodCheckCacheFeature {
-
-            // Due to some uncontrollable factors, the caching mechanism will not be adopted temporarily.
-            useCache = false;
 
             if (!checkMethod.HasBody) {
                 return false;
@@ -40,7 +58,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
             var methodId = checkMethod.GetIdentifier();
 
-            if (useCache && checkUsedContextBountFieldCache.TryGetValue(methodId, out bool value)) {
+            if (useCache && checkUsedContextBountFieldCache.TryGetValue(methodId, out bool value) && value) {
                 return value;
             }
 
@@ -61,10 +79,37 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 }
                 foreach (var inst in currentCheck.Body.Instructions) {
                     if (inst.Operand is FieldReference field) {
-                        if (field.FieldType.FullName == rootContextDef.FullName) {
+                        if (field.Name == "recipe") {
+
+                        }
+                        if (field.FieldType.FullName == Constants.RootContextFullName) {
                             return CacheReturn(true, useCache, methodId);
                         }
-                        if (instanceConvdFieldOrigMap.ContainsKey(field.FullName)) {
+                        if (instanceConvdFieldOrigMap.ContainsKey(field.GetIdentifier())) {
+                            return CacheReturn(true, useCache, methodId);
+                        }
+                    }
+                    if (inst.OpCode == OpCodes.Call || inst.OpCode == OpCodes.Callvirt) {
+                        var methodRef = (MethodReference)inst.Operand;
+                        string? autoDeleFieldName = null;
+                        if (methodRef.Name.OrdinalStartsWith("add_")) {
+                            autoDeleFieldName = methodRef.Name[4..];
+                        }
+                        else if (methodRef.Name.OrdinalStartsWith("remove_")) { 
+                            autoDeleFieldName = methodRef.Name[7..];
+                        }
+                        if (autoDeleFieldName is null) {
+                            continue;
+                        }
+                        var declaringType = methodRef.DeclaringType.TryResolve();
+                        if (declaringType is null) {
+                            continue;
+                        }
+                        var autoDeleField = declaringType.Fields.FirstOrDefault(f => f.Name == autoDeleFieldName);
+                        if (autoDeleField is null) {
+                            continue;
+                        }
+                        if (instanceConvdFieldOrigMap.ContainsKey(autoDeleField.GetIdentifier())) {
                             return CacheReturn(true, useCache, methodId);
                         }
                     }
@@ -75,7 +120,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         }
                         else if (inheritanceGraph.CheckedMethodImplementationChains.TryGetValue(methodRef.GetIdentifier(), out var implMethods)) {
                             foreach (var implMethod in implMethods) {
-                                if (implMethod.Parameters.Count != 0 && implMethod.Parameters[0].ParameterType.FullName == rootContextDef.FullName) {
+                                if (implMethod.Parameters.Count != 0 && implMethod.Parameters[0].ParameterType.FullName == Constants.RootContextFullName) {
                                     return CacheReturn(true, useCache, methodId);
                                 }
                                 worklist.Push(implMethod);
@@ -105,114 +150,18 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                             if (PredefineMethodUsedContext.Contains(callee.GetIdentifier())) {
                                 return CacheReturn(true, useCache, methodId);
                             }
-                            if (ParamCheck(rootContextDef, useds, callee, out var shouldAddToCheckList)) {
+                            if (ParamCheck(useds, callee, out var shouldAddToCheckList)) {
                                 return CacheReturn(true, useCache, methodId);
                             }
                             if (shouldAddToCheckList) {
                                 worklist.Push(callee);
                             }
-                            if (callee.Name == ".ctor" && callee.DeclaringType.Name.StartsWith('<')) {
+                            if (callee.Name == ".ctor" && callee.DeclaringType.Name.OrdinalStartsWith('<')) {
                                 foreach (var autoGenerate in callee.DeclaringType.Methods) {
                                     if (autoGenerate.Name == ".ctor") {
                                         continue;
                                     }
-                                    if (ParamCheck(rootContextDef, useds, autoGenerate, out shouldAddToCheckList)) {
-                                        return CacheReturn(true, useCache, methodId);
-                                    }
-                                    if (shouldAddToCheckList) {
-                                        worklist.Push(autoGenerate);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            return CacheReturn(false, useCache, methodId);
-        }
-        private static bool ParamCheck(TypeDefinition rootContextDef, MethodReferenceData referenceData, MethodDefinition callee, out bool shouldAddToCheckList) {
-            shouldAddToCheckList = true;
-            if (!callee.HasBody) {
-                return false;
-            }
-            if (referenceData.implicitCallMode is ImplicitCallMode.Inheritance && referenceData.DirectlyCalledMethod.Module.Name != callee.Module.Name) {
-                shouldAddToCheckList = false;
-                return false;
-            }
-            if (callee.Parameters.Count != 0 && callee.Parameters[0].ParameterType.FullName == rootContextDef.FullName) {
-                return true;
-            }
-            if (callee.DeclaringType.Fields.Any(f => f.FieldType.FullName == rootContextDef.FullName)) {
-                // It is implicit reference to context and no external effect to interface constraint, so we should not add to check list
-                if (referenceData.DirectlyCalledMethod != callee && referenceData.implicitCallMode is not ImplicitCallMode.None) {
-                    shouldAddToCheckList = false;
-                    return false;
-                }
-                return true;
-            }
-            return false;
-        }
-        public static bool CheckUsedContextBoundField<TFeature>(
-            this TFeature point,
-            TypeDefinition rootContextDef,
-            HashSet<FieldDefinition> modifiedFields,
-            MethodDefinition checkMethod,
-            bool useCache = true)
-            where TFeature : IMethodCheckCacheFeature {
-
-            if (!checkMethod.HasBody) {
-                return false;
-            }
-
-            var methodId = checkMethod.GetIdentifier();
-
-            if (checkUsedContextBountFieldCache.TryGetValue(methodId, out bool value)) {
-                return value;
-            }
-
-            HashSet<MethodDefinition> visited = [];
-            Stack<MethodDefinition> worklist = new([checkMethod]);
-
-            while (worklist.Count > 0) {
-                var currentCheck = worklist.Pop();
-                if (visited.Contains(currentCheck)) {
-                    continue;
-                }
-                visited.Add(currentCheck);
-                foreach (var inst in currentCheck.Body.Instructions) {
-                    if (inst.Operand is FieldReference field) {
-                        var fieldDef = field.Resolve();
-                        if (modifiedFields.Contains(fieldDef)) {
-                            return CacheReturn(true, useCache, methodId);
-                        }
-                    }
-                    if (inst.OpCode == OpCodes.Ldftn) {
-                        var methodRef = (MethodReference)inst.Operand;
-                        if (methodRef.DeclaringType.Name == "<>c") {
-                            worklist.Push(methodRef.Resolve());
-                        }
-                    }
-                }
-                var currentId = currentCheck.GetIdentifier();
-
-                if (point.MethodCallGraph.MediatedCallGraph.TryGetValue(currentId, out var calldata)) {
-                    foreach (var useds in calldata.UsedMethods) {
-                        foreach (var callee in useds.ImplementedMethods()) {
-                            if (PredefineMethodUsedContext.Contains(callee.GetIdentifier())) {
-                                return CacheReturn(true, useCache, methodId);
-                            }
-                            if (ParamCheck(rootContextDef, useds, callee, out var shouldAddToCheckList)) {
-                                return CacheReturn(true, useCache, methodId);
-                            }
-                            if (shouldAddToCheckList) {
-                                worklist.Push(callee);
-                            }
-                            if (callee.Name == ".ctor" && callee.DeclaringType.Name.StartsWith('<')) {
-                                foreach (var autoGenerate in callee.DeclaringType.Methods) {
-                                    if (autoGenerate.Name == ".ctor") {
-                                        continue;
-                                    }
-                                    if (ParamCheck(rootContextDef, useds, autoGenerate, out shouldAddToCheckList)) {
+                                    if (ParamCheck(useds, autoGenerate, out shouldAddToCheckList)) {
                                         return CacheReturn(true, useCache, methodId);
                                     }
                                     if (shouldAddToCheckList) {

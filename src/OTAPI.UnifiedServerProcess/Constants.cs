@@ -11,6 +11,9 @@ namespace OTAPI.UnifiedServerProcess
         public const string ContextSuffix = "SystemContext";
         public const string RootContextName = "RootContext";
         public const string RootContextFullName = "UnifiedServerProcess.RootContext";
+        public const string GlobalInitializerTypeName = "UnifiedServerProcess.GlobalInitializer";
+        public const string InitializerAttributeTypeName = "UnifiedServerProcess.InitializerExtractFromAttribute";
+        public const string GlobalInitializerEntryPointName = "InitializeEntryPoint";
 
         public static class Modifiers
         {
@@ -22,6 +25,7 @@ namespace OTAPI.UnifiedServerProcess
 
             public const FieldAttributes ContextField = FieldAttributes.Public;
             public const MethodAttributes ContextConstructor = MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName;
+            public const MethodAttributes GlobalInitialize = MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.Static;
         }
         public static class Patching
         {

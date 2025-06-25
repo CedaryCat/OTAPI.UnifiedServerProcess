@@ -182,7 +182,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             }
             foreach (var field in originalType.Fields.ToArray()) {
                 if (!field.IsStatic) {
-                    tmpSingletonFieldMap.Add(field.FullName, field);
+                    tmpSingletonFieldMap.Add(field.GetIdentifier(), field);
                 }
             }
 
@@ -258,7 +258,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             var rootContextParam = new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, rootContextField.FieldType);
             PatchingCommon.InsertParamAt0AndRemapIndices(existingConstructor.Body, PatchingCommon.InsertParamMode.Insert, rootContextParam);
 
-            // instance field init (not reference any parameter or field)
+            // instance field init (not reference any TrackingParameter or field)
             // ldarg.0, call base constructor
             // constructor body
 
@@ -354,7 +354,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             else {
                 int collisionCount = 0;
                 foreach (var existingField in declaringType.Fields) {
-                    if (existingField.Name == fieldName || existingField.Name.StartsWith(fieldName + "_")) {
+                    if (existingField.Name == fieldName || existingField.Name.OrdinalStartsWith(fieldName + "_")) {
                         collisionCount++;
                     }
                 }
@@ -393,7 +393,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                 ilProcessor.InsertBefore(insertTarget, Instruction.Create(OpCodes.Dup));
             }
             else {
-                // 'this' is other context, but parameter 0 (not including 'this') is root context
+                // 'this' is other context, but TrackingParameter 0 (not including 'this') is root context
                 ilProcessor.InsertBefore(insertTarget, Instruction.Create(OpCodes.Ldarg_1));
             }
             ilProcessor.InsertBefore(insertTarget, Instruction.Create(OpCodes.Newobj, instanceConvdTypeConstructor));

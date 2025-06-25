@@ -2,6 +2,7 @@
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
 using ReLogic.OS;
+using UnifiedServerProcess;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork
 {
@@ -26,6 +27,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             NetworkPatcher.Load();
             AppDomain.CurrentDomain.AssemblyResolve += ResolveHelpers.ResolveAssembly;
             Terraria.Program.SavePath = Platform.Get<IPathService>().GetStoragePath("Terraria");
+            Terraria.Main.SkipAssemblyLoad = true;
+            GlobalInitializer.InitializeEntryPoint();
 
             int port = 7777;
 
@@ -39,11 +42,9 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             Console.WriteLine("- done.");
 
             Task.Run(() => {
-                server1.Main.SkipAssemblyLoad = true;
                 server1.Program.LaunchGame(args);
             });
             Task.Run(() => {
-                server2.Main.SkipAssemblyLoad = true;
                 server2.Program.LaunchGame(args);
             });
 

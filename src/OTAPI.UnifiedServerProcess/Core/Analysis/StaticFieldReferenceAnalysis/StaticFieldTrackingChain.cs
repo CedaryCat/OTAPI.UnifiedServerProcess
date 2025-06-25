@@ -1,5 +1,5 @@
 ﻿using Mono.Cecil;
-using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels;
+using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
@@ -16,22 +16,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
         /// </summary>
         public readonly FieldDefinition TrackingStaticField;
         /// <summary>
-        /// When a parameter is encapsulated within an instance, the storeIn containing the parameter
-        /// is prepended to this hierarchy in the chain replica created by <see cref="CreateEncapsulatedInstance"/>.
+        /// When a TrackingParameter is encapsulated within an instance, the storeIn containing the TrackingParameter
+        /// is prepended to this hierarchy in the tail replica created by <see cref="CreateEncapsulatedInstance"/>.
         /// Subsequent encapsulations will continue prepending members. This hierarchy represents the path
-        /// from outermost container to inner values needed to access the tracked parameter.
+        /// from outermost container to inner values needed to access the tracked TrackingParameter.
         /// 
         /// <para>When accessing members from tracked objects via methods like <see cref="TryExtendTrackingWithMemberAccess"/>:</para>
         /// <para>1. If accessed storeIn matches the first element in the hierarchy, it indicates unwrapping - returns true</para>
         /// <para>2. If storeIn doesn't match hierarchy head - indicates unrelated access - returns false</para>
-        /// <para>3. Empty hierarchy means tracking base parameter. Member accesses are considered part of
-        /// the parameter itself and extend <see cref="ComponentAccessPath"/> instead - returns true</para>
+        /// <para>3. Empty hierarchy means tracking base TrackingParameter. Member accesses are considered part of
+        /// the TrackingParameter itself and extend <see cref="ComponentAccessPath"/> instead - returns true</para>
         /// </summary>
         public readonly ImmutableArray<MemberAccessStep> EncapsulationHierarchy = [];
         /// <summary>
-        /// When directly accessing members of the base parameter (when <see cref="EncapsulationHierarchy"/> is empty),
-        /// these accesses are recorded here. Unlike the encapsulation hierarchy, this chain represents the internal
-        /// structure of the parameter itself and doesn't support unwrapping semantics.
+        /// When directly accessing members of the base TrackingParameter (when <see cref="EncapsulationHierarchy"/> is empty),
+        /// these accesses are recorded here. Unlike the encapsulation hierarchy, this tail represents the internal
+        /// structure of the TrackingParameter itself and doesn't support unwrapping semantics.
         /// </summary>
         public readonly ImmutableArray<MemberAccessStep> ComponentAccessPath = [];
         readonly string Key;
@@ -91,8 +91,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         _ => false
                     };
                 }
-                else if (member is ArrayElementLayer indexer) {
-                    isValidReference = !indexer.MemberType.IsTruelyValueType();
+                else if (member is ArrayElementLayer array) {
+                    isValidReference = !array.MemberType.IsTruelyValueType();
+                }
+                else if (member is CollectionElementLayer collection) {
+                    isValidReference = !collection.MemberType.IsTruelyValueType();
                 }
                 else {
                     isValidReference = false;
@@ -103,7 +106,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                     // ** very special case **
                     // it's means that member is a reference part of the argument
                     // so we treat it as the argument itself
-                    // and the call chain is empty
+                    // and the call tail is empty
 
                     result = new StaticFieldTrackingChain(TrackingStaticField, [], [.. ComponentAccessPath, member]);
                     return true;
@@ -162,7 +165,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
             return null;
         }
-        public static StaticFieldTrackingChain? CombineParameterTraces(StaticFieldTrackingChain outerPart, StaticFieldTrackingChain innerPart) {
+        public static StaticFieldTrackingChain? CombineStaticFieldTraces(StaticFieldTrackingChain outerPart, StaticFieldTrackingChain innerPart) {
             static bool AreEqualLengthSegmentsEqual(ImmutableArray<MemberAccessStep> a, ImmutableArray<MemberAccessStep> b) {
                 var length = Math.Min(a.Length, b.Length);
                 for (int i = 0; i < length; i++) {

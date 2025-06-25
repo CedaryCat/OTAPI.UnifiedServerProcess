@@ -3,7 +3,7 @@ using Mono.Cecil.Cil;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
 {
     public class CollectionElementLayer(TypeReference collectionType, TypeReference elementType) : MemberAccessStep
     {
@@ -18,6 +18,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
         static TypeDefinition? IDictionaryType;
         static TypeDefinition? QueueType;
         static TypeDefinition? StackType;
+        public override bool IsSameLayer(MemberAccessStep layer) {
+            if (layer is CollectionElementLayer) {
+                return true;
+            }
+            return base.IsSameLayer(layer);
+        }
 
         [MemberNotNull(nameof(ICollectionType), nameof(ISetType), nameof(IListType), nameof(IDictionaryType), nameof(QueueType), nameof(StackType))]
         static void LazyInit(ModuleDefinition module) {
@@ -27,6 +33,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
             IDictionaryType ??= module.ImportReference(typeof(IDictionary<,>)).Resolve();
             QueueType ??= module.ImportReference(typeof(Queue<>)).Resolve();
             StackType ??= module.ImportReference(typeof(Stack<>)).Resolve();
+        }
+        public static bool IsStoreElementsMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction storeMethodCallInstruction) {
+
+            if (storeMethodCallInstruction.Operand is not MethodReference storeMethod) {
+                return false;
+            }
+
+            LazyInit(caller.Module);
+
+            var resolvedStoreMethod = storeMethod.Resolve();
+            if (resolvedStoreMethod.DeclaringType.FullName == typeof(List<>).FullName && resolvedStoreMethod.Name == "AddRange") {
+                return true;
+            }
+
+            return false;
         }
 
         public static bool IsStoreElementMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction storeMethodCallInstruction, out int indexOfValueInParameters) {
@@ -58,7 +79,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
                 // 0: value
                 indexOfValueInParameters = 0;
                 return true;
-
             }
 
             if (inheritancesTypes.ContainsKey(ISetType.FullName) && resolvedStoreMethod.Name is "Add") {
@@ -143,6 +163,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
             var inheritancesTypes = graph.GetInheritancesTypes(resolvedModifyMethod.DeclaringType);
 
             if (resolvedModifyMethod.Name is "set_Item" && resolvedModifyMethod.IsSpecialName) {
+                return true;
+            }
+
+            if (resolvedModifyMethod.DeclaringType.FullName == typeof(List<>).FullName && resolvedModifyMethod.Name == "AddRange") {
                 return true;
             }
 

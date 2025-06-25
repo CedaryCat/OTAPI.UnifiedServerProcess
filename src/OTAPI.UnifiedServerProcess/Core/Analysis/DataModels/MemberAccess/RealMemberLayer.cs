@@ -1,6 +1,6 @@
 ﻿using Mono.Cecil;
 
-namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels
+namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
 {
     public sealed class RealMemberLayer(MemberReference member) : MemberAccessStep
     {

@@ -55,7 +55,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var adjacencyList = new Dictionary<ContextTypeData, List<ContextTypeData>>();
             var inDegree = new Dictionary<ContextTypeData, int>();
 
-            // Initialize adjacency list and in-degree for all nodes
+            // InitializeEn adjacency list and in-degree for all nodes
             foreach (var type in dependencies.Keys) {
                 adjacencyList[type] = [];
                 inDegree[type] = 0;
@@ -169,7 +169,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var visited = new Dictionary<ContextTypeData, VisitState>();
                     var pathStack = new Stack<ContextTypeData>();
 
-                    // Initialize visit state
+                    // InitializeEn visit state
                     foreach (var n in dependencies.Keys)
                         visited[n] = VisitState.Unvisited;
 

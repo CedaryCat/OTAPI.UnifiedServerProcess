@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
+using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Immutable;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
@@ -28,7 +29,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         /// All instanceConvd fields, sorted by full name
         /// </summary>
         public readonly ImmutableDictionary<string, FieldDefinition> InstanceConvdFields = instanceConvdFieldOrigMap.Values
-            .ToImmutableDictionary(v => v.FullName, v => v);
+            .ToImmutableDictionary(v => v.GetIdentifier(), v => v);
         /// <summary>
         /// All instanceConvd types, sorted by full name
         /// </summary>

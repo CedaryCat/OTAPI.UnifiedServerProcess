@@ -11,7 +11,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
         public static class IL
         {
             /// <summary>
-            /// The name of the "this" parameter is an empty string rather than "this".
+            /// The name of the "this" TrackingParameter is an empty string rather than "this".
             /// </summary>
             public const string ThisParameterName = "";
             public static Instruction BuildParameterLoad(MethodDefinition method, MethodBody body, ParameterDefinition parameter) {
@@ -32,7 +32,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             }
             public static Instruction BuildParameterSet(MethodDefinition method, MethodBody body, ParameterDefinition parameter) {
                 if (method.HasThis && ((body is not null && body.ThisParameter == parameter) || parameter.Name == "")) {
-                    throw new ArgumentException("Cannot set \"this\" parameter", nameof(parameter));
+                    throw new ArgumentException("Cannot set \"this\" TrackingParameter", nameof(parameter));
                 }
                 else {
                     var index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
@@ -107,7 +107,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 }
                 var param = method.Parameters[paramIndex];
                 if (tmpCheck is not null && tmpCheck.Name != param.Name) {
-                    throw new InvalidOperationException("Operand parameter is invalid");
+                    throw new InvalidOperationException("Operand TrackingParameter is invalid");
                 }
                 return param;
             }
@@ -143,7 +143,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     var paramIndex = paramInnerIndex - (method.HasThis ? 1 : 0);
                     parameter = method.Parameters[paramIndex];
                     if (tmpCheck is not null && tmpCheck.Name != parameter.Name) {
-                        throw new InvalidOperationException("Operand parameter is invalid");
+                        throw new InvalidOperationException("Operand TrackingParameter is invalid");
                     }
                 }
                 return true;
@@ -182,13 +182,86 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     Code.Ldloc_1 or Code.Stloc_1 => 1,
                     Code.Ldloc_2 or Code.Stloc_2 => 2,
                     Code.Ldloc_3 or Code.Stloc_3 => 3,
+
                     Code.Ldloc_S or
                     Code.Ldloc or
-                    Code.Ldloca or
                     Code.Ldloca_S or
-                    Code.Stloc or
+                    Code.Ldloca or
                     Code.Stloc_S or
                     Code.Stloc => (tmpCheck = (VariableDefinition)instruction.Operand).Index,
+                    _ => -1
+                };
+
+                if (tmpCheck is not null && tmpCheck != method.Body.Variables[localIndex]) {
+                    throw new ArgumentException("Operand variable is invalid", nameof(instruction));
+                }
+
+                if (localIndex == -1) {
+                    variable = null;
+                    return false;
+                }
+
+                variable = method.Body.Variables[localIndex];
+                return true;
+            }
+            public static bool MatchSetVariable(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) {
+                VariableDefinition? tmpCheck = null;
+
+                var localIndex = instruction.OpCode.Code switch {
+                    Code.Stloc_0 => 0,
+                    Code.Stloc_1 => 1,
+                    Code.Stloc_2 => 2,
+                    Code.Stloc_3 => 3,
+
+                    Code.Stloc_S or
+                    Code.Stloc => (tmpCheck = (VariableDefinition)instruction.Operand).Index,
+                    _ => -1
+                };
+
+                if (tmpCheck is not null && tmpCheck != method.Body.Variables[localIndex]) {
+                    throw new ArgumentException("Operand variable is invalid", nameof(instruction));
+                }
+
+                if (localIndex == -1) {
+                    variable = null;
+                    return false;
+                }
+
+                variable = method.Body.Variables[localIndex];
+                return true;
+            }
+            public static bool MatchLoadVariableAddress(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) {
+                VariableDefinition? tmpCheck = null;
+
+                var localIndex = instruction.OpCode.Code switch {
+                    Code.Ldloca_S or
+                    Code.Ldloca => (tmpCheck = (VariableDefinition)instruction.Operand).Index,
+                    _ => -1
+                };
+
+                if (tmpCheck is not null && tmpCheck != method.Body.Variables[localIndex]) {
+                    throw new ArgumentException("Operand variable is invalid", nameof(instruction));
+                }
+
+                if (localIndex == -1) {
+                    variable = null;
+                    return false;
+                }
+
+                variable = method.Body.Variables[localIndex];
+                return true;
+            }
+            public static bool MatchLoadVariable(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) { 
+                VariableDefinition? tmpCheck = null;
+
+                var localIndex = instruction.OpCode.Code switch {
+                    Code.Ldloc_0 => 0,
+                    Code.Ldloc_1 => 1,
+                    Code.Ldloc_2 => 2,
+                    Code.Ldloc_3 => 3,
+
+                    Code.Ldloc_S or
+                    Code.Ldloc => (tmpCheck = (VariableDefinition)instruction.Operand).Index,
                     _ => -1
                 };
 

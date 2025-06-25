@@ -30,10 +30,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             ProcessTerraria_Net_NetManager(raw);
             ProcessTerraria_GameContent_Creative_CreativePowerManager(raw);
 
-            foreach (var field in raw.ModifiedStaticFields) {
-                if (field.DeclaringType.HasGenericParameters) {
-                    if (ignoredStaticGenericFieldDeclaringFullNames.Contains(field.DeclaringType.FullName)) {
-                        raw.ModifiedStaticFields.Remove(field);
+            foreach (var fieldKV in raw.ModifiedStaticFields.ToArray()) {
+                if (fieldKV.Value.DeclaringType.HasGenericParameters) {
+                    if (ignoredStaticGenericFieldDeclaringFullNames.Contains(fieldKV.Value.DeclaringType.FullName)) {
+                        raw.ModifiedStaticFields.Remove(fieldKV.Key);
                         continue;
                     }
                     throw new Exception("This generic static type not supported yet");
@@ -57,11 +57,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             RefactorFieldOperate_DictionaryStorage(netManager, packetTypeStorage);
 
-            argument.ModifiedStaticFields.Remove(packetTypeStorage_Id);
-            argument.ModifiedStaticFields.Remove(packetTypeStorage_Module);
+            argument.ModifiedStaticFields.Remove(packetTypeStorage_Id.GetIdentifier());
+            argument.ModifiedStaticFields.Remove(packetTypeStorage_Module.GetIdentifier());
 
-            argument.ModifiedStaticFields.Add(netManager.GetField("Instance"));
-            argument.ModifiedStaticFields.Add(netManager.GetField("PacketTypeStorageInstance"));
+            var instanceField = netManager.GetField("Instance");
+            argument.ModifiedStaticFields.TryAdd(instanceField.GetIdentifier(), instanceField);
+            var packetTypeStorageInstanceField = netManager.GetField("PacketTypeStorageInstance");
+            argument.ModifiedStaticFields.TryAdd(packetTypeStorageInstanceField.GetIdentifier(), packetTypeStorageInstanceField);
         }
 
         void ProcessTerraria_GameContent_Creative_CreativePowerManager(FilterArgumentSource argument) {
@@ -85,10 +87,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             RefactorFieldOperate_DictionaryStorage(creativePowerManager, powerTypeStorage);
 
-            argument.ModifiedStaticFields.Remove(powerTypeStorage_Id);
-            argument.ModifiedStaticFields.Remove(powerTypeStorage_Name);
-            argument.ModifiedStaticFields.Remove(powerTypeStorage_Power);
-            argument.ModifiedStaticFields.Add(creativePowerManager.GetField("PowerTypeStorageInstance"));
+            argument.ModifiedStaticFields.Remove(powerTypeStorage_Id.GetIdentifier());
+            argument.ModifiedStaticFields.Remove(powerTypeStorage_Name.GetIdentifier());
+            argument.ModifiedStaticFields.Remove(powerTypeStorage_Power.GetIdentifier());
+            var powersCountField = creativePowerManager.GetField("PowerTypeStorageInstance");
+            argument.ModifiedStaticFields.TryAdd(powersCountField.GetIdentifier(), powersCountField);
         }
 
         public readonly struct TypeInitializationParams
@@ -116,7 +119,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     throw new ArgumentException("It is not a generic type");
                 }
                 if (staticGenericType.GenericParameters.Count > 1) {
-                    throw new ArgumentException("Only support one generic parameter");
+                    throw new ArgumentException("Only support one generic TrackingParameter");
                 }
                 origGenericParam = staticGenericType.GenericParameters[0];
 
@@ -237,7 +240,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             var fields = staticGenericType.Fields.Where(f => f.IsStatic).ToArray();
             var origGenericField = fields.FirstOrDefault(f => f.FieldType == origGenericParam)
-                ?? throw new Exception("The type does not contain a field of the generic type");
+                ?? throw new Exception("The type does not contain a fieldKV of the generic type");
 
             var fieldMap = new Dictionary<FieldDefinition, FieldDefinition>();
 

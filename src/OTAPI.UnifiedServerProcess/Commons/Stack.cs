@@ -1,6 +1,9 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
+using OTAPI.UnifiedServerProcess.Extensions;
+using OTAPI.UnifiedServerProcess.Optimize.FastCollections;
+using OTAPI.UnifiedServerProcess.Optimize.LinkObjects;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -33,16 +36,16 @@ namespace OTAPI.UnifiedServerProcess.Commons
             public static Instruction[] AnalyzeStackTopValueUsage(MethodDefinition caller, Instruction afterThisExec) {
                 var visited = new HashSet<(Instruction, int)>();
                 var results = new HashSet<Instruction>();
-                var workQueue = new Queue<AnalysisContext>();
+                var workStack = new Stack<AnalysisContext>();
 
                 Instruction initialInstruction = afterThisExec.Next;
 
                 if (initialInstruction is null) return [];
 
-                workQueue.Enqueue(new AnalysisContext(initialInstruction, 0));
+                workStack.Push(new AnalysisContext(initialInstruction, 0));
 
-                while (workQueue.Count > 0) {
-                    var ctx = workQueue.Dequeue();
+                while (workStack.Count > 0) {
+                    var ctx = workStack.Pop();
 
                     if (visited.Contains((ctx.CurrentInstruction, ctx.TargetPosition)))
                         continue;
@@ -56,8 +59,8 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         if (ctx.CurrentInstruction.OpCode == OpCodes.Dup) {
                             foreach (var next in GetNextInstructions(ctx.CurrentInstruction)) {
                                 if (next is null) continue;
-                                workQueue.Enqueue(new AnalysisContext(next, 0));
-                                workQueue.Enqueue(new AnalysisContext(next, 1));
+                                workStack.Push(new AnalysisContext(next, 0));
+                                workStack.Push(new AnalysisContext(next, 1));
                             }
                         }
                         else {
@@ -68,11 +71,30 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         int newPosition = currentPosition - popCount + pushCount;
                         foreach (var next in GetNextInstructions(ctx.CurrentInstruction)) {
                             if (next != null)
-                                workQueue.Enqueue(new AnalysisContext(next, newPosition));
+                                workStack.Push(new AnalysisContext(next, newPosition));
                         }
                     }
                 }
 
+                return results.ToArray();
+            }
+            public static Instruction[] AnalyzeStackTopValueFinalUsage(MethodDefinition caller, Instruction afterThisExec) {
+                List<Instruction> results = [];
+                Stack<Instruction> works = [];
+                works.Push(afterThisExec);
+
+                while (works.Count > 0) {
+                    var current = works.Pop();
+                    var usages = AnalyzeStackTopValueUsage(caller, current);
+                    foreach (var usage in usages) {
+                        if (MonoModCommon.Stack.GetPushCount(caller.Body, usage) > 0) {
+                            works.Push(usage);
+                        }
+                        else {
+                            results.Add(usage);
+                        }
+                    }
+                }
                 return results.ToArray();
             }
 
@@ -99,28 +121,28 @@ namespace OTAPI.UnifiedServerProcess.Commons
             public static TypeReference? AnalyzeStackTopType(MethodDefinition caller, Instruction afterThisExec, Dictionary<Instruction, List<Instruction>>? cachedJumpSitess = null) {
                 // Verify target is within the method's instructions
                 var instructions = caller.Body.Instructions;
-                int targetIndex = instructions.IndexOf(afterThisExec);
-                if (targetIndex == -1)
-                    throw new ArgumentException("Target instruction is not part of the method body.");
+                //int targetIndex = instructions.IndexOf(afterThisExec);
+                //if (targetIndex == -1)
+                //    throw new ArgumentException("Target instruction is not part of the method body.");
 
                 cachedJumpSitess ??= BuildJumpSitesMap(caller);
 
                 // initialize analysis queue
-                var workQueue = new Queue<(Instruction current, int stackBalance)>();
+                var workStack = new Stack<(Instruction current, int stackBalance, HashSet<Instruction> visited)>();
 
-                workQueue.Enqueue((afterThisExec, -1));
+                workStack.Push((afterThisExec, -1, []));
 
                 TypeReference? type = null;
 
-                var visited = new HashSet<(Instruction, int)>();
+                // var visited = new HashSet<(Instruction, int)>();
 
-                while (workQueue.Count > 0) {
-                    var (current, stackBalance) = workQueue.Dequeue();
+                while (workStack.Count > 0) {
+                    var (current, stackBalance, visited) = workStack.Pop();
 
                     // Check for visited state to prevent loops
-                    var stateKey = (current, stackBalance);
-                    if (visited.Contains(stateKey)) continue;
-                    visited.Add(stateKey);
+
+                    if (visited.Contains(current)) continue;
+                    visited.Add(current);
 
                     var newerBalance = stackBalance + GetPushCount(caller.Body, current) - GetPopCount(caller.Body, current);
 
@@ -149,14 +171,14 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                     if (cachedJumpSitess.TryGetValue(current, out var jumpSitess)) {
                         foreach (var source in jumpSitess) {
-                            workQueue.Enqueue((source, newerBalance));
+                            workStack.Push((source, newerBalance, [.. visited]));
                         }
                     }
 
                     // linear backtracking
                     if (current.Previous != null) {
                         if (!IsTerminatorInstruction(current.Previous)) {
-                            workQueue.Enqueue((current.Previous, newerBalance));
+                            workStack.Push((current.Previous, newerBalance, visited));
                         }
                         else if (newerBalance == -1 && IsTryEndInstruction(caller.Body, current.Previous, out type)) {
                             break;
@@ -168,29 +190,27 @@ namespace OTAPI.UnifiedServerProcess.Commons
             }
             public static StackTopTypePath[] AnalyzeStackTopTypeAllPaths(MethodDefinition caller, Instruction afterThisExec, Dictionary<Instruction, List<Instruction>>? cachedJumpSitess = null) {
                 var instructions = caller.Body.Instructions;
-                int targetIndex = instructions.IndexOf(afterThisExec);
-                if (targetIndex == -1)
-                    throw new ArgumentException("Target instruction is not part of the method body.");
+                //int targetIndex = instructions.IndexOf(afterThisExec);
+                //if (targetIndex == -1)
+                //    throw new ArgumentException("Target instruction is not part of the method body.");
 
                 cachedJumpSitess ??= BuildJumpSitesMap(caller);
 
                 // initialize analysis queue
-                var workQueue = new Queue<(List<Instruction> path, Instruction current, int stackBalance)>();
+                var workStack = new Stack<(ReversibleLinkedList<Instruction> path, Instruction current, int stackBalance, HashSet<Instruction> visited)>();
 
-                workQueue.Enqueue(([], afterThisExec, -1));
+                workStack.Push((new(), afterThisExec, -1, []));
 
                 List<StackTopTypePath> paths = [];
-                var visited = new HashSet<(Instruction, int)>();
+                // var visited = new HashSet<(Instruction, int)>();
 
-                while (workQueue.Count > 0) {
-                    var (path, current, stackBalance) = workQueue.Dequeue();
+                while (workStack.Count > 0) {
+                    var (path, current, stackBalance, visited) = workStack.Pop();
 
                     path.Add(current);
 
-                    // Check for visited state to prevent loops
-                    var stateKey = (current, stackBalance);
-                    if (visited.Contains(stateKey)) continue;
-                    visited.Add(stateKey);
+                    if (visited.Contains(current)) continue;
+                    visited.Add(current);
 
                     var newerBalance = stackBalance + GetPushCount(caller.Body, current) - GetPopCount(caller.Body, current);
 
@@ -205,7 +225,10 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     if (stackBalance + addCount >= 0) {
                         if (current.OpCode != OpCodes.Dup) {
                             var type = GetPushType(current, caller, cachedJumpSitess);
-                            paths.Add(new StackTopTypePath(type, current) { Instructions = [.. path] });
+                            paths.Add(new StackTopTypePath(type, current) { Instructions = path.ToArray() });
+                            if (paths.Count > 256) {
+                                workStack.Clear();
+                            }
                             continue;
                         }
                         else {
@@ -215,18 +238,21 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                     if (cachedJumpSitess.TryGetValue(current, out var jumpSitess)) {
                         foreach (var source in jumpSitess) {
-                            workQueue.Enqueue(([.. path], source, newerBalance));
+                            workStack.Push((new(path), source, newerBalance, [.. visited]));
                         }
                     }
 
                     // linear backtracking
                     if (current.Previous != null) {
                         if (!IsTerminatorInstruction(current.Previous)) {
-                            workQueue.Enqueue(([.. path], current.Previous, newerBalance));
+                            workStack.Push((new(path), current.Previous, newerBalance, visited));
                         }
                         else if (newerBalance == -1 && IsTryEndInstruction(caller.Body, current.Previous, out var exceptionType)) {
                             path.Add(current.Previous);
-                            paths.Add(new StackTopTypePath(exceptionType, current.Previous) { Instructions = [.. path] });
+                            paths.Add(new StackTopTypePath(exceptionType, current.Previous) { Instructions = path.ToArray() });
+                            if (paths.Count > 256) {
+                                workStack.Clear();
+                            }
                             continue;
                         }
                     }
@@ -319,6 +345,54 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                 return reachUpperBound;
             }
+
+            static void FindEndpoints(IEnumerable<Instruction> nodes, out Instruction min, out Instruction max, out HashSet<Instruction> block) {
+                var nodeSet = new HashSet<Instruction>(nodes);
+
+                if (nodeSet.Count == 0) throw new ArgumentException("Node set must contain at least one node");
+
+                Instruction start = nodeSet.First();
+                nodeSet.Remove(start);
+                block = [start];
+
+                min = start;
+                max = start;
+
+                Instruction leftCursor = start;
+                HashSet<Instruction> leftCollected = [];
+                Instruction rightCursor = start; 
+                HashSet<Instruction> rightCollected = [];
+
+                while (nodeSet.Count > 0) {
+                    if (leftCursor.Previous != null) {
+                        leftCursor = leftCursor.Previous;
+
+                        leftCollected.Add(leftCursor);
+
+                        if (nodeSet.Remove(leftCursor)) {
+                            min = leftCursor;
+                            foreach (var inst in leftCollected) {
+                                block.Add(inst);
+                            }
+                        }
+                    }
+
+                    if (nodeSet.Count == 0) break;
+
+                    if (rightCursor.Next != null) {
+                        rightCursor = rightCursor.Next; 
+
+                        rightCollected.Add(rightCursor);
+
+                        if (nodeSet.Remove(rightCursor)) {
+                            max = rightCursor;
+                            foreach (var inst in rightCollected) {
+                                block.Add(inst);
+                            }
+                        }
+                    }
+                }
+            }
             public static bool CheckSinglePredecessor(
                 MethodDefinition method,
                 Instruction[] bound,
@@ -330,71 +404,9 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     throw new ArgumentException("Invalid bounds.");
                 }
 
+                FindEndpoints(bound, out upperBound, out lowerBound, out var block);
+
                 cachedJumpSitess ??= BuildJumpSitesMap(method);
-                List<Instruction> allowsForward = [];
-                List<Instruction> allowsBackward = [];
-
-                // Step 1: Build allowed instruction set
-                var currentForward = bound[bound.Length / 2 - 1];
-                var currentBackward = bound[bound.Length / 2];
-
-                Dictionary<Instruction, int> allows = new() {
-                    { currentForward, 0 },
-                    { currentBackward, 1 }
-                };
-
-
-                var boundSet = new HashSet<Instruction>(bound);
-
-                while (true) {
-                    if (currentForward is not null) {
-                        allowsForward.Add(currentForward);
-
-                        if (boundSet.Contains(currentForward)) {
-                            var index = allows[allowsForward[0]];
-                            for (int i = 1; i < allowsForward.Count; i++) {
-                                allows[allowsForward[i]] = index - i;
-                            }
-                            boundSet.Remove(currentForward);
-                            allowsForward.Clear();
-                            allowsForward.Add(currentForward);
-                        }
-
-                        currentForward = currentForward.Previous;
-                    }
-
-                    if (currentBackward is not null) {
-                        allowsBackward.Add(currentBackward);
-
-                        if (boundSet.Contains(currentBackward)) {
-                            var index = allows[allowsBackward[0]];
-                            for (int i = 1; i < allowsBackward.Count; i++) {
-                                allows[allowsBackward[i]] = index + i;
-                            }
-                            boundSet.Remove(currentBackward);
-                            allowsBackward.Clear();
-                            allowsBackward.Add(currentBackward);
-                        }
-
-                        currentBackward = currentBackward.Next;
-                    }
-
-                    if (boundSet.Count == 0) {
-                        break;
-                    }
-
-                    if (currentForward is null && currentBackward is null) {
-                        throw new ArgumentException("Invalid bounds, could not find upper and lower bound.");
-                    }
-                }
-
-                if (allows.Count == 0) {
-                    throw new ArgumentException("Invalid bounds.");
-                }
-
-                var sorted = allows.OrderBy(x => x.Value).Select(x => x.Key).ToArray();
-                upperBound = sorted[0];
-                lowerBound = sorted[^1];
 
                 // Step 2: Traverse all possible predecessors
                 HashSet<Instruction> visited = new();
@@ -411,7 +423,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     // Check jump sources
                     if (cachedJumpSitess.TryGetValue(work, out var jumpSites)) {
                         foreach (var site in jumpSites) {
-                            if (!allows.ContainsKey(site)) {
+                            if (!block.Contains(site)) {
                                 // External jump source detected
                                 return false;
                             }
@@ -445,7 +457,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     _ => false
                 };
             }
-            public static TypeReference? GetPushType(Instruction instruction, MethodDefinition method, Dictionary<Instruction, List<Instruction>>? cachedJumpSitess = null) {
+            public static TypeReference? GetPushType(Instruction instruction, MethodDefinition method, Dictionary<Instruction, List<Instruction>>? cachedJumpSites = null) {
                 switch (instruction.OpCode.Code) {
                     // Load
                     case Code.Ldloc_0:
@@ -534,8 +546,8 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     case Code.Rem:
                     case Code.Rem_Un:
                     case Code.Neg:
-                        var calculatePaths = Stack.AnalyzeInstructionArgsSources(method, instruction, cachedJumpSitess);
-                        var operandType = Stack.AnalyzeStackTopType(method, calculatePaths[0].ParametersSources[0].Instructions.Last());
+                        var calculatePaths = Stack.AnalyzeInstructionArgsSources(method, instruction, cachedJumpSites);
+                        var operandType = Stack.AnalyzeStackTopType(method, calculatePaths[0].ParametersSources[0].Instructions.Last(), cachedJumpSites);
                         return operandType;
 
                     // number type convert
@@ -597,9 +609,9 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     case Code.Ldelem_I: return method.Module.TypeSystem.IntPtr;
                     case Code.Ldelem_Any: return (TypeReference)instruction.Operand;
                     case Code.Ldelem_Ref:
-                        var arrayAccessPaths = AnalyzeInstructionArgsSources(method, instruction).First();
+                        var arrayAccessPaths = AnalyzeInstructionArgsSources(method, instruction, cachedJumpSites).First();
                         var arrayInstructions = arrayAccessPaths.ParametersSources[0].Instructions;
-                        var arrayType = AnalyzeStackTopType(method, arrayInstructions.Last(), cachedJumpSitess);
+                        var arrayType = AnalyzeStackTopType(method, arrayInstructions.Last(), cachedJumpSites);
                         if (arrayType is ArrayType at) {
                             return at.ElementType;
                         }
@@ -615,7 +627,11 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     case Code.Ldind_R4: return method.Module.TypeSystem.Single;
                     case Code.Ldind_R8: return method.Module.TypeSystem.Double;
                     case Code.Ldind_I: return method.Module.TypeSystem.IntPtr;
-                    case Code.Ldind_Ref: return method.Module.TypeSystem.Object;
+                    case Code.Ldind_Ref:
+                        var referencePaths = AnalyzeInstructionArgsSources(method, instruction, cachedJumpSites).First();
+                        var referenceInstructions = referencePaths.ParametersSources[0].Instructions;
+                        var referenceType = (ByReferenceType)AnalyzeStackTopType(method, referenceInstructions.Last(), cachedJumpSites)!;
+                        return referenceType.ElementType;
 
                     case Code.Ldobj: return (TypeReference)instruction.Operand;
 
@@ -710,11 +726,11 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 public override string ToString() => $"[{Index}] (inst: {Instructions.Length})";
             }
             /// <summary>
-            /// Analyzes parameter sources considering control flow and multiple execution paths
+            /// Analyzes TrackingParameter sources considering control flow and multiple execution paths
             /// </summary>
             /// <param name="caller">Containing method</param>
             /// <param name="target">Method call/newobj instruction</param>
-            /// <returns>Array of possible parameter flow paths</returns>
+            /// <returns>Array of possible TrackingParameter flow paths</returns>
             public static FlowPath<ParameterSource>[] AnalyzeParametersSources(MethodDefinition caller, Instruction target, Dictionary<Instruction, List<Instruction>>? cachedJumpSitess = null) {
 
                 cachedJumpSitess ??= BuildJumpSitesMap(caller);
@@ -727,32 +743,33 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     paramCount = callee.Parameters.Count;
 
                 // Initialize analysis queue
-                var workQueue = new Queue<ReverseAnalysisContext>();
+                var workStack = new Stack<ReverseAnalysisContext>();
                 var initialDemand = new StackDemand(paramCount, GetPushCount(caller.Body, target));
-                workQueue.Enqueue(new ReverseAnalysisContext(
+                workStack.Push(new ReverseAnalysisContext(
                     current: target,
                     previous: target.Previous,
                     stackDemand: initialDemand,
-                    path: new List<Instruction>(),
-                    isBranch: false
+                    path: new(),
+                    isBranch: false,
+                    visited: []
                 ));
 
                 List<FlowPath<ParameterSource>> paths = new();
-                var visited = new HashSet<(Instruction, int)>(); // Track visited (offset, stackBalance)
+                // var visited = new HashSet<(Instruction, int)>(); // Track visited (offset, stackBalance)
 
-                while (workQueue.Count > 0) {
-                    var ctx = workQueue.Dequeue();
+                while (workStack.Count > 0) {
+                    var ctx = workStack.Pop();
 
-                    // Check for visited state to prevent loops
-                    var stateKey = (ctx.Current, ctx.StackDemand.StackBalance);
+                    var stateKey = ctx.Current; // (ctx.Current, ctx.StackDemand.StackBalance);
+                    var visited = ctx.Visited;
                     if (visited.Contains(stateKey)) continue;
                     visited.Add(stateKey);
 
                     // Clone context to prevent state pollution
                     var stackDemand = ctx.StackDemand.Clone();
-                    var path = new List<Instruction>(ctx.Path);
+                    var path = new ReversibleLinkedList<Instruction>(ctx.Path);
 
-                    // Process current instruction's reverse stack effect
+                    // Process tail instruction's reverse stack effect
                     int originalPush = GetPushCount(caller.Body, ctx.Current);
                     int originalPop = GetPopCount(caller.Body, ctx.Current);
 
@@ -765,8 +782,10 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                     // Termination condition
                     if (stackDemand.StackBalance == 0) {
-                        path.Reverse();
-                        paths.Add(ProcessCompletedPath(caller, path, callee));
+                        paths.Add(ProcessCompletedPath(caller, path.ReverseToArray(), callee));
+                        if (paths.Count > 256) {
+                            workStack.Clear();
+                        }
                         continue;
                     }
 
@@ -774,13 +793,13 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     if (cachedJumpSitess.TryGetValue(ctx.Current, out var jumpSitess)) {
                         foreach (var source in jumpSitess) {
                             var branchStack = stackDemand.Clone();
-                            var branchPath = new List<Instruction>(path);
-                            workQueue.Enqueue(new ReverseAnalysisContext(
+                            workStack.Push(new ReverseAnalysisContext(
                                 current: source,
                                 previous: source.Previous,
                                 stackDemand: branchStack,
-                                path: branchPath,
-                                isBranch: true
+                                path: new(path),
+                                isBranch: true,
+                                visited: [.. ctx.Visited]
                             ));
                         }
                     }
@@ -788,18 +807,18 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     // Linear backtracking
                     if (ctx.Previous != null) {
                         if (!IsTerminatorInstruction(ctx.Previous)) {
-                            workQueue.Enqueue(new ReverseAnalysisContext(
+                            workStack.Push(new ReverseAnalysisContext(
                                 current: ctx.Previous,
                                 previous: ctx.Previous.Previous,
                                 stackDemand: stackDemand,
                                 path: path,
-                                isBranch: false
+                                isBranch: false,
+                                visited: ctx.Visited
                             ));
                         }
                         else if (stackDemand.StackBalance == -1 && IsTryEndInstruction(caller.Body, ctx.Previous, out _)) {
                             path.Add(ctx.Previous);
-                            path.Reverse();
-                            paths.Add(ProcessCompletedPath(caller, path, callee));
+                            paths.Add(ProcessCompletedPath(caller, path.ReverseToArray(), callee));
                             continue;
                         }
                     }
@@ -843,33 +862,34 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 var argsCount = GetInstructionArgCount(caller.Body, target);
 
                 // initialize analysis queue
-                var workQueue = new Queue<ReverseAnalysisContext>();
+                var workStack = new Stack<ReverseAnalysisContext>();
                 var initialDemand = new StackDemand(argsCount, GetPushCount(caller.Body, target));
 
-                workQueue.Enqueue(new ReverseAnalysisContext(
+                workStack.Push(new ReverseAnalysisContext(
                     current: target,
                     previous: target.Previous,
                     stackDemand: initialDemand,
-                    path: [],
-                    isBranch: false
+                    path: new(),
+                    isBranch: false,
+                    visited: []
                 ));
 
                 List<FlowPath<InstructionArgsSource>> paths = new();
-                var visited = new HashSet<(Instruction, int)>();
 
-                while (workQueue.Count > 0) {
-                    var ctx = workQueue.Dequeue();
+                while (workStack.Count > 0) {
+                    var ctx = workStack.Pop();
 
                     // Check for visited state to prevent loops
-                    var stateKey = (ctx.Current, ctx.StackDemand.StackBalance);
+                    var stateKey = ctx.Current; // (ctx.Current, ctx.StackDemand.StackBalance);
+                    var visited = ctx.Visited;
                     if (visited.Contains(stateKey)) continue;
                     visited.Add(stateKey);
 
                     // Clone context to prevent polluting
                     var stackDemand = ctx.StackDemand.Clone();
-                    var path = new List<Instruction>(ctx.Path);
+                    var path = new ReversibleLinkedList<Instruction>(ctx.Path);
 
-                    // Process the reverse stack effect of the current instruction
+                    // Process the reverse stack effect of the tail instruction
                     int originalPush = GetPushCount(caller.Body, ctx.Current);
                     int originalPop = GetPopCount(caller.Body, ctx.Current);
 
@@ -882,8 +902,10 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                     // All parameters have been resolved
                     if (stackDemand.StackBalance == 0) {
-                        path.Reverse();
-                        paths.Add(ProcessCompletedInstructionPath(caller, path, argsCount));
+                        paths.Add(ProcessCompletedInstructionPath(caller, path.ReverseToArray(), argsCount));
+                        if (paths.Count > 256) {
+                            workStack.Clear();
+                        }
                         continue;
                     }
 
@@ -891,14 +913,14 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     if (cachedJumpSitess.TryGetValue(ctx.Current, out var jumpSitess)) {
                         foreach (var source in jumpSitess) {
                             var branchStack = stackDemand.Clone();
-                            var branchPath = new List<Instruction>(path);
 
-                            workQueue.Enqueue(new ReverseAnalysisContext(
+                            workStack.Push(new ReverseAnalysisContext(
                                 current: source,
                                 previous: source.Previous,
                                 stackDemand: branchStack,
-                                path: branchPath,
-                                isBranch: true
+                                path: new(path),
+                                isBranch: true,
+                                visited: [.. ctx.Visited]
                             ));
                         }
                     }
@@ -906,18 +928,18 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     // Linear backtracking
                     if (ctx.Previous != null) {
                         if (!IsTerminatorInstruction(ctx.Previous)) {
-                            workQueue.Enqueue(new ReverseAnalysisContext(
+                            workStack.Push(new ReverseAnalysisContext(
                                 current: ctx.Previous,
                                 previous: ctx.Previous.Previous,
                                 stackDemand: stackDemand,
                                 path: path,
-                                isBranch: false
+                                isBranch: false,
+                                visited: ctx.Visited
                             ));
                         }
                         else if (stackDemand.StackBalance == -1 && IsTryEndInstruction(caller.Body, ctx.Previous, out _)) {
                             path.Add(ctx.Previous);
-                            path.Reverse();
-                            paths.Add(ProcessCompletedInstructionPath(caller, path, argsCount));
+                            paths.Add(ProcessCompletedInstructionPath(caller, path.ReverseToArray(), argsCount));
                             continue;
                         }
                     }
@@ -958,12 +980,12 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 }
                 return jumpTargets;
             }
-            private static FlowPath<ParameterSource> ProcessCompletedPath(MethodDefinition caller, List<Instruction> path, MethodReference callee) {
-                return new FlowPath<ParameterSource>([.. AnalyzeMethodCallPath(caller, callee, path.Last(), [.. path])]);
+            private static FlowPath<ParameterSource> ProcessCompletedPath(MethodDefinition caller, Instruction[] path, MethodReference callee) {
+                return new FlowPath<ParameterSource>([.. AnalyzeMethodCallPath(caller, callee, path.Last(), path)]);
             }
-            private static FlowPath<InstructionArgsSource> ProcessCompletedInstructionPath(MethodDefinition caller, List<Instruction> path, int argsCount) {
+            private static FlowPath<InstructionArgsSource> ProcessCompletedInstructionPath(MethodDefinition caller, Instruction[] path, int argsCount) {
                 return new FlowPath<InstructionArgsSource>(
-                    [.. AnalyzeInstructionArgs(caller.Body, path.Last(), argsCount, [.. path])]
+                    [.. AnalyzeInstructionArgs(caller.Body, path.Last(), argsCount, path)]
                 );
             }
             private static List<ParameterSource> AnalyzeMethodCallPath(MethodDefinition caller, MethodReference callee, Instruction target, Instruction[] path) {
@@ -1190,22 +1212,14 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 int push = GetPushCount(body, instruction);
                 return push - pop;
             }
-            private class ReverseAnalysisContext
+            private class ReverseAnalysisContext(Instruction current, Instruction previous, StackDemand stackDemand, ReversibleLinkedList<Instruction> path, bool isBranch, HashSet<Instruction> visited)
             {
-                public Instruction Current { get; }
-                public Instruction Previous { get; }
-                public StackDemand StackDemand { get; }
-                public List<Instruction> Path { get; }
-                public bool IsBranch { get; }
-
-                public ReverseAnalysisContext(Instruction current, Instruction previous,
-                    StackDemand stackDemand, List<Instruction> path, bool isBranch) {
-                    Current = current;
-                    Previous = previous;
-                    StackDemand = stackDemand;
-                    Path = path;
-                    IsBranch = isBranch;
-                }
+                public readonly Instruction Current = current;
+                public readonly Instruction Previous = previous;
+                public readonly StackDemand StackDemand = stackDemand;
+                public readonly ReversibleLinkedList<Instruction> Path = path;
+                public readonly bool IsBranch = isBranch;
+                public readonly HashSet<Instruction> Visited = visited;
             }
             private class StackDemand
             {

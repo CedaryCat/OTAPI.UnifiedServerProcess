@@ -36,7 +36,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
             for (int progress = 0; progress < cctors.Count; progress++) {
                 var cctor = cctors[progress];
-                if (cctor.DeclaringType.Name.StartsWith('<')) {
+                if (cctor.DeclaringType.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
                 Progress(progress, cctors.Count, $"Processing .cctor of: {cctor.DeclaringType.FullName}");
@@ -227,7 +227,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (fieldDef is null) {
                     return;
                 }
-                if (!arguments.InstanceConvdFieldOrgiMap.ContainsKey(fieldDef.FullName)) {
+                if (!arguments.InstanceConvdFieldOrgiMap.ContainsKey(fieldDef.GetIdentifier())) {
                     return;
                 }
                 ExtractSources(feature, cctor, transformInsts, localMap, inst);
@@ -238,7 +238,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (fieldDef is null) {
                     return;
                 }
-                if (!arguments.InstanceConvdFieldOrgiMap.ContainsKey(fieldDef.FullName)) {
+                if (!arguments.InstanceConvdFieldOrgiMap.ContainsKey(fieldDef.GetIdentifier())) {
                     return;
                 }
                 transformInsts.Add(inst);
@@ -412,7 +412,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 FieldDefinition? instanceConvdField;
                 // If the loading field is just an context, it must come from a singleton field redirection
                 if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
-                    // If it is loading the field value but address, and current method is an instance method of the context
+                    // If it is loading the field value but address, and tail method is an instance method of the context
                     // Just use 'this'
                     if (method.DeclaringType.FullName == instanceConvdType.ContextTypeDef.FullName
                         && !method.IsStatic
@@ -422,21 +422,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         instruction.Operand = null;
                         return;
                     }
-                    // Load the field by chain: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> current field **
-                    // The current field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
+                    // Load the field by tail: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> tail field **
+                    // The tail field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
                     // So the instructions insert before the instruction is the load of field n-1
                     else {
                         instanceConvdField = instanceConvdType.nestedChain.Last();
-                        // If instance-converted types doesn't have the type of the field n-1 (pararent instance of current field), it means the field n-1 is root context
+                        // If instance-converted types doesn't have the type of the field n-1 (pararent instance of tail field), it means the field n-1 is root context
                         if (!arguments.ContextTypes.TryGetValue(instanceConvdField.DeclaringType.FullName, out instanceConvdType)) {
                             instanceConvdType = null;
                         }
                     }
                 }
                 // If the loading field is a member field of a context but context itself
-                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.FullName, out instanceConvdField)) {
+                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
                     var declaringType = instanceConvdField.DeclaringType;
-                    // pararent instance of current field must be a existing context
+                    // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
                 else {
@@ -457,21 +457,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 // If the loading field is just an context, it must come from a singleton field redirection
                 if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
 
-                    // Load the field by chain: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> current field **
+                    // Load the field by tail: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> tail field **
 
-                    // The current field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
+                    // The tail field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
                     // So the instructions insert before the instruction is the load of field n-1
 
                     instanceConvdField = instanceConvdType.nestedChain.Last();
-                    // If instance-converted types doesn't have the type of the field n-1 (pararent instance of current field), it means the field n-1 is root context
+                    // If instance-converted types doesn't have the type of the field n-1 (pararent instance of tail field), it means the field n-1 is root context
                     if (!arguments.ContextTypes.TryGetValue(instanceConvdField.DeclaringType.FullName, out instanceConvdType)) {
                         instanceConvdType = null;
                     }
                 }
                 // If the loading field is a member field of a context but context itself
-                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.FullName, out instanceConvdField)) {
+                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
                     var declaringType = instanceConvdField.DeclaringType;
-                    // pararent instance of current field must be a existing context
+                    // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
                 else {

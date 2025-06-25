@@ -1,4 +1,5 @@
-﻿using Mono.Cecil;
+﻿using ModFramework;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Loggers;
@@ -16,13 +17,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
         public override string Name => nameof(RemoveUnusedCodePatcherAtBegin);
 
         public override void Patch() {
+            ClearMethodBody(module.GetType("Terraria.Graphics.FinalFractalHelper/FinalFractalProfile").Method("StripDust"));
+            foreach (var method in module.GetType("Terraria.DelegateMethods/Minecart").Methods) {
+                if (method.IsConstructor || method.ReturnType.FullName != module.TypeSystem.Void.FullName) {
+                    continue;
+                }
+                ClearMethodBody(method);
+            }
+        }
 
-            var finalFractalProfile = module.GetType("Terraria.Graphics.FinalFractalHelper/FinalFractalProfile");
-            var stripDust = finalFractalProfile.Methods.Single(m => m.Name == "StripDust");
-
-            stripDust.Body.Variables.Clear();
-            stripDust.Body.Instructions.Clear();
-            stripDust.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+        private static void ClearMethodBody(MethodDefinition method) {
+            method.Body.Variables.Clear();
+            method.Body.Instructions.Clear();
+            method.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
         }
     }
 }

@@ -9,7 +9,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
         private readonly ILogger logger = logger;
         public override string Name => nameof(PatchChain);
         public override void Execute() {
-            Info("Starting patching chain");
+            Info("Starting patching tail");
             previous?.Execute();
         }
         public override string Print() {
@@ -62,7 +62,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
         public override void Execute() {
             previous?.Execute();
         }
-        /// <para><see cref="arguments"/> is shared between the chain and ensures that the argument is only constructed once the logic that needs the argument is executed. </para>
+        /// <para><see cref="arguments"/> is shared between the tail and ensures that the argument is only constructed once the logic that needs the argument is executed. </para>
         /// <para>This avoids the construction time of the argument that may have side effects on the outside.</para>
         /// <para>Currently, this instance of <see cref="PatchingChain{TArgument}"/> is only a wrapper of the no-argument logic <see cref="previous"/>, </para>
         /// <para>so there is no need to do anything to <see cref="arguments"/>.</para>

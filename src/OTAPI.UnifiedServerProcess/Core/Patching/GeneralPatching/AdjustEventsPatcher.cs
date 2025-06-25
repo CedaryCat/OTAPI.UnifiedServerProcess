@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
+using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Linq;
@@ -41,8 +42,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     }
 
                     string theEventName;
-                    bool isAdder = method.Name.StartsWith("add_");
-                    bool isRemover = method.Name.StartsWith("remove_");
+                    bool isAdder = method.Name.OrdinalStartsWith("add_");
+                    bool isRemover = method.Name.OrdinalStartsWith("remove_");
                     if (!isAdder && !isRemover) {
                         continue;
                     }

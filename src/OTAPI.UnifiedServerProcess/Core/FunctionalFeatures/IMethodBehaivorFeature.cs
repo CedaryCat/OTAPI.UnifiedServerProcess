@@ -93,13 +93,13 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
                 // It's mean that method from core reference library, that has no body
                 if (callee.ReturnType.FullName == callee.Module.TypeSystem.Void.FullName
-                    && callee.Module.Name.StartsWith("System")
+                    && callee.Module.Name.OrdinalStartsWith("System")
                     && callee.Body.Instructions.Count == 1
                     && callee.Body.Instructions[0].OpCode == OpCodes.Ret) {
                     return [];
                 }
                 if (callee.Body.Instructions.Count == 2
-                    && callee.Module.Name.StartsWith("System")
+                    && callee.Module.Name.OrdinalStartsWith("System")
                     && callee.Body.Instructions[0].OpCode == OpCodes.Ldnull
                     && callee.Body.Instructions[1].OpCode == OpCodes.Throw) {
                     return [];

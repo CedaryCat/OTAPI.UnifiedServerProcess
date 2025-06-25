@@ -141,7 +141,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // because sometime the user method have been moved to another type,
             // so the original closure definition may been removed and create a new definition in the new type
 
-            if (!closureTypeOrigRef.Name.StartsWith("<>c__DisplayClass")) {
+            if (!closureTypeOrigRef.Name.OrdinalStartsWith("<>c__DisplayClass")) {
                 return null;
             }
 
@@ -153,7 +153,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var closureKey = closureTypeOrigRef.FullName;
 
 
-            while (containingType.Name.StartsWith("<>")) {
+            while (containingType.Name.OrdinalStartsWith("<>")) {
                 containingType = containingType.DeclaringType;
             }
             var declaringChanged = closureTypeOrigRef.DeclaringType.FullName != containingType.FullName;
@@ -194,7 +194,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             if (arguments.ContextTypes.ContainsKey(containingType.FullName)
                 || arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(containingType.FullName)
-                || userMethod.DeclaringType.Name.StartsWith("<>c__DisplayClass")) {
+                || userMethod.DeclaringType.Name.OrdinalStartsWith("<>c__DisplayClass")) {
                 captureParam = userMethod.Body.ThisParameter;
             }
             else if (userMethod.Parameters.Count > 0 && userMethod.Parameters[0].ParameterType.FullName == arguments.RootContextDef.FullName) {
@@ -293,7 +293,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
             // this.AdjustConstructorLoadRoot(arguments.RootContextDef, closureMethodDef);
-            if (anyModified || this.CheckUsedContextBoundField(arguments.RootContextDef, arguments.InstanceConvdFieldOrgiMap, closureMethodDef)) {
+            if (anyModified || this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, closureMethodDef)) {
                 anyModified = true;
             }
             if (anyModified) {
@@ -396,7 +396,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         closureObjData = ClosureData.CreateClosureByCaptureParam(arguments, declaringType, userMethod, closureTypeName, userMethod.Parameters[0]));
                 }
                 else {
-                    throw new Exception("Unexpected: The first parameter of the method is not the root context");
+                    throw new Exception("Unexpected: The first TrackingParameter of the method is not the root context");
                 }
             }
 
@@ -440,12 +440,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
             var fieldRef = new FieldReference(closureField.Name, fieldType, declaringTypeRef);
 
-            // both use root context as first parameter
+            // both use root context as first TrackingParameter
             if (rootFieldChain is null && !invocationContextBoundImplicit) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
             }
-            // user method first parameter is root context, invocation method is instance method and declared in a context type
+            // user method first TrackingParameter is root context, invocation method is instance method and declared in a context type
             else if (rootFieldChain is null && invocationContextBoundImplicit) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
@@ -453,7 +453,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, field));
                 }
             }
-            // user method is instance method and declared in a context type, invocation method first parameter is root context
+            // user method is instance method and declared in a context type, invocation method first TrackingParameter is root context
             else if (rootFieldChain is not null && !invocationContextBoundImplicit) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
@@ -520,7 +520,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
             // is closure method, skip and give control to 'TryAddContextToExistingClosureMethod'
-            if (types.Any(t => t.Name.StartsWith("<>c__DisplayClass"))) {
+            if (types.Any(t => t.Name.OrdinalStartsWith("<>c__DisplayClass"))) {
                 return null;
             }
 
@@ -570,9 +570,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             bool isLoadingBaseMethod =
                 // use ldftn rather than ldvirtftn
                 !isLdvirtftn
-                // method to load is not in current type
+                // method to load is not in tail type
                 && types[0].FullName != invocationRef.DeclaringType.FullName
-                // but same overload exists in current type
+                // but same overload exists in tail type
                 && types[0].Resolve().Methods.Any(m => m.GetIdentifier(false, arguments.RootContextDef) == invocationRef.GetIdentifier(false, arguments.RootContextDef));
 
             var captureType = (isLoadingBaseMethod || types.Length == 1)
@@ -695,7 +695,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             captures));
                 }
                 else {
-                    throw new Exception("Unexpected: The first parameter of the method is not the root context");
+                    throw new Exception("Unexpected: The first TrackingParameter of the method is not the root context");
                 }
                 closureObjData.Apply(userMethodDeclaringType, userMethod, jumpSites);
 
@@ -789,7 +789,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var thisFieldTypeRef = MonoModCommon.Structure.DeepMapTypeReference(thisField.FieldType, mapOption);
             var thisFieldRef = new FieldReference(thisField.Name, thisFieldTypeRef, declaringTypeRef);
 
-            // method use root context as first parameter
+            // method use root context as first TrackingParameter
             if (rootFieldChain is null) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 if (thisFieldTypeRef.IsValueType) {
@@ -837,6 +837,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             nextInstruction = null;
             compilerGeneratedMethodOrig = null;
             delegateCtor = null;
+            if (checkBegin.Offset == 245) {
+
+            }
             if (IsNormal(checkBegin, out origBlockInstructions, out nextInstruction, out compilerGeneratedMethodOrig, out delegateCtor)) {
                 return true;
             }
@@ -970,6 +973,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
+            if (userMethod.Name == "mfwh_Initialize") {
+
+            }
+
             if (!IsNoCaptureAnonymousMethod(instruction, out var origBlockInstructions, out var nextInstruction, out var compilerGeneratedMethodOrig, out var delegateCtor)) {
                 return null;
             }
@@ -1018,7 +1025,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     closureObjData = ClosureData.CreateClosureByCaptureParam(arguments, declaringType, userMethod, closureTypeName, userMethod.Parameters[0]);
                 }
                 else {
-                    throw new Exception("Unexpected: The first parameter of the method is not the root context");
+                    throw new Exception("Unexpected: The first TrackingParameter of the method is not the root context");
                 }
             }
             var generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(
@@ -1055,7 +1062,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
 
-            if (anyModified || this.CheckUsedContextBoundField(arguments.RootContextDef, arguments.InstanceConvdFieldOrgiMap, generatedMethod)) {
+            if (anyModified || this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, generatedMethod)) {
                 cachedClosureObjs.TryAdd(closureKey, closureObjData);
                 closureObjData.ApplyMethod(declaringType, userMethod, generatedMethod, jumpSites);
 
@@ -1174,7 +1181,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
         void HandleStoreStaticField(Instruction instruction, MethodDefinition generatedMethod, PatcherArguments arguments, ClosureData closureObjData, Dictionary<string, ClosureData> cachedClosureObjs, ref bool anyModified) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.FullName, out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
                 return;
             }
             anyModified = true;
@@ -1190,7 +1197,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
         void HandleLoadStaticField(Instruction instruction, MethodDefinition generatedMethod, bool isAddress, PatcherArguments arguments, ClosureData closureObjData, Dictionary<string, ClosureData> cachedClosureObjs, ref bool anyModified) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.FullName, out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
                 return;
             }
 

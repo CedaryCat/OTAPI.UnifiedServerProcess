@@ -17,11 +17,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 {
     /// <summary>
     /// If the implementation of a function that implements a certain interface uses context-related content,
-    /// <para>we need to evaluate whether to modify the interface definition to add a RootContext parameter to achieve context attachment</para>
+    /// <para>we need to evaluate whether to modify the interface definition to add a RootContext TrackingParameter to achieve context attachment</para>
     /// <para>or to introduce a RootContext field within the instance to achieve context attachment</para>
     /// <para>based on: </para>
     /// <para>1. Whether the interface is defined in an external assembly;</para>
-    /// <para>2. Ensuring the consistency of all implementations of the interface in the current module.</para>
+    /// <para>2. Ensuring the consistency of all implementations of the interface in the tail module.</para>
     /// </summary>
     /// <param name="methodCallGraph"></param>
     public class ExternalInterfaceProcessor(MethodCallGraph methodCallGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature
@@ -37,7 +37,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             var contextTypes = source.OriginalToContextType.Values.ToDictionary(t => t.ContextTypeDef.FullName, t => t.ContextTypeDef).ToImmutableDictionary();
 
             foreach (var type in modules.GetAllTypes()) {
-                if (type.Name.StartsWith('<')) {
+                if (type.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
                 if (source.OriginalToContextType.TryGetValue(type.FullName, out var contextType) && contextType.IsReusedSingleton) {
@@ -57,7 +57,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
         private void ContextualStaticField(PatcherArgumentSource source, Dictionary<string, TypeDefinition> implicitContexts, ModuleDefinition modules, ImmutableDictionary<string, TypeDefinition> contextTypes) {
             foreach (var type in modules.GetAllTypes().ToArray()) {
-                if (type.Name.StartsWith('<')) {
+                if (type.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
                 foreach (var field in type.Fields) {
@@ -71,7 +71,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     if (contextTypes.ContainsKey(fieldType.FullName)) {
                         continue;
                     }
-                    if (source.OriginalToInstanceConvdField.ContainsKey(field.FullName)) {
+                    if (source.OriginalToInstanceConvdField.ContainsKey(field.GetIdentifier())) {
                         continue;
                     }
                     if (!source.OriginalToContextType.TryGetValue(field.DeclaringType.FullName, out var contextType)) {
@@ -80,7 +80,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     var newfield = new FieldDefinition(field.Name, field.Attributes & ~FieldAttributes.Static, field.FieldType);
                     newfield.CustomAttributes.AddRange(field.CustomAttributes.Select(c => c.Clone()));
                     contextType.ContextTypeDef.Fields.Add(newfield);
-                    source.OriginalToInstanceConvdField.Add(field.FullName, newfield);
+                    source.OriginalToInstanceConvdField.Add(field.GetIdentifier(), newfield);
                 }
             }
         }
@@ -119,7 +119,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         if (interfaceMethods.Count == 0) {
                             continue;
                         }
-                        if (!this.CheckUsedContextBoundField(source.RootContextDef, source.OriginalToInstanceConvdField, method)) {
+                        if (!this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, method)) {
                             continue;
                         }
                         foreach (var interfaceMethod in interfaceMethods) {
@@ -128,7 +128,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                                 if (impl.DeclaringType.IsInterface) {
                                     continue;
                                 }
-                                if (impl.DeclaringType.Name.StartsWith('<')) {
+                                if (impl.DeclaringType.Name.OrdinalStartsWith('<')) {
                                     continue;
                                 }
                                 if (!implicitContexts.ContainsKey(impl.DeclaringType.FullName)) {
@@ -176,7 +176,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             }
             if (anyExternalInterface) {
                 foreach (var check in checkMethods) {
-                    if (this.CheckUsedContextBoundField(source.RootContextDef, source.OriginalToInstanceConvdField, check)) {
+                    if (this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, check)) {
                         return true;
                     }
                 }

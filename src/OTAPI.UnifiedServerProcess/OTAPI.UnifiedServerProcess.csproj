@@ -10,6 +10,7 @@
 
 	<ItemGroup>
 	  <Compile Remove="Core\Analysis\ParameterTracer.cs" />
+	  <Compile Remove="Core\Patching\GeneralPatching\GlobalExtractPatcher.cs" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -20,6 +21,10 @@
 	  <PackageReference Include="OTAPI.Upcoming" Version="3.2.6" />
 	  <PackageReference Include="MonoMod.RuntimeDetour.HookGen" Version="22.7.31.1" />
 	  <PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.15" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Core\Analysis\DataModels\CSharp\" />
 	</ItemGroup>
 
 	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">

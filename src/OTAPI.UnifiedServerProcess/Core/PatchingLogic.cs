@@ -15,15 +15,19 @@ namespace OTAPI.UnifiedServerProcess.Core
     {
         public static void Patch(ILogger logger, ModuleDefinition module) {
 
+            new NetworkLogicPruner(module).Prune();
+
             var analyzers = new AnalyzerGroups(logger, module);
-            var cacheHelper = new CacheManager(logger);
+            // var cacheHelper = new CacheManager(logger);
 
             var main = module.GetType("Terraria.Main");
 
-            var unmodifiedStaticFields = cacheHelper.LoadUnmodifiedStaticFields(module, analyzers,
-                [main.Method("Initialize_TileAndNPCData1"), main.Method("Initialize_TileAndNPCData2")],
-                main.Method(".ctor"),
-                main.Method("DedServ"));
+            MethodDefinition[] entryPoints = [main.Method("DedServ")];
+            MethodDefinition[] initialMethods = [main.Method("Initialize"), main.Method("Initialize_AlmostEverything"), main.Method("PostContentLoadInitialize")];
+
+            analyzers.StaticFieldModificationAnalyzer.FetchModifiedFields(
+                entryPoints, initialMethods, 
+                out var rawModifiedStaticFields, out var initialStaticFields);
 
             List<FieldDefinition> modifiedStaticFields = [];
             var rootContextDef = module.GetType(Constants.RootContextFullName);
@@ -32,13 +36,15 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .Then(new SimplifyMacrosPatcher(logger, module))
                 .Then(new RemoveUnusedCodePatcherAtBegin(logger, module))
 
-                .DefineArgument(new FilterArgumentSource(module, unmodifiedStaticFields))
-                .RegisterProcessor(new AddModifiedFieldsProcessor())
+                .DefineArgument(new FilterArgumentSource(module, initialMethods))
+                .RegisterProcessor(new AddModifiedFieldsProcessor(rawModifiedStaticFields, initialStaticFields))
                 .RegisterProcessor(new AddEventsProcessor())
                 .RegisterProcessor(new AddHooksProcessor())
                 .RegisterProcessor(new ForceStaticProcessor())
+                .RegisterProcessor(new ForceInstanceProcessor())
                 .RegisterProcessor(new StaticGenericProcessor())
-                .RegisterProcessor(new ContextRequiredFieldsProcessor(analyzers.MethodCallGraph, rootContextDef))
+                .RegisterProcessor(new ContextRequiredFieldsProcessor(analyzers.MethodCallGraph))
+                .RegisterProcessor(new InitialFieldModificationProcessor(logger, analyzers))
                 .ApplyArgument()
                 .Finalize((fieldArgument) => {
                     modifiedStaticFields.AddRange(fieldArgument.ModifiedStaticFields);
@@ -49,7 +55,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .RegisterProcessor(new GenerateContextsProcessor(modifiedStaticFields, analyzers.MethodCallGraph))
                 .RegisterProcessor(new PreparePropertiesProcessor(analyzers.MethodCallGraph))
                 .RegisterProcessor(new ExternalInterfaceProcessor(analyzers.MethodCallGraph))
-                .RegisterProcessor(new StaticConstructorProcessor(analyzers.MethodCallGraph))
+                .RegisterProcessor(new StaticConstructorProcessor(analyzers))
                 .ApplyArgument()
                 .Then(new AdjustHooksPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new StaticRedirectPatcher(logger, analyzers.DelegateInvocationGraph, analyzers.MethodInheritanceGraph, analyzers.MethodCallGraph))

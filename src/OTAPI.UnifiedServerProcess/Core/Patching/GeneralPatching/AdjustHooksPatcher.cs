@@ -27,14 +27,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
 
             foreach (var type in arguments.MainModule.GetAllTypes()) {
-                if (!type.GetRootDeclaringType().Namespace.StartsWith("HookEvents.")) {
+                if (!type.GetRootDeclaringType().Namespace.OrdinalStartsWith("HookEvents.")) {
                     continue;
                 }
                 if (type.BaseType?.Name == "MulticastDelegate") {
                     continue;
                 }
                 foreach (var invokeMethod in type.Methods) {
-                    if (!invokeMethod.Name.StartsWith("Invoke")) {
+                    if (!invokeMethod.Name.OrdinalStartsWith("Invoke")) {
                         continue;
                     }
                     var methodId = invokeMethod.GetIdentifier();

@@ -2,7 +2,7 @@
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
-using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels;
+using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis;
@@ -67,7 +67,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
                     if (dataChanged) {
                         foreach (var modification in modifiedParameters[method.GetIdentifier()].Values) {
-                            Progress(iteration, progress, currentWorkBatch.Length, "modified modifications: {0}", indent: 2, modification.parameter.GetDebugName());
+                            Progress(iteration, progress, currentWorkBatch.Length, "modified modifications: {0}", indent: 2, modification.TrackingParameter.GetDebugName());
                         }
                     }
                     if (dataChanged && callGraph.MediatedCallGraph.TryGetValue(method.GetIdentifier(), out var callers)) {
@@ -180,7 +180,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                     if (part.ComponentAccessPath.Length == 0) {
                         continue;
                     }
-                    if (!modifications.modifications.Add(new ModifiedComponent(part.ComponentAccessPath))) {
+                    if (!modifications.modifications.Add(new ModifiedComponent(modifications.TrackingParameter, part.ComponentAccessPath))) {
                         continue;
                     }
                     result = true;
@@ -208,7 +208,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
                 bool result = false;
                 foreach (var modified in modifications) {
-                    if (!modification.modifications.Add(new ModifiedComponent(modified))) {
+                    if (!modification.modifications.Add(new ModifiedComponent(modification.TrackingParameter, modified))) {
                         continue;
                     }
                     result = true;
@@ -245,7 +245,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                         }
 
                         foreach (var modifiedParameter in modified.ReferencedParameters.Values) {
-                            // Ignore the modificationAccessChain of "this" in constructors, we only care about input parameters.
+                            // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
                             if (modifiedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
                                 continue;
                             }
@@ -282,11 +282,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                     if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
                         continue;
                     }
-                    if (!tracedStackData.TryExtendTrackingWithArrayAccess((ArrayType)loadModifyingInstance.StackTopType!, out var modified)) {
-                        continue;
-                    }
+                    //if (!tracedStackData.TryExtendTrackingWithArrayAccess((ArrayType)loadModifyingInstance.StackTopType!, out var modified)) {
+                    //    continue;
+                    //}
                     foreach (var modifiedParameter in tracedStackData.ReferencedParameters.Values) {
-                        // Ignore the modificationAccessChain of "this" in constructors, we only care about input parameters.
+                        // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
                         if (modifiedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
                             continue;
                         }
@@ -304,13 +304,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                     if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
                         continue;
                     }
-                    var collectionType = ((MethodReference)modifyingInstruction.Operand).DeclaringType;
-                    var elementType = collectionType is GenericInstanceType generic ? generic.GenericArguments.Last() : collectionType.Module.TypeSystem.Object;
-                    if (!tracedStackData.TryExtendTrackingWithCollectionAccess(collectionType, elementType, out var modified)) {
-                        continue;
-                    }
+                    //var collectionType = ((MethodReference)modifyingInstruction.Operand).DeclaringType;
+                    //var elementType = collectionType is GenericInstanceType generic ? generic.GenericArguments.Last() : collectionType.Module.TypeSystem.Object;
+                    //if (!tracedStackData.TryExtendTrackingWithCollectionAccess(collectionType, elementType, out var modified)) {
+                    //    continue;
+                    //}
                     foreach (var modifiedParameter in tracedStackData.ReferencedParameters.Values) {
-                        // Ignore the modificationAccessChain of "this" in constructors, we only care about input parameters.
+                        // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
                         if (modifiedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
                             continue;
                         }
@@ -382,7 +382,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 //    }
 
                 //    foreach (var referencedParameter in tracedStackData.ReferencedParameters.Values) {
-                //        // Ignore the modificationAccessChain of "this" in constructors, we only care about input parameters.
+                //        // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
                 //        if (referencedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
                 //            continue;
                 //        }
@@ -443,30 +443,43 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
                             foreach (var referencedParameter in tracedStackData.ReferencedParameters.Values) {
 
-                                // Ignore the modificationAccessChain of "this" in constructors, we only care about input parameters.
+                                // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
                                 if (referencedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
                                     continue;
                                 }
                                 List<MemberAccessStep[]> chains = [];
                                 foreach (var modification in willBeModified.modifications) {
                                     foreach (var part in referencedParameter.PartTrackingPaths) {
-                                        if (part.ComponentAccessPath.Length > 0) {
-                                            if (modification.modificationAccessChain.Length <= part.ComponentAccessPath.Length) {
+                                        if (modification.ModificationAccessPath.Length >= part.ComponentAccessPath.Length) {
+                                            bool startsWith = true;
+                                            for (int i = 0; i < part.ComponentAccessPath.Length; i++) {
+                                                if (!modification.ModificationAccessPath[i].IsSameLayer(part.ComponentAccessPath[i])) {
+                                                    startsWith = false;
+                                                    break;
+                                                }
+                                            }
+                                            // avoid loop
+                                            if (startsWith) {
+                                                continue;
+                                            }
+                                        }
+                                        if (part.EncapsulationHierarchy.Length > 0) {
+                                            if (modification.ModificationAccessPath.Length <= part.EncapsulationHierarchy.Length) {
                                                 continue;
                                             }
                                             bool isLeadingChain = true;
-                                            for (int i = 0; i < part.ComponentAccessPath.Length; i++) {
-                                                if (modification.modificationAccessChain[i] != part.ComponentAccessPath[i]) {
+                                            for (int i = 0; i < part.EncapsulationHierarchy.Length; i++) {
+                                                if (modification.ModificationAccessPath[i] != part.EncapsulationHierarchy[i]) {
                                                     isLeadingChain = false;
                                                     break;
                                                 }
                                             }
                                             if (isLeadingChain) {
-                                                chains.Add([.. modification.modificationAccessChain.Skip(part.ComponentAccessPath.Length)]);
+                                                chains.Add([.. part.ComponentAccessPath, .. modification.ModificationAccessPath.Skip(part.EncapsulationHierarchy.Length)]);
                                             }
                                         }
                                         else {
-                                            chains.Add([.. modification.modificationAccessChain.Skip(part.ComponentAccessPath.Length)]);
+                                            chains.Add([.. part.ComponentAccessPath, .. modification.ModificationAccessPath]);
                                         }
                                     }
                                 }

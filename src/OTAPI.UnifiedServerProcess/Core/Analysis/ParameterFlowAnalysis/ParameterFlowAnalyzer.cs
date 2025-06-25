@@ -2,9 +2,10 @@
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
-using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels;
+using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
+using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
@@ -147,7 +148,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             // Build jump sites table
-            var jumpSitess = this.GetMethodJumpSites(method);
+            var jumpSites = this.GetMethodJumpSites(method);
             bool hasInnerChange;
 
             do {
@@ -222,8 +223,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             void HandleReturnInstruction(Instruction instruction) {
                 if (method.ReturnType.FullName == module.TypeSystem.Void.FullName) return;
 
-                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
-                    var loadInstr = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)
+                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                    var loadInstr = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
                         .First().RealPushValueInstruction;
 
                     if (stackTrace.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadInstr), out var value)) {
@@ -250,8 +251,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 var variable = MonoModCommon.IL.GetReferencedVariable(method, instruction);
                 if (variable.VariableType.IsTruelyValueType()) return;
 
-                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
-                    foreach (var loadPath in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)) {
+                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                    foreach (var loadPath in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
                         var loadInstr = loadPath.RealPushValueInstruction;
                         var stackKey = ParameterReferenceData.GenerateStackKey(method, loadInstr);
 
@@ -280,8 +281,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 var fieldRef = (FieldReference)instruction.Operand;
                 if (fieldRef.FieldType.IsTruelyValueType()) return;
 
-                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
-                    foreach (var instanceLoad in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)) {
+                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                    foreach (var instanceLoad in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
 
                         var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceLoad.RealPushValueInstruction);
 
@@ -299,13 +300,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 var fieldRef = (FieldReference)instruction.Operand;
                 if (fieldRef.FieldType.IsTruelyValueType()) return;
 
-                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
+                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
 
-                    var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)
+                    var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
                         .First();
                     var instanceInstr = instancePath.RealPushValueInstruction;
                     var instanceType = instancePath.StackTopType?.TryResolve();
-                    var valueInstr = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[1].Instructions.Last(), jumpSitess)
+                    var valueInstr = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[1].Instructions.Last(), jumpSites)
                         .First().RealPushValueInstruction;
 
                     var valueKey = ParameterReferenceData.GenerateStackKey(method, valueInstr);
@@ -334,7 +335,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         else {
                             filteredValueTrace = valueTrace;
                         }
-                        // Create field storage tracking chain
+                        // Create field storage tracking tail
                         instanceTrace = filteredValueTrace.CreateEncapsulatedInstance(fieldRef);
                     }
 
@@ -362,13 +363,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
             void HandleLoadArrayElement(Instruction instruction, bool isLoadAddress) {
                 if (instruction.OpCode != OpCodes.Call && instruction.OpCode != OpCodes.Callvirt) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
+                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                         HandleLoadArrayElementInstrustion(instruction, path.ParametersSources[0].Instructions.Last(), isLoadAddress);
                     }
                 }
                 // To support multi-dim array, they isn't use ldelem instruction but call
                 else {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSitess)) {
+                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
                         HandleLoadArrayElementInstrustion(instruction, path.ParametersSources[0].Instructions.Last(), isLoadAddress);
                     }
                 }
@@ -376,7 +377,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
             void HandleStoreArrayElement(Instruction instruction) {
                 if (instruction.OpCode != OpCodes.Call && instruction.OpCode != OpCodes.Callvirt) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
+                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                         HandleStoreArrayElementInstrustions(
                             instruction,
                             path.ParametersSources.First().Instructions.Last(),
@@ -385,7 +386,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
                 // To support multi-dim array, they isn't use stelem instruction but call
                 else {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSitess)) {
+                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
                         HandleStoreArrayElementInstrustions(
                             instruction,
                             path.ParametersSources.First().Instructions.Last(),
@@ -395,7 +396,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             void HandleLoadArrayElementInstrustion(Instruction loadEleInstruction, Instruction loadInstanceInstruction, bool isLoadAddress) {
-                foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, loadInstanceInstruction, jumpSitess)) {
+                foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, loadInstanceInstruction, jumpSites)) {
 
                     if (loadInstance.StackTopType is not ArrayType arrayType) {
                         continue;
@@ -419,48 +420,88 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
             void HandleStoreArrayElementInstrustions(Instruction storeInstruction, Instruction loadInstanceInstruction, Instruction loadValueInstruction) {
                 // Get the instance object
-                var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, loadInstanceInstruction, jumpSitess)
+                var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, loadInstanceInstruction, jumpSites)
                     .First();
                 if (instancePath.StackTopType is null)
                     return;
                 var instanceInstr = instancePath.RealPushValueInstruction;
 
                 // Get the value
-                var valueInstr = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, loadValueInstruction, jumpSitess)
+                var valueInstr = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, loadValueInstruction, jumpSites)
                     .First().RealPushValueInstruction;
 
                 var valueKey = ParameterReferenceData.GenerateStackKey(method, valueInstr);
-                if (!stackTrace.TryGetTrace(valueKey, out var valueTrace)) return;
-
+                var valueTraceIsNull = !stackTrace.TryGetTrace(valueKey, out var valueTrace);
+                valueTrace ??= new CompositeParameterTracking();
                 var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceInstr);
+                var instanceTraceIsNull = !stackTrace.TryGetTrace(instanceKey, out var instanceTrace);
+                instanceTrace ??= new CompositeParameterTracking();
+                bool instanceTraceHasChange = false;
+                bool valueTraceHasChange = false;
 
-
-                CompositeParameterTracking filteredValueTrace;
-                if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
-                    filteredValueTrace = new();
-                    foreach (var origin in valueTrace.ReferencedParameters) {
-                        if (instanceTrace.ReferencedParameters.ContainsKey(origin.Key)) {
-                            continue;
-                        }
-                        filteredValueTrace.ReferencedParameters.Add(origin.Key, origin.Value);
+                foreach (var valueSingleParamTraceKV in valueTrace.ReferencedParameters) {
+                    if (!instanceTrace.ReferencedParameters.TryGetValue(valueSingleParamTraceKV.Key, out var instanceSingleParamTrace)) {
+                        instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TrackedParameter, []);
                     }
+                    foreach (var chain in valueSingleParamTraceKV.Value.PartTrackingPaths) {
+                        if (instanceSingleParamTrace.PartTrackingPaths.Add(chain.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType))) {
+                            hasInnerChange = true;
+                            instanceTraceHasChange = true;
+                        }
+                    }
+                    instanceTrace.ReferencedParameters[valueSingleParamTraceKV.Key] = instanceSingleParamTrace;
                 }
-                else {
-                    filteredValueTrace = valueTrace;
+                foreach (var instanceSingleParamTraceKV in instanceTrace.ReferencedParameters) {
+                    if (valueTrace.ReferencedParameters.TryGetValue(instanceSingleParamTraceKV.Key, out var valueSingleParamTrace)) {
+                        continue;
+                    }
+                    valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TrackedParameter, []);
+                    foreach (var chain in instanceSingleParamTraceKV.Value.PartTrackingPaths) {
+                        if (chain.TryExtendTrackingWithArrayAccess((ArrayType)instancePath.StackTopType, out var newChain)
+                            && valueSingleParamTrace.PartTrackingPaths.Add(newChain)) {
+                            hasInnerChange = true;
+                            valueTraceHasChange = true;
+                        }
+                    }
+                    valueTrace.ReferencedParameters[instanceSingleParamTraceKV.Key] = valueSingleParamTrace;
                 }
 
-                // Create element storage tracking chain
-                var fieldTrace = filteredValueTrace.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType);
-
-                if (stackTrace.TryAddTrace(instanceKey, fieldTrace)) {
-                    hasInnerChange = true;
+                if (valueTraceIsNull && valueTraceHasChange) {
+                    stackTrace.TryAddTrace(valueKey, valueTrace);
                 }
+                if (instanceTraceIsNull && instanceTraceHasChange) {
+                    stackTrace.TryAddTrace(instanceKey, instanceTrace);
+                }
+
+                //if (stackTrace.TryGetTrace(valueKey, out var valueTrace)) {
+                //    CompositeParameterTracking filteredValueTrace;
+
+                //    if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
+                //        filteredValueTrace = new();
+                //        foreach (var origin in valueTrace.ReferencedParameters) {
+                //            if (instanceTrace.ReferencedParameters.ContainsKey(origin.Key)) {
+                //                continue;
+                //            }
+                //            filteredValueTrace.ReferencedParameters.Add(origin.Key, origin.Value);
+                //        }
+                //    }
+                //    else {
+                //        filteredValueTrace = valueTrace;
+                //    }
+
+                //    // Create element storage tracking tail
+                //    var traceData = filteredValueTrace.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType);
+
+                //    if (stackTrace.TryAddTrace(instanceKey, traceData)) {
+                //        hasInnerChange = true;
+                //    }
+                //}
             }
 
             void HandleLoadCollectionElement(Instruction instruction) {
                 var callingMethod = (MemberReference)instruction.Operand;
-                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
-                    foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)) {
+                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                    foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
                         if (loadInstance.StackTopType is null) {
                             continue;
                         }
@@ -468,7 +509,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         var stackKey = ParameterReferenceData.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                         if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                            baseTrace.TryExtendTrackingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSitess)!, out var newTrace)) {
+                            baseTrace.TryExtendTrackingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, out var newTrace)) {
                             var targetKey = ParameterReferenceData.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                                 hasInnerChange = true;
@@ -479,42 +520,148 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             void HandleStoreCollectionElement(Instruction instruction, int indexOfValueInArguments) {
-                foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSitess)) {
-                    var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)
+                foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
+                    var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
                         .First();
                     if (instancePath.StackTopType is null)
                         return;
                     var instanceInstr = instancePath.RealPushValueInstruction;
-                    var valuePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[indexOfValueInArguments].Instructions.Last(), jumpSitess)
+                    var valuePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[indexOfValueInArguments].Instructions.Last(), jumpSites)
                         .First();
                     if (valuePath.StackTopType is null)
                         return;
                     var valueInstr = valuePath.RealPushValueInstruction;
 
                     var valueKey = ParameterReferenceData.GenerateStackKey(method, valueInstr);
-                    if (!stackTrace.TryGetTrace(valueKey, out var valueTrace)) return;
-
+                    var valueTraceIsNull = !stackTrace.TryGetTrace(valueKey, out var valueTrace);
+                    valueTrace ??= new CompositeParameterTracking();
                     var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceInstr);
+                    var instanceTraceIsNull = !stackTrace.TryGetTrace(instanceKey, out var instanceTrace);
+                    instanceTrace ??= new CompositeParameterTracking();
+                    bool instanceTraceHasChange = false;
+                    bool valueTraceHasChange = false;
 
-                    CompositeParameterTracking filteredValueTrace;
-                    if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
-                        filteredValueTrace = new();
-                        foreach (var origin in valueTrace.ReferencedParameters) {
-                            if (instanceTrace.ReferencedParameters.ContainsKey(origin.Key)) {
-                                continue;
-                            }
-                            filteredValueTrace.ReferencedParameters.Add(origin.Key, origin.Value);
+                    foreach (var valueSingleParamTraceKV in valueTrace.ReferencedParameters) {
+                        if (instanceTrace.ReferencedParameters.TryGetValue(valueSingleParamTraceKV.Key, out var instanceSingleParamTrace)) {
+                            continue;
                         }
-                    }
-                    else {
-                        filteredValueTrace = valueTrace;
+                        instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TrackedParameter, []);
+                        foreach (var chain in valueSingleParamTraceKV.Value.PartTrackingPaths) {
+                            if (instanceSingleParamTrace.PartTrackingPaths.Add(chain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType))) {
+                                hasInnerChange = true;
+                                instanceTraceHasChange = true;
+                            }
+                        }
+                        instanceTrace.ReferencedParameters[valueSingleParamTraceKV.Key] = instanceSingleParamTrace;
                     }
 
-                    // Create element storage tracking chain
-                    var fieldTrace = filteredValueTrace.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType);
+                    foreach (var instanceSingleParamTraceKV in instanceTrace.ReferencedParameters) {
+                        if (!valueTrace.ReferencedParameters.TryGetValue(instanceSingleParamTraceKV.Key, out var valueSingleParamTrace)) {
+                            valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TrackedParameter, []);
+                        }
+                        foreach (var chain in instanceSingleParamTraceKV.Value.PartTrackingPaths) {
+                            if (chain.TryExtendTrackingWithCollectionAccess(instancePath.StackTopType, valuePath.StackTopType, out var newChain)
+                                && valueSingleParamTrace.PartTrackingPaths.Add(newChain)) {
+                                hasInnerChange = true;
+                                valueTraceHasChange = true;
+                            }
+                        }
+                        valueTrace.ReferencedParameters[instanceSingleParamTraceKV.Key] = valueSingleParamTrace;
+                    }
 
-                    if (stackTrace.TryAddTrace(instanceKey, fieldTrace)) {
-                        hasInnerChange = true;
+                    if (valueTraceIsNull && valueTraceHasChange) {
+                        stackTrace.TryAddTrace(valueKey, valueTrace);
+                    }
+                    if (instanceTraceIsNull && instanceTraceHasChange) {
+                        stackTrace.TryAddTrace(instanceKey, instanceTrace);
+                    }
+
+                    //var valueKey = ParameterReferenceData.GenerateStackKey(method, valueInstr);
+                    //if (!stackTrace.TryGetTrace(valueKey, out var valueTrace)) return;
+
+                    //var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceInstr);
+
+                    //CompositeParameterTracking filteredValueTrace;
+                    //if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace)) {
+                    //    filteredValueTrace = new();
+                    //    foreach (var origin in valueTrace.ReferencedParameters) {
+                    //        if (instanceTrace.ReferencedParameters.ContainsKey(origin.Key)) {
+                    //            continue;
+                    //        }
+                    //        filteredValueTrace.ReferencedParameters.Add(origin.Key, origin.Value);
+                    //    }
+                    //}
+                    //else {
+                    //    filteredValueTrace = valueTrace;
+                    //}
+
+                    //// Create element storage tracking tail
+                    //var fieldTrace = filteredValueTrace.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuesPath.StackTopType);
+
+                    //if (stackTrace.TryAddTrace(instanceKey, fieldTrace)) {
+                    //    hasInnerChange = true;
+                    //}
+                }
+            }
+            void HandleStoreCollectionElements(Instruction instruction) {
+                foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
+                    var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
+                        .First();
+                    if (instancePath.StackTopType is null)
+                        return;
+                    var instanceInstr = instancePath.RealPushValueInstruction; 
+                    var valuesPath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[1].Instructions.Last(), jumpSites)
+                        .First();
+                    if (valuesPath.StackTopType is null)
+                        return;
+                    var valueInstr = valuesPath.RealPushValueInstruction;
+
+                    var valueType = valuesPath.StackTopType;
+                    var valueElementType = valueType is ArrayType arrayType ? arrayType.ElementType : ((GenericInstanceType)valueType).GenericArguments.Last();
+
+                    var valueKey = ParameterReferenceData.GenerateStackKey(method, valueInstr);
+                    var valueTraceIsNull = !stackTrace.TryGetTrace(valueKey, out var valueTrace);
+                    valueTrace ??= new CompositeParameterTracking();
+                    var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceInstr);
+                    var instanceTraceIsNull = !stackTrace.TryGetTrace(instanceKey, out var instanceTrace);
+                    instanceTrace ??= new CompositeParameterTracking();
+                    bool instanceTraceHasChange = false;
+                    bool valueTraceHasChange = false;
+
+                    foreach (var valueSingleParamTraceKV in valueTrace.ReferencedParameters) {
+                        if (instanceTrace.ReferencedParameters.TryGetValue(valueSingleParamTraceKV.Key, out var instanceSingleParamTrace)) {
+                            continue;
+                        }
+                        instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TrackedParameter, []);
+                        foreach (var valueChain in valueSingleParamTraceKV.Value.PartTrackingPaths) {
+                            if (valueChain.TryExtendTrackingWithCollectionAccess(valueType, valueElementType, out var elementChain)
+                                && instanceSingleParamTrace.PartTrackingPaths.Add(elementChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType))) {
+                                hasInnerChange = true;
+                                instanceTraceHasChange = true;
+                            }
+                        }
+                        instanceTrace.ReferencedParameters[valueSingleParamTraceKV.Key] = instanceSingleParamTrace;
+                    }
+
+                    foreach (var instanceSingleParamTraceKV in instanceTrace.ReferencedParameters) {
+                        if (!valueTrace.ReferencedParameters.TryGetValue(instanceSingleParamTraceKV.Key, out var valueSingleParamTrace)) {
+                            valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TrackedParameter, []);
+                        }
+                        foreach (var containChain in instanceSingleParamTraceKV.Value.PartTrackingPaths) {
+                            if (containChain.TryExtendTrackingWithCollectionAccess(valueType, valueElementType, out var innerChain)
+                                && valueSingleParamTrace.PartTrackingPaths.Add(innerChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType))) {
+                                hasInnerChange = true;
+                                valueTraceHasChange = true;
+                            }
+                        }
+                        valueTrace.ReferencedParameters[instanceSingleParamTraceKV.Key] = valueSingleParamTrace;
+                    }
+
+                    if (valueTraceIsNull && valueTraceHasChange) {
+                        stackTrace.TryAddTrace(valueKey, valueTrace);
+                    }
+                    if (instanceTraceIsNull && instanceTraceHasChange) {
+                        stackTrace.TryAddTrace(instanceKey, instanceTrace);
                     }
                 }
             }
@@ -542,8 +689,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
 
                 if (EnumeratorLayer.IsGetEnumeratorMethod(typeInheritance, method, instruction)) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSitess)) {
-                        var instanceLoad = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)
+                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
+                        var instanceLoad = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
                             .First();
                         var instanceType = instanceLoad.StackTopType?.TryResolve();
                         var instanceInstr = instanceLoad.RealPushValueInstruction;
@@ -563,8 +710,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
 
                 if (EnumeratorLayer.IsGetCurrentMethod(typeInheritance, method, instruction)) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSitess)) {
-                        foreach (var instanceLoad in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSitess)) {
+                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                        foreach (var instanceLoad in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
 
                             var instanceKey = ParameterReferenceData.GenerateStackKey(method, instanceLoad.RealPushValueInstruction);
 
@@ -579,16 +726,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     return;
                 }
 
-                if (CollectionElementLayer.IsStoreElementMethod(typeInheritance, method, instruction, out var indexOfValueInParameters)) {
-                    // try-get is instance method, the argument index is indexOfValueInParameters + 1
-                    HandleStoreCollectionElement(instruction, indexOfValueInParameters + 1);
+                if (CollectionElementLayer.IsStoreElementMethod(typeInheritance, method, instruction, out var paramIndexWithoutInstance)) {
+                    HandleStoreCollectionElement(instruction, paramIndexWithoutInstance + 1);
+                    return;
+                }
+
+                if (CollectionElementLayer.IsStoreElementsMethod(typeInheritance, method, instruction)) {
+                    HandleStoreCollectionElements(instruction);
                     return;
                 }
 
                 // Handle collection element load
-                if (CollectionElementLayer.IsLoadElementMethod(typeInheritance, method, instruction, out var tryGetOutParamIndex)
+                if (CollectionElementLayer.IsLoadElementMethod(typeInheritance, method, instruction, out var tryGetOutParamIndexWithoutInstance)
                     // If its not a try-get method, element is just push on the stack like normal
-                    && tryGetOutParamIndex == -1) {
+                    && tryGetOutParamIndexWithoutInstance == -1) {
                     // Then we can handle this like normal load
                     HandleLoadCollectionElement(instruction);
                     return;
@@ -599,17 +750,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     return;
                 }
                 // Get all implementations of the called method
-                var implementations = this.GetMethodImplementations(method, instruction, jumpSitess, out _);
+                var implementations = this.GetMethodImplementations(method, instruction, jumpSites, out _);
 
-                // Analyze parameter sources
-                var paramPaths = MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSitess);
+                // Analyze TrackingParameter sources
+                var paramPaths = MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites);
                 MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths = new MonoModCommon.Stack.StackTopTypePath[paramPaths.Length][];
 
                 for (int i = 0; i < loadParamsInEveryPaths.Length; i++) {
                     var path = paramPaths[i];
                     loadParamsInEveryPaths[i] = new MonoModCommon.Stack.StackTopTypePath[path.ParametersSources.Length];
                     for (int j = 0; j < path.ParametersSources.Length; j++) {
-                        loadParamsInEveryPaths[i][j] = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[j].Instructions.Last(), jumpSitess).First();
+                        loadParamsInEveryPaths[i][j] = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[j].Instructions.Last(), jumpSites).First();
                     }
                 }
 
@@ -648,12 +799,37 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                                 continue;
                             }
 
-                            var loadValue = paramGroup[paramIndex];
-                            if (!stackTrace.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadValue.RealPushValueInstruction), out var loadingParamStackValue)) {
+                            var loadParam = paramGroup[paramIndex];
+                            var loadParamKey = StaticFieldReferenceData.GenerateStackKey(method, loadParam.RealPushValueInstruction);
+
+                            // Means the calling method is a collection try-get method
+                            if (tryGetOutParamIndexWithoutInstance != -1) {
+                                // and because of try-get is instance method, the argument index is tryGetOutParamIndexWithoutInstance + 1
+                                var tryGetOutParamIndexWithInstance = tryGetOutParamIndexWithoutInstance + 1;
+
+                                // The first TrackingParameter is the instance, but its not reference any static field
+                                // so we can skip
+                                if (!stackTrace.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(method, paramGroup[0].RealPushValueInstruction), out var instanceTrace)) {
+                                    continue;
+                                }
+
+                                var loadInstance = paramGroup[0];
+                                if (loadInstance.StackTopType is null || loadParam.StackTopType is null) {
+                                    continue;
+                                }
+
+                                if (!instanceTrace.TryExtendTrackingWithCollectionAccess(loadInstance.StackTopType, loadParam.StackTopType, out var elementAccess)) {
+                                    continue;
+                                }
+
+                                stackTrace.TryAddTrace(StaticFieldReferenceData.GenerateStackKey(method, paramGroup[tryGetOutParamIndexWithInstance].RealPushValueInstruction), elementAccess);
+                            }
+
+                            if (!stackTrace.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadParam.RealPushValueInstruction), out var loadingParamStackValue)) {
                                 continue;
                             }
 
-                            // Return value parameter propagation
+                            // Return value TrackingParameter propagation
                             if (calleeReturnTrace is not null) {
                                 if (!calleeReturnTrace.ReferencedParameters.TryGetValue(paramInImpl.Name, out var paramParts)) {
                                     continue;
@@ -683,7 +859,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                                             //    continue;
                                             //}
                                             var substitution = ParameterTrackingChain.CombineParameterTraces(outerPart, innerPart);
-                                            if (substitution is not null && stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, loadValue.RealPushValueInstruction), substitution)) {
+                                            if (substitution is not null && stackTrace.TryAddOriginChain(ParameterReferenceData.GenerateStackKey(method, loadParam.RealPushValueInstruction), substitution)) {
                                                 hasExternalChange = true;
                                             }
                                         }

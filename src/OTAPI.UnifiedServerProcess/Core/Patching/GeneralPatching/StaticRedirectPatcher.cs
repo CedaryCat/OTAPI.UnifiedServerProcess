@@ -70,7 +70,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             var workQueue = module.GetAllTypes()
                 // skip delegate closures and auto enumerators, they will be handled by the later patcher
-                .Where(t => !t.Name.StartsWith('<'))
+                .Where(t => !t.Name.OrdinalStartsWith('<'))
                 .SelectMany(t => t.Methods)
                 .Where(m => m.HasBody && m.Name != ".cctor")
                 .ToDictionary(m => m.GetIdentifier());
@@ -126,21 +126,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
             var name = method.Name;
-            if (name.StartsWith("get_")) {
+            if (name.OrdinalStartsWith("get_")) {
                 return method.DeclaringType.Methods.FirstOrDefault(m => m.Name == string.Concat("set_", name.AsSpan(4)));
             }
-            else if (name.StartsWith("set_")) {
+            else if (name.OrdinalStartsWith("set_")) {
                 return method.DeclaringType.Methods.FirstOrDefault(m => m.Name == string.Concat("get_", name.AsSpan(4)));
             }
             var nameParts = name.Split('.');
             if (nameParts.Length > 1) {
                 name = nameParts[^1];
-                if (name.StartsWith("get_")) {
+                if (name.OrdinalStartsWith("get_")) {
                     nameParts[^1] = string.Concat("set_", name.AsSpan(4));
                     var methodName = string.Join('.', nameParts);
                     return method.DeclaringType.Methods.FirstOrDefault(m => m.Name == methodName);
                 }
-                else if (name.StartsWith("set_")) {
+                else if (name.OrdinalStartsWith("set_")) {
                     nameParts[^1] = string.Concat("get_", name.AsSpan(4));
                     var methodName = string.Join('.', nameParts);
                     return method.DeclaringType.Methods.FirstOrDefault(m => m.Name == methodName);
@@ -170,7 +170,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 foreach (var caller in callers.UsedByMethods) {
 
                     // skip delegate closures, they will be handled by the InvocationCtxAdaptorPatcher
-                    if (caller.DeclaringType.Name.StartsWith('<')) {
+                    if (caller.DeclaringType.Name.OrdinalStartsWith('<')) {
                         continue;
                     }
                     // skip static ctors, they will be handled by the CctorCtxAdaptPatcher
@@ -267,7 +267,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             if (graph.TryGetValue(inheritedMethodId, out callers)) {
                                 foreach (var caller in callers.UsedByMethods) {
                                     // skip delegate closures, these will be handled by the InvocationAdaptorPatcher
-                                    if (caller.DeclaringType.Name.StartsWith('<')) {
+                                    if (caller.DeclaringType.Name.OrdinalStartsWith('<')) {
                                         continue;
                                     }
                                     // skip static ctors, they will be handled by the CctorCtxAdaptPatcher
@@ -299,7 +299,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             /// </summary>
             InstanceConverted = 1 << 0,
             /// <summary>
-            /// Context-bound by adding a root context parameter (explicit-context-bound)
+            /// Context-bound by adding a root context TrackingParameter (explicit-context-bound)
             /// </summary>
             AddedParam = 1 << 1,
         }
@@ -342,7 +342,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
 
                 if (method.IsStatic) {
-                    if (this.CheckUsedContextBoundField(arguments.RootContextDef, arguments.InstanceConvdFieldOrgiMap, method)) {
+                    if (this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, method)) {
                         method = PatchingCommon.CreateInstanceConvdMethod(method, contextType, arguments.InstanceConvdFieldOrgiMap);
                         mode = MethodModifyMode.InstanceConverted;
                         // add context-bound method for original method key
@@ -370,14 +370,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     // add context-bound method for self
                     contextBoundMethods.Add(methodId, method);
                 }
-                else if (this.CheckUsedContextBoundField(arguments.RootContextDef, arguments.InstanceConvdFieldOrgiMap, method)) {
+                else if (this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, method)) {
                     PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, null, out addedParam);
                     if (addedParam) {
                         mode |= MethodModifyMode.AddedParam;
                     }
                 }
             }
-            else if (this.CheckUsedContextBoundField(arguments.RootContextDef, arguments.InstanceConvdFieldOrgiMap, method)) {
+            else if (this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, method)) {
                 PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, null, out addedParam);
                 if (addedParam) {
                     mode |= MethodModifyMode.AddedParam;
@@ -432,7 +432,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (methodDef is null) {
                     return;
                 }
-                if (!this.CheckUsedContextBoundField(arguments.RootContextDef, arguments.InstanceConvdFieldOrgiMap, methodDef)) {
+                if (!this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, methodDef)) {
                     return;
                 }
                 Info("HandleLoadMethodPtr: {0} when processing {1}", methodRef.GetDebugName(), caller.GetDebugName());
@@ -451,7 +451,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 FieldDefinition? instanceConvdField;
                 // If the loading field is just an context, it must come from a singleton field redirection
                 if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
-                    // If it is loading the field value but address, and current method is an instance method of the context
+                    // If it is loading the field value but address, and tail method is an instance method of the context
                     // Just use 'this'
                     if (method.DeclaringType.FullName == instanceConvdType.ContextTypeDef.FullName
                         && !method.IsStatic
@@ -461,21 +461,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         instruction.Operand = null;
                         return;
                     }
-                    // Load the field by chain: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> current field **
-                    // The current field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
+                    // Load the field by tail: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> tail field **
+                    // The tail field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
                     // So the instructions insert before the instruction is the load of field n-1
                     else {
                         instanceConvdField = instanceConvdType.nestedChain.Last();
-                        // If instance-converted types doesn't have the type of the field n-1 (pararent instance of current field), it means the field n-1 is root context
+                        // If instance-converted types doesn't have the type of the field n-1 (pararent instance of tail field), it means the field n-1 is root context
                         if (!arguments.ContextTypes.TryGetValue(instanceConvdField.DeclaringType.FullName, out instanceConvdType)) {
                             instanceConvdType = null;
                         }
                     }
                 }
                 // If the loading field is a member field of a context but context itself
-                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.FullName, out instanceConvdField)) {
+                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
                     var declaringType = instanceConvdField.DeclaringType;
-                    // pararent instance of current field must be a existing context
+                    // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
                 else {
@@ -497,21 +497,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 // If the loading field is just an context, it must come from a singleton field redirection
                 if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
 
-                    // Load the field by chain: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> current field **
+                    // Load the field by tail: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> tail field **
 
-                    // The current field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
+                    // The tail field will be loaded by existing instruction: ** isAddress ? OpCodes.Ldflda : OpCodes.Ldfld **
                     // So the instructions insert before the instruction is the load of field n-1
 
                     instanceConvdField = instanceConvdType.nestedChain.Last();
-                    // If instance-converted types doesn't have the type of the field n-1 (pararent instance of current field), it means the field n-1 is root context
+                    // If instance-converted types doesn't have the type of the field n-1 (pararent instance of tail field), it means the field n-1 is root context
                     if (!arguments.ContextTypes.TryGetValue(instanceConvdField.DeclaringType.FullName, out instanceConvdType)) {
                         instanceConvdType = null;
                     }
                 }
                 // If the loading field is a member field of a context but context itself
-                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.FullName, out instanceConvdField)) {
+                else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
                     var declaringType = instanceConvdField.DeclaringType;
-                    // pararent instance of current field must be a existing context
+                    // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
                 else {

@@ -3,6 +3,7 @@ using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
+using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +29,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                     // Redirect vanilla singleton field to converted context field
                     if (contextType.VanillaSingletonField is not null) {
-                        source.OriginalToInstanceConvdField.TryAdd(contextType.VanillaSingletonField.FullName, contextType.nestedChain.Last());
+                        source.OriginalToInstanceConvdField.TryAdd(contextType.VanillaSingletonField.GetIdentifier(), contextType.nestedChain.Last());
                     }
                 }
                 // add other fields besides singleton
@@ -37,16 +38,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         var field = new FieldDefinition(modified.Name + Constants.Patching.ConvertedFieldInSingletonSuffix, modified.Attributes & ~FieldAttributes.Static, modified.FieldType);
                         field.CustomAttributes.AddRange(modified.CustomAttributes.Select(c => c.Clone()));
                         contextType.ContextTypeDef.Fields.Add(field);
-                        source.OriginalToInstanceConvdField.Add(modified.FullName, field);
+                        source.OriginalToInstanceConvdField.Add(modified.GetIdentifier(), field);
                     }
                     else {
-                        if (source.OriginalToInstanceConvdField.ContainsKey(modified.FullName)) {
+                        if (source.OriginalToInstanceConvdField.ContainsKey(modified.GetIdentifier())) {
                             continue;
                         }
                         var field = new FieldDefinition(modified.Name, modified.Attributes & ~FieldAttributes.Static, modified.FieldType);
                         field.CustomAttributes.AddRange(modified.CustomAttributes.Select(c => c.Clone()));
                         contextType.ContextTypeDef.Fields.Add(field);
-                        source.OriginalToInstanceConvdField.Add(modified.FullName, field);
+                        source.OriginalToInstanceConvdField.Add(modified.GetIdentifier(), field);
                     }
                 }
             }
