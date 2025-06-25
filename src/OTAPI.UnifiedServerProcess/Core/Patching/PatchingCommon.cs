@@ -25,8 +25,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             bc.MaxStackSize = bo2.MaxStackSize;
             bc.InitLocals = bo2.InitLocals;
             bc.LocalVarToken = bo2.LocalVarToken;
-            bc.Instructions.AddRange(bo2.Instructions.Select(delegate (Instruction o)
-            {
+            bc.Instructions.AddRange(bo2.Instructions.Select(delegate (Instruction o) {
                 Instruction instruction = Instruction.Create(Mono.Cecil.Cil.OpCodes.Nop);
                 instruction.OpCode = o.OpCode;
                 instruction.Operand = o.Operand;
@@ -42,8 +41,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 CatchType = o.CatchType
             }));
             bc.Variables.AddRange(bo2.Variables.Select((VariableDefinition o) => new VariableDefinition(o.VariableType)));
-            m.CustomDebugInformations.AddRange(bo2.Method.CustomDebugInformations.Select(delegate (CustomDebugInformation o)
-            {
+            m.CustomDebugInformations.AddRange(bo2.Method.CustomDebugInformations.Select(delegate (CustomDebugInformation o) {
                 if (o is AsyncMethodBodyDebugInformation asyncMethodBodyDebugInformation) {
                     AsyncMethodBodyDebugInformation asyncMethodBodyDebugInformation2 = new AsyncMethodBodyDebugInformation();
                     if (asyncMethodBodyDebugInformation.CatchHandler.Offset >= 0) {

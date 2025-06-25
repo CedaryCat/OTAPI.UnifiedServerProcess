@@ -609,7 +609,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         .First();
                     if (instancePath.StackTopType is null)
                         return;
-                    var instanceInstr = instancePath.RealPushValueInstruction; 
+                    var instanceInstr = instancePath.RealPushValueInstruction;
                     var valuesPath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[1].Instructions.Last(), jumpSites)
                         .First();
                     if (valuesPath.StackTopType is null)

@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Extensions
 {
@@ -10,7 +7,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
     {
         public static List<T> CopyWithCapacity<T>(this List<T> list) {
             var copy = new List<T>(Math.Max(list.Capacity, list.Count));
-            foreach (var item in list) { 
+            foreach (var item in list) {
                 copy.Add(item);
             }
             return copy;

@@ -1,5 +1,4 @@
-﻿using OTAPI.UnifiedServerProcess.Extensions;
-using OTAPI.UnifiedServerProcess.Loggers;
+﻿using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -27,8 +26,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.Localization.GameCulture",
             // ignore hit tile, it should not run on server
             "Terraria.HitTile",
-
-            "Terraria.ObjectData.TileObjectData._baseObject"
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var modified in source.ModifiedStaticFields.ToArray()) {

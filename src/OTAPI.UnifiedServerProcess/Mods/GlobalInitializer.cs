@@ -15,7 +15,8 @@ namespace UnifiedServerProcess
     {
         public static void InitializeEntryPoint() { }
     }
-    public class InitializerExtractFromAttribute(Type type, string method) : Attribute { 
+    public class InitializerExtractFromAttribute(Type type, string method) : Attribute
+    {
         public readonly Type originalType = type;
         public readonly string MethodName = method;
     }

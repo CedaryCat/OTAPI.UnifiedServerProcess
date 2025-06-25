@@ -95,7 +95,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         if (methodRef.Name.OrdinalStartsWith("add_")) {
                             autoDeleFieldName = methodRef.Name[4..];
                         }
-                        else if (methodRef.Name.OrdinalStartsWith("remove_")) { 
+                        else if (methodRef.Name.OrdinalStartsWith("remove_")) {
                             autoDeleFieldName = methodRef.Name[7..];
                         }
                         if (autoDeleFieldName is null) {

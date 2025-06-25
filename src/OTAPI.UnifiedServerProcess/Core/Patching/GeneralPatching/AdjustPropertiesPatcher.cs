@@ -67,7 +67,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var propName = method.Name[4..];
                     var prop = type.Properties.FirstOrDefault(x => x.Name == propName);
 
-                    if (arguments.ContextTypes.TryGetValue(type.FullName, out var contextTypeData) 
+                    if (arguments.ContextTypes.TryGetValue(type.FullName, out var contextTypeData)
                         && contextTypeData.originalType.FullName != type.FullName
                         && contextTypeData.originalType.Module == type.Module) {
 

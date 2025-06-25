@@ -6,11 +6,8 @@ using MonoMod.Cil;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core
 {
@@ -90,8 +87,8 @@ namespace OTAPI.UnifiedServerProcess.Core
                                 checking = checking.Next;
                             }
 
-                            if (blockEnd.OpCode != OpCodes.Ret 
-                                && blockEnd.OpCode != OpCodes.Br 
+                            if (blockEnd.OpCode != OpCodes.Ret
+                                && blockEnd.OpCode != OpCodes.Br
                                 && blockEnd.OpCode != OpCodes.Br_S
                                 && blockEnd != switchEnd) {
 
@@ -123,7 +120,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
                     var data = (-1, -1);
 
-                    for (int i = 0; i < method.Body.Instructions.Count; ) {
+                    for (int i = 0; i < method.Body.Instructions.Count;) {
                         var reachableInst = method.Body.Instructions[i];
                         CanReachCurrentInstruction(method.Body, jumpSites, switchBlockEnd, reachableInst, removes, indexMap, ref i, ref data);
                         reachableInstructions.Add(reachableInst);
@@ -141,16 +138,16 @@ namespace OTAPI.UnifiedServerProcess.Core
 
         void CanReachCurrentInstruction(
 
-            MethodBody body, 
+            MethodBody body,
             Dictionary<Instruction, List<Instruction>> jumpSites,
-            Dictionary<Instruction, Instruction> switchBlockToEnd, 
-            Instruction instruction, 
-            List<Instruction> rm, 
+            Dictionary<Instruction, Instruction> switchBlockToEnd,
+            Instruction instruction,
+            List<Instruction> rm,
             Dictionary<Instruction, int> indexMap,
 
             ref int index, ref (int end_dedServIsTrueBlock, int end_skipMenuIsFalseBlock) data) {
 
-            
+
             if (index > data.end_dedServIsTrueBlock) {
                 data.end_dedServIsTrueBlock = -1;
             }
@@ -259,7 +256,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             return;
 
             static bool CheckIsJumpOutOfBlock(MethodBody body, Instruction instruction, Dictionary<Instruction, Instruction> switchBlockToEnd, List<Instruction> rm, Dictionary<Instruction, int> indexMap, ref int index, int endOfBlock) {
-                
+
                 if (endOfBlock >= 0) {
 
                     if (instruction.OpCode == OpCodes.Br || instruction.OpCode == OpCodes.Br_S) {

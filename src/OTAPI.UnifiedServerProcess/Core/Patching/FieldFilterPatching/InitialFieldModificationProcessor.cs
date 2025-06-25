@@ -933,7 +933,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         private void ExpandBranchSourcesUntilStable(MethodDefinition method,
             FieldDefinition staticField,
             HashSet<Instruction> modifications,
-            Dictionary<Instruction, HashSet<Instruction>> branchBlockMapToConditions, 
+            Dictionary<Instruction, HashSet<Instruction>> branchBlockMapToConditions,
             Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap,
             HashSet<VariableDefinition> ignoreExtractLocalModifications) {
 
@@ -1052,13 +1052,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         /// <param name="LoopCond"></param>
         /// <param name="FilteredLoopBody">key is field identifier</param>
         /// <param name="OrigiLoopBody"></param>
-        record LoopBlockData(VariableDefinition OriginalLocal, VariableDefinition Local, 
-            Instruction[] InitLoopVariable, 
+        record LoopBlockData(VariableDefinition OriginalLocal, VariableDefinition Local,
+            Instruction[] InitLoopVariable,
             Instruction JumpToLoopHead,
-            Instruction[] PostLoop, 
+            Instruction[] PostLoop,
             Instruction[] LoopCond,
             Instruction[] OrigiLoopBody,
-            Dictionary<string, HashSet<Instruction>> FilteredLoopBody) {
+            Dictionary<string, HashSet<Instruction>> FilteredLoopBody)
+        {
 
             public IEnumerable<Instruction> AllInsts() => InitLoopVariable.Concat(PostLoop).Concat(LoopCond).Concat(FilteredLoopBody.Values.SelectMany(x => x));
             public IEnumerable<Instruction> SortedAllInsts() => AllInsts().OrderBy(x => x.Offset);
@@ -1148,9 +1149,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     current = current.Next;
                 }
 
-                loopBlocks.Add(loopVariable, 
+                loopBlocks.Add(loopVariable,
                     new LoopBlockData(
-                        loopVariable, 
+                        loopVariable,
                         new VariableDefinition(loopVariable.VariableType),
                         [.. extractedLoopVariableInit.OrderBy(x => x.Offset)],
                         initLoopVariable.Next,
@@ -1240,9 +1241,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
             }
         }
-        static void ExtractSources(IJumpSitesCacheFeature feature, 
-            MethodDefinition caller, 
-            FieldDefinition referenceField, 
+        static void ExtractSources(IJumpSitesCacheFeature feature,
+            MethodDefinition caller,
+            FieldDefinition referenceField,
             HashSet<Instruction> transformInsts,
             Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap,
             IEnumerable<Instruction> extractSources,

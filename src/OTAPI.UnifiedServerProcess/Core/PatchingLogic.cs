@@ -1,6 +1,5 @@
 ﻿using ModFramework;
 using Mono.Cecil;
-using OTAPI.UnifiedServerProcess.Core.Infrastructure;
 using OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching;
@@ -26,7 +25,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             MethodDefinition[] initialMethods = [main.Method("Initialize"), main.Method("Initialize_AlmostEverything"), main.Method("PostContentLoadInitialize")];
 
             analyzers.StaticFieldModificationAnalyzer.FetchModifiedFields(
-                entryPoints, initialMethods, 
+                entryPoints, initialMethods,
                 out var rawModifiedStaticFields, out var initialStaticFields);
 
             List<FieldDefinition> modifiedStaticFields = [];

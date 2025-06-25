@@ -1,8 +1,6 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
-using OTAPI.UnifiedServerProcess.Extensions;
-using OTAPI.UnifiedServerProcess.Optimize.FastCollections;
 using OTAPI.UnifiedServerProcess.Optimize.LinkObjects;
 using System;
 using System.Collections.Generic;
@@ -360,7 +358,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                 Instruction leftCursor = start;
                 HashSet<Instruction> leftCollected = [];
-                Instruction rightCursor = start; 
+                Instruction rightCursor = start;
                 HashSet<Instruction> rightCollected = [];
 
                 while (nodeSet.Count > 0) {
@@ -380,7 +378,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     if (nodeSet.Count == 0) break;
 
                     if (rightCursor.Next != null) {
-                        rightCursor = rightCursor.Next; 
+                        rightCursor = rightCursor.Next;
 
                         rightCollected.Add(rightCursor);
 

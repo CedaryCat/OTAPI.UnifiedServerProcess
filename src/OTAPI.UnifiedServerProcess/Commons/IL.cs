@@ -251,7 +251,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 variable = method.Body.Variables[localIndex];
                 return true;
             }
-            public static bool MatchLoadVariable(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) { 
+            public static bool MatchLoadVariable(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) {
                 VariableDefinition? tmpCheck = null;
 
                 var localIndex = instruction.OpCode.Code switch {

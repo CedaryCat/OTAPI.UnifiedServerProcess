@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace OTAPI.UnifiedServerProcess.Optimize.LinkObjects
+﻿namespace OTAPI.UnifiedServerProcess.Optimize.LinkObjects
 {
     public class ReversibleLinkedList<TItem>
     {
@@ -16,7 +10,7 @@ namespace OTAPI.UnifiedServerProcess.Optimize.LinkObjects
         public void Add(TItem item) {
             tail = new Node(tail, item);
         }
-        public TItem[] ReverseToArray() { 
+        public TItem[] ReverseToArray() {
             if (tail is null) {
                 return [];
             }

@@ -19,9 +19,9 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
     }
     public static class StaticModificationCheckFeatureExtensions
     {
-        public static bool IsAboutStaticFieldModification(this IStaticModificationCheckFeature point, 
+        public static bool IsAboutStaticFieldModification(this IStaticModificationCheckFeature point,
             MethodDefinition method,
-            Instruction inst, 
+            Instruction inst,
             [NotNullWhen(true)] out HashSet<FieldDefinition>? modifiedFields, [NotNullWhen(true)] out HashSet<Instruction>? modificationOperations) {
 
             modifiedFields = [];
@@ -63,7 +63,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             return true;
         }
         public static bool IsReferencedStaticFieldModified(this IStaticModificationCheckFeature point,
-            MethodDefinition method, 
+            MethodDefinition method,
             Instruction pushedFieldReference,
             [NotNullWhen(true)] out Dictionary<string, SingleStaticFieldTrace>? modified,
             [NotNullWhen(true)] out HashSet<Instruction>? modificationOperations) {
@@ -93,7 +93,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                             !path.ParametersSources[paramIndex].Instructions.Contains(pushedFieldReference)) {
                             continue;
                         }
-                        
+
                         modificationOperations.Add(usage);
 
                         foreach (var referencedFieldTracing in trace.TrackedStaticFields.Values) {
