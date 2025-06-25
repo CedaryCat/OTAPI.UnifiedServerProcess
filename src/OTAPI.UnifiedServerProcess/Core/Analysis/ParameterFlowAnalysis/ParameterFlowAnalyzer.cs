@@ -17,7 +17,7 @@ using System.Linq;
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 {
 
-    public sealed class ParameterFlowAnalyzer : Analyzer, IMethodBehaivorFeature
+    public sealed class ParameterFlowAnalyzer : Analyzer, IMethodImplementationFeature
     {
         public readonly ImmutableDictionary<string, ParameterReferenceData> AnalyzedMethods;
         public sealed override string Name => "ParamFlowAnalyzer";

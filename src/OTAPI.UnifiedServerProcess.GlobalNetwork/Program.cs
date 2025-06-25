@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             Console.WriteLine("                       Demonstration For Terraria v{0} & OTAPI v{1}                         ", version.TerrariaVersion, version.OTAPIVersion);
             Console.WriteLine("---------------------------------------------------------------------------------------------------");
 
-            Console.Write("[USP|Info] Waiting for servers instances creation... ");
+            Console.Write("[USP|Info] Initializing... ");
             var spinner = new ConsoleSpinner(100);
             spinner.Start();
 
@@ -28,7 +28,13 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             AppDomain.CurrentDomain.AssemblyResolve += ResolveHelpers.ResolveAssembly;
             Terraria.Program.SavePath = Platform.Get<IPathService>().GetStoragePath("Terraria");
             Terraria.Main.SkipAssemblyLoad = true;
-            GlobalInitializer.InitializeEntryPoint();
+            GlobalInitializer.Initialize();
+            spinner.Stop();
+            Console.WriteLine("- done.");
+
+            Console.Write("[USP|Info] Waiting for servers instances creation... ");
+            spinner = new ConsoleSpinner(100);
+            spinner.Start();
 
             int port = 7777;
 

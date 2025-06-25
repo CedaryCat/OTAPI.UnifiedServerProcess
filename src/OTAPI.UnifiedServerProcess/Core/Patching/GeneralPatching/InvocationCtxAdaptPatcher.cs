@@ -837,9 +837,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             nextInstruction = null;
             compilerGeneratedMethodOrig = null;
             delegateCtor = null;
-            if (checkBegin.Offset == 245) {
 
-            }
             if (IsNormal(checkBegin, out origBlockInstructions, out nextInstruction, out compilerGeneratedMethodOrig, out delegateCtor)) {
                 return true;
             }
@@ -971,10 +969,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             bool addedparam = false;
             if (instruction.OpCode != OpCodes.Ldsfld) {
                 return null;
-            }
-
-            if (userMethod.Name == "mfwh_Initialize") {
-
             }
 
             if (!IsNoCaptureAnonymousMethod(instruction, out var origBlockInstructions, out var nextInstruction, out var compilerGeneratedMethodOrig, out var delegateCtor)) {

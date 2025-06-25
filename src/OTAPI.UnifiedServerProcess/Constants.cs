@@ -13,7 +13,7 @@ namespace OTAPI.UnifiedServerProcess
         public const string RootContextFullName = "UnifiedServerProcess.RootContext";
         public const string GlobalInitializerTypeName = "UnifiedServerProcess.GlobalInitializer";
         public const string InitializerAttributeTypeName = "UnifiedServerProcess.InitializerExtractFromAttribute";
-        public const string GlobalInitializerEntryPointName = "InitializeEntryPoint";
+        public const string GlobalInitializerEntryPointName = "Initialize";
 
         public static class Modifiers
         {

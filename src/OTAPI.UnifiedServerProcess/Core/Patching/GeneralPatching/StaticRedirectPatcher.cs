@@ -28,7 +28,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
     public class StaticRedirectPatcher(ILogger logger,
         DelegateInvocationGraph delegateInvocationGraph,
         MethodInheritanceGraph methodInheritanceGraph,
-        MethodCallGraph callGraph) : GeneralPatcher(logger), IContextInjectFeature, IMethodBehaivorFeature, IJumpSitesCacheFeature, IMethodCheckCacheFeature
+        MethodCallGraph callGraph) : GeneralPatcher(logger), IContextInjectFeature, IMethodImplementationFeature, IJumpSitesCacheFeature, IMethodCheckCacheFeature
     {
 
         public override string Name => nameof(StaticRedirectPatcher);

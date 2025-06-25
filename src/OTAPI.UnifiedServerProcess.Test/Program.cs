@@ -11,16 +11,13 @@ namespace OTAPI.UnifiedServerProcess.Test
             Terraria.Program.SavePath = Platform.Get<IPathService>().GetStoragePath("Terraria");
             Terraria.Main.SkipAssemblyLoad = true;
 
-            RootContext test;
-            for (int i = 0; i < 1200; i++) {
-                test = new RootContext("Test");
-            }
+            RootContext test = new RootContext("Test");
 
-            //test.Hooks.NetMessage.PlayerAnnounce += (sender, e) => {
-            //    Console.WriteLine("[USP] Player joined: " + test.Main.player[e.Plr].name);
-            //};
+            test.Hooks.NetMessage.PlayerAnnounce += (sender, e) => {
+                Console.WriteLine("[USP] Player joined: " + test.Main.player[e.Plr].name);
+            };
 
-            //test.Program.LaunchGame(args);
+            test.Program.LaunchGame(args);
         }
     }
 }

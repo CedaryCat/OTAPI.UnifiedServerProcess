@@ -17,7 +17,7 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 {
-    public class InitialFieldModificationProcessor(ILogger logger, AnalyzerGroups analyzers) : LoggedComponent(logger), IFieldFilterArgProcessor, IJumpSitesCacheFeature, IMethodBehaivorFeature, IMethodCheckCacheFeature
+    public class InitialFieldModificationProcessor(ILogger logger, AnalyzerGroups analyzers) : LoggedComponent(logger), IFieldFilterArgProcessor, IJumpSitesCacheFeature, IMethodImplementationFeature, IMethodCheckCacheFeature
     {
         public DelegateInvocationGraph DelegateInvocationGraph => analyzers.DelegateInvocationGraph;
         public MethodInheritanceGraph MethodInheritanceGraph => analyzers.MethodInheritanceGraph;

@@ -28,7 +28,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
         MethodCallGraph callGraph,
         DelegateInvocationGraph invocationGraph,
         MethodInheritanceGraph inheritanceGraph,
-        TypeInheritanceGraph typeInheritanceGraph) : Analyzer(logger), IMethodBehaivorFeature, IMethodCheckCacheFeature
+        TypeInheritanceGraph typeInheritanceGraph) : Analyzer(logger), IMethodImplementationFeature, IMethodCheckCacheFeature
     {
         public DelegateInvocationGraph DelegateInvocationGraph => invocationGraph;
         public MethodInheritanceGraph MethodInheritanceGraph => inheritanceGraph;

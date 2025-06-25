@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 {
-    public interface IMethodBehaivorFeature : ILoggedComponent
+    public interface IMethodImplementationFeature : ILoggedComponent
     {
         DelegateInvocationGraph DelegateInvocationGraph { get; }
         MethodInheritanceGraph MethodInheritanceGraph { get; }
@@ -24,7 +24,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             Dictionary<Instruction, List<Instruction>> jumpSites,
             out bool isDelegateInvocation,
             bool noWarings = false)
-            where TFeature : LoggedComponent, IMethodBehaivorFeature {
+            where TFeature : LoggedComponent, IMethodImplementationFeature {
 
             if (callInstruction.OpCode != OpCodes.Callvirt && callInstruction.OpCode != OpCodes.Call && callInstruction.OpCode != OpCodes.Newobj) {
                 throw new Exception("Expected callvirt or call");

@@ -16,7 +16,7 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 {
-    public sealed class StaticFieldReferenceAnalyzer : Analyzer, IMethodBehaivorFeature
+    public sealed class StaticFieldReferenceAnalyzer : Analyzer, IMethodImplementationFeature
     {
         public readonly ImmutableDictionary<string, StaticFieldReferenceData> AnalyzedMethods;
         public sealed override string Name => "StaticFieldReferenceAnalyzer";

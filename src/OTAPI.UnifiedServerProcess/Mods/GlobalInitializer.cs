@@ -13,7 +13,7 @@ namespace UnifiedServerProcess
 {
     public static class GlobalInitializer
     {
-        public static void InitializeEntryPoint() { }
+        public static void Initialize() { }
     }
     public class InitializerExtractFromAttribute(Type type, string method) : Attribute
     {

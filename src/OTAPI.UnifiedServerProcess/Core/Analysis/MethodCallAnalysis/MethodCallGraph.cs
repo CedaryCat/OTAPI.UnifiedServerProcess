@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
 {
-    public class MethodCallGraph : Analyzer, IMethodBehaivorFeature
+    public class MethodCallGraph : Analyzer, IMethodImplementationFeature
     {
         public override string Name => "MethodCallGraph";
 

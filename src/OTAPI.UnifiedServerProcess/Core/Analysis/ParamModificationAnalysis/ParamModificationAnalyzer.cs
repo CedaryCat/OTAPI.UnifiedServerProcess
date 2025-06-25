@@ -16,7 +16,7 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 {
-    public class ParamModificationAnalyzer : Analyzer, IMethodBehaivorFeature
+    public class ParamModificationAnalyzer : Analyzer, IMethodImplementationFeature
     {
         public sealed override string Name => "ParamModificationAnalyzer";
         public readonly ImmutableDictionary<string, ImmutableDictionary<int, ParamModifications>> ModifiedParameters;
