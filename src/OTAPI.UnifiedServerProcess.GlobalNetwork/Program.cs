@@ -3,7 +3,9 @@ using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
 using ReLogic.OS;
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Reflection;
+using System.Threading.Tasks;
 using UnifiedServerProcess;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork
@@ -22,66 +24,49 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             Console.WriteLine(@"---------------------------------------------------------------------------------------------------");
             Console.WriteLine(@"                       Demonstration For Terraria v{0} & OTAPI v{1}                         ", version.TerrariaVersion, version.OTAPIVersion);
             Console.WriteLine(@"---------------------------------------------------------------------------------------------------");
-
-
-            Console.Write("[USP|Info] Global initialization started... ");
-            var spinner = new ConsoleSpinner(100);
-            spinner.Start();
-
-            Stopwatch stopwatch = new();
-            stopwatch.Start();
-            SynchronizedGuard.Load();
-            NetworkPatcher.Load();
-            AppDomain.CurrentDomain.AssemblyResolve += ResolveHelpers.ResolveAssembly;
-            Terraria.Program.SavePath = Platform.Get<IPathService>().GetStoragePath("Terraria");
-            Terraria.Main.SkipAssemblyLoad = true;
-            GlobalInitializer.Initialize();
-            stopwatch.Stop();
-            spinner.Stop();
-            Console.WriteLine($"- done. (used {stopwatch.ElapsedMilliseconds:.00}ms)");
-
-            Console.Write("[USP|Info] Creating server instances... ");
-            spinner = new ConsoleSpinner(100);
-            spinner.Start();
-            stopwatch.Restart();
-
-            int port = 7777;
-
-            var server1 = new ServerContext("Server1", TestWorlds.World_1);
-            var server2 = new ServerContext("Server2", TestWorlds.World_2);
-
-            var router = new Router(port, server1, [server1, server2]);
-            var cmd = new CommandHandler(router);
-
-            stopwatch.Stop();
-            spinner.Stop();
-            Console.WriteLine($"- done. (used {stopwatch.ElapsedMilliseconds:.00}ms)");
-
-            Task.Run(() => {
-                server1.Program.LaunchGame(args);
-            });
-            Task.Run(() => {
-                server2.Program.LaunchGame(args);
+            
+            WorkRunner.RunTimedWork("Global initialization started...", () => {
+                SynchronizedGuard.Load();
+                NetworkPatcher.Load();
+                AppDomain.CurrentDomain.AssemblyResolve += ResolveHelpers.ResolveAssembly;
+                Terraria.Program.SavePath = Platform.Get<IPathService>().GetStoragePath("Terraria");
+                Terraria.Main.SkipAssemblyLoad = true;
+                GlobalInitializer.Initialize();
             });
 
+            var (server1, server2) = WorkRunner.RunTimedWork("Creating server instances...", () => {
+                var server1 = new ServerContext("Server1", TestWorlds.World_1);
+                var server2 = new ServerContext("Server2", TestWorlds.World_2);
+                return (server1, server2);
+            });
 
-            Console.Write("[USP|Info] Starting main servers... ");
-            spinner = new ConsoleSpinner(100);
-            spinner.Start();
-            stopwatch.Restart();
+            var (router, cmdh) = WorkRunner.RunTimedWork("Creating global network...", () => {
+                var router = new Router(7777, server1, [server1, server2]);
+                var cmdh = new CommandHandler(router);
+                return (router, cmdh);
+            });
 
-            router.Started += () => {
-                stopwatch.Stop();
-                spinner.Stop();
-                Console.WriteLine($"- done. (used {stopwatch.ElapsedMilliseconds:.00}ms)");
+            WorkRunner.RunTimedWorkAsync("Starting main servers...",
+            () => {
+                Task.Run(() => {
+                    server1.Program.LaunchGame(args);
+                });
+                Task.Run(() => {
+                    server2.Program.LaunchGame(args);
+                });
+                var tcs = new TaskCompletionSource();
+                router.Started += () => tcs.SetResult();
+                return tcs;
+            }, 
+            () => {
                 Console.WriteLine();
                 Console.WriteLine("[USP] Unified Server Process Launched successfully.");
-                Console.WriteLine("[USP] Listening on port: {0}.", port);
+                Console.WriteLine("[USP] Listening on port: {0}.", router.ListenPort);
                 Console.WriteLine("[USP] Type 'help' for more information.");
                 Console.WriteLine();
-            };
+            });
 
-            cmd.KeepReadingInput();
+            cmdh.KeepReadingInput();
         }
     }
 }

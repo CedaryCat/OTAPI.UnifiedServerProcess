@@ -10,6 +10,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 {
     public class Router
     {
+        public int ListenPort { get; private set; }
         public static readonly RemoteClient[] globalClients = new RemoteClient[256];
         public static readonly MessageBuffer[] globalMsgBuffers = new MessageBuffer[257];
         public readonly ServerContext[] clientCurrentlyServers = new ServerContext[256];
@@ -33,6 +34,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             }
         }
         public Router(int listenPort, ServerContext main, params ServerContext[] allServers) {
+            ListenPort = listenPort;
             Array.Fill(clientCurrentlyServers, main);
 
             On.Terraria.NetMessageSystemContext.mfwh_CheckBytes += ProcessBytes;
