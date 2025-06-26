@@ -15,14 +15,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         public static readonly MessageBuffer[] globalMsgBuffers = new MessageBuffer[257];
         public readonly ServerContext[] clientCurrentlyServers = new ServerContext[256];
         static Router() {
-            const int maxTilesX = 8400;
-            const int maxTilesY = 2400;
-            var tmp = new RootContext("tmp");
-            tmp.Main.maxTilesX = maxTilesX;
-            tmp.Main.maxTilesY = maxTilesY;
-
             for (int i = 0; i < 256; i++) {
-                globalClients[i] = new RemoteClient(tmp) {
+                globalClients[i] = new RemoteClient() {
                     Id = i,
                     ReadBuffer = new byte[1024]
                 };
@@ -39,17 +33,24 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 
             On.Terraria.NetMessageSystemContext.mfwh_CheckBytes += ProcessBytes;
             On.Terraria.NetplaySystemContext.mfwh_UpdateServerInMainThread += UpdateServerInMainThread;
+            On.Terraria.NetMessageSystemContext.CheckCanSend += NetMessageSystemContext_CheckCanSend;
 
             this.main = main;
             this.servers = allServers;
 
             listener = new TcpListener(IPAddress.Any, listenPort);
+            broadcastClient = new UdpClient();
+            broadcastClient.EnableBroadcast = true;
 
             var listenThread = new Thread(ServerLoop) {
                 IsBackground = true,
                 Name = "Server Thread"
             };
             listenThread.Start();
+        }
+
+        private bool NetMessageSystemContext_CheckCanSend(On.Terraria.NetMessageSystemContext.orig_CheckCanSend orig, NetMessageSystemContext self, int clientIndex) {
+            return clientCurrentlyServers[clientIndex] == self.root && globalClients[clientIndex].IsConnected();
         }
 
         private void UpdateServerInMainThread(On.Terraria.NetplaySystemContext.orig_mfwh_UpdateServerInMainThread orig, NetplaySystemContext self) {
@@ -132,6 +133,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 
         readonly TcpListener listener;
         volatile bool isListening;
+        readonly UdpClient broadcastClient;
+        volatile bool keepBroadcasting;
 
         public event Func<TcpClient, ISocket>? CreateSocket;
         public event Action? Started;
@@ -152,38 +155,43 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         }
 
         private void UpdateConnectedClients() {
-            for (int i = 0; i < 256; i++) {
-                var client = globalClients[i];
-                var server = clientCurrentlyServers[i];
+            try {
+                for (int i = 0; i < 256; i++) {
+                    var client = globalClients[i];
+                    var server = clientCurrentlyServers[i];
 
-                if (client.PendingTermination) {
-                    if (client.PendingTerminationApproved) {
-                        client.Reset(main);
-                        server.NetMessage.SyncDisconnectedPlayer(i);
+                    if (client.PendingTermination) {
+                        if (client.PendingTerminationApproved) {
+                            client.Reset(main);
+                            server.NetMessage.SyncDisconnectedPlayer(i);
 
-                        bool active = server.Main.player[i].active;
-                        server.Main.player[i].active = false;
-                        if (active) {
-                            server.Player.Hooks.PlayerDisconnect(i);
+                            bool active = server.Main.player[i].active;
+                            server.Main.player[i].active = false;
+                            if (active) {
+                                server.Player.Hooks.PlayerDisconnect(i);
+                            }
+
+                            clientCurrentlyServers[i] = main;
                         }
+                        continue;
+                    }
+                    if (client.IsConnected()) {
+                        lock (client) {
+                            client.Update(server);
+                            server.Netplay.HasClients = true;
+                        }
+                        continue;
+                    }
+                    if (client.IsActive) {
+                        client.PendingTermination = true;
+                        client.PendingTerminationApproved = true;
+                        continue;
+                    }
+                    client.StatusText2 = "";
+                }
+            }
+            catch (Exception ex) {
 
-                        clientCurrentlyServers[i] = main;
-                    }
-                    continue;
-                }
-                if (client.IsConnected()) {
-                    lock (client) {
-                        client.Update(server);
-                        server.Netplay.HasClients = true;
-                    }
-                    continue;
-                }
-                if (client.IsActive) {
-                    client.PendingTermination = true;
-                    client.PendingTerminationApproved = true;
-                    continue;
-                }
-                client.StatusText2 = "";
             }
         }
 
@@ -196,6 +204,15 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             }
             return space;
         }
+        static int GetActiveClientCount() {
+            int count = 0;
+            for (int i = 0; i < 255; i++) {
+                if (globalClients[i].IsActive) {
+                    count += 1;
+                }
+            }
+            return count;
+        }
 
         void StartListeningIfNeeded() {
             if (isListening || !main.IsRunning || GetClientSpace() <= 0) {
@@ -204,6 +221,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             isListening = true;
             listener.Start();
             Task.Run(ListenLoop);
+            Task.Run(LaunchBroadcast);
         }
         void ListenLoop() {
             while (main.IsRunning && GetClientSpace() > 0) {
@@ -217,6 +235,49 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             }
             listener.Stop();
             isListening = false;
+            keepBroadcasting = false;
+        }
+        void LaunchBroadcast() {
+            try {
+                keepBroadcasting = true;
+                int playerCountPosInStream = 0;
+                byte[] data;
+                using (MemoryStream memoryStream = new MemoryStream()) {
+                    using (BinaryWriter bw = new BinaryWriter(memoryStream)) {
+                        int value = 1010;
+                        bw.Write(value);
+                        bw.Write(ListenPort);
+                        bw.Write("Unified-Server-Process");
+                        string text = Dns.GetHostName();
+                        if (text == "localhost") {
+                            text = Environment.MachineName;
+                        }
+                        bw.Write(text);
+                        bw.Write((ushort)main.Main.maxTilesX);
+                        bw.Write(main.Main.ActiveWorldFileData.HasCrimson);
+                        bw.Write(main.Main.ActiveWorldFileData.GameMode);
+                        bw.Write(255);
+                        playerCountPosInStream = (int)memoryStream.Position;
+                        bw.Write((byte)0);
+                        bw.Write(main.Main.ActiveWorldFileData.IsHardMode);
+                        bw.Flush();
+                        data = memoryStream.ToArray();
+                    }
+                }
+                do {
+                    data[(int)playerCountPosInStream] = (byte)GetActiveClientCount();
+                    try {
+                        broadcastClient.Send(data, data.Length, new IPEndPoint(IPAddress.Broadcast, 8888));
+                    }
+                    catch {
+                    }
+                    Thread.Sleep(1000);
+                }
+                while (keepBroadcasting);
+            }
+            catch { 
+                keepBroadcasting = false;
+            }
         }
 
         void OnConnectionAccepted(ISocket client) {

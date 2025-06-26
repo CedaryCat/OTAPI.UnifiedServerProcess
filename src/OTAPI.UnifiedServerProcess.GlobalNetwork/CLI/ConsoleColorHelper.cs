@@ -1,6 +1,6 @@
 ﻿using Microsoft.Xna.Framework;
 
-namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
+namespace OTAPI.UnifiedServerProcess.GlobalNetwork.CLI
 {
 
     public static class ConsoleColorHelper

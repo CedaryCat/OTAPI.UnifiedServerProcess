@@ -1,5 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
-using OTAPI.UnifiedServerProcess.GlobalNetwork.IO;
+using OTAPI.UnifiedServerProcess.GlobalNetwork.CLI;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
 using System.Diagnostics.CodeAnalysis;
@@ -13,7 +13,12 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
     public class CommandHandler
     {
         readonly Router router;
-        public CommandHandler(Router router) {
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="router"></param>
+        /// <param name="chat">Ensure instatiate after <see cref="ChatHandler"/>, so that it can have higher priority in <see cref="ChatHandler.ProcessIncomingMessage"/></param>
+        public CommandHandler(Router router, ChatHandler chat) {
             this.router = router;
             On.Terraria.Chat.Commands.SayChatCommand.ProcessIncomingMessage += ProcessIncomingMessage;
             On.OTAPI.HooksSystemContext.MainSystemContext.InvokeCommandProcess += ProcessConsoleMessage;

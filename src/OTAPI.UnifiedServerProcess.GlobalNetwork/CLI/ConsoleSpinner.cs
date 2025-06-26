@@ -1,4 +1,4 @@
-﻿namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
+﻿namespace OTAPI.UnifiedServerProcess.GlobalNetwork.CLI
 {
     public class ConsoleSpinner
     {

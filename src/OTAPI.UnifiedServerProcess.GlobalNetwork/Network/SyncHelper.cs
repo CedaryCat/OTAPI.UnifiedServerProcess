@@ -49,20 +49,16 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         static void SendWorldEntities(this ServerContext server, int whoAmI) {
             server.NetMessage.SyncConnectedPlayer(whoAmI);
             for (int i = 0; i < Terraria.Main.maxItems; i++) {
+                server.NetMessage.TrySendData(MessageID.SyncItem, whoAmI, -1, null, i);
                 if (server.Main.item[i].active) {
-                    server.NetMessage.TrySendData(MessageID.SyncItem, whoAmI, -1, null, i);
                     server.NetMessage.TrySendData(MessageID.ItemOwner, whoAmI, -1, null, i);
                 }
             }
             for (int i = 0; i < Terraria.Main.maxNPCs; i++) {
-                if (server.Main.npc[i].active) {
-                    server.NetMessage.TrySendData(MessageID.SyncNPC, whoAmI, -1, null, i);
-                }
+                server.NetMessage.TrySendData(MessageID.SyncNPC, whoAmI, -1, null, i);
             }
             for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
-                if (server.Main.projectile[i].active && (Main.projPet[server.Main.projectile[i].type] || server.Main.projectile[i].netImportant)) {
-                    server.NetMessage.TrySendData(MessageID.SyncProjectile, whoAmI, -1, null, i);
-                }
+                server.NetMessage.TrySendData(MessageID.SyncProjectile, whoAmI, -1, null, i);
             }
         }
         static void SendWorldInfo(this ServerContext server, int whoAmI) {
@@ -82,7 +78,20 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 
         #region Sync Server Offline To Player
         public static void SyncServerOfflineToPlayer(ServerContext offlineServer, int plr) {
-
+            for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
+                var proj = offlineServer.Main.projectile[i];
+                if (!proj.active) {
+                    continue;
+                }
+                offlineServer.NetMessage.TrySendData(MessageID.KillProjectile, plr, -1, null, proj.identity, proj.owner);
+            }
+            for (int i = 0; i < Terraria.Main.maxPlayers; i++) {
+                var player = offlineServer.Main.player[i];
+                if (!player.active) { 
+                    continue;
+                }
+                offlineServer.NetMessage.TrySendData(MessageID.PlayerActive, plr, i, null, i, 0);
+            }
         }
         #endregion
 

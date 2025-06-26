@@ -5,7 +5,7 @@ using System.IO.Pipes;
 using System.Runtime.CompilerServices;
 using UnifiedServerProcess;
 
-namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
+namespace OTAPI.UnifiedServerProcess.GlobalNetwork.CLI
 {
     public unsafe partial class ConsoleClientLauncher : ConsoleSystemContext
     {

@@ -4,7 +4,7 @@ using OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.S2C;
 using System.Collections.Concurrent;
 using System.Text;
 
-namespace OTAPI.UnifiedServerProcess.GlobalNetwork.IO
+namespace OTAPI.UnifiedServerProcess.GlobalNetwork.CLI
 {
     partial class ConsoleClientLauncher
     {

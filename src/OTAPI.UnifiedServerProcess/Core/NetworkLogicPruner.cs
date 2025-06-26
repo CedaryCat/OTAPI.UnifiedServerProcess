@@ -157,6 +157,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             }
 
             if (instruction.MatchLdsfld(out var fieldReference)) {
+
                 if (fieldReference.FullName == dedServ.FullName) {
                     var nextInst = instruction.Next;
 
@@ -176,6 +177,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                             if (switchEndIndex < jumpIndex) {
                                 index = switchEndIndex;
                             }
+                            rm.Add(instruction);
                             return;
                         }
 
@@ -218,6 +220,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                             if (switchEndIndex < jumpIndex) {
                                 index = switchEndIndex;
                             }
+                            rm.Add(instruction);
                             return;
                         }
 

@@ -1,4 +1,4 @@
-﻿using OTAPI.UnifiedServerProcess.GlobalNetwork.IO;
+﻿using OTAPI.UnifiedServerProcess.GlobalNetwork.CLI;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
 using ReLogic.OS;
@@ -42,7 +42,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
 
             var (router, cmdh) = WorkRunner.RunTimedWork("Creating global network...", () => {
                 var router = new Router(7777, server1, [server1, server2]);
-                var cmdh = new CommandHandler(router);
+                var cmdh = new CommandHandler(router, new ChatHandler(router));
                 return (router, cmdh);
             });
 

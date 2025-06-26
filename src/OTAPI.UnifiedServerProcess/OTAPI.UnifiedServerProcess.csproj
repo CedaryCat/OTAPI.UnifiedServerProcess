@@ -9,11 +9,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <Compile Remove="Core\Analysis\ParameterTracer.cs" />
-	  <Compile Remove="Core\Patching\GeneralPatching\GlobalExtractPatcher.cs" />
-	</ItemGroup>
-
-	<ItemGroup>
 		<Mods Include="Mods/*.cs" />
 	</ItemGroup>
 
