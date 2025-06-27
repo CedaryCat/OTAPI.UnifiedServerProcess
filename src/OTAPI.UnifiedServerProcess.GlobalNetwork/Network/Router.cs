@@ -191,7 +191,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 }
             }
             catch (Exception ex) {
-
+                Console.WriteLine(ex);
             }
         }
 

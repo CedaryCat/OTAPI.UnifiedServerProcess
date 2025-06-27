@@ -58,7 +58,9 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 server.NetMessage.TrySendData(MessageID.SyncNPC, whoAmI, -1, null, i);
             }
             for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
-                server.NetMessage.TrySendData(MessageID.SyncProjectile, whoAmI, -1, null, i);
+                if (server.Main.projectile[i].active) {
+                    server.NetMessage.TrySendData(MessageID.SyncProjectile, whoAmI, -1, null, i);
+                }
             }
         }
         static void SendWorldInfo(this ServerContext server, int whoAmI) {
