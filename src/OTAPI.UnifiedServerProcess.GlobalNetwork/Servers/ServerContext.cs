@@ -19,5 +19,6 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Servers
             Netplay.ListenPort = -1;
             Netplay.UseUPNP = true;
         }
+        public override string ToString() => $"{{ Type:ServerContext, Name:\"{Name}\", Players:{Main.player.Count(p => p.active)} }}";
     }
 }

@@ -37,13 +37,13 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             List<Point> existingPos = new((spawnSectionXEnd - spawnSectionXBegin) * (spawnSectionYEnd - spawnSectionYBegin));
             for (int x = spawnSectionXBegin; x < spawnSectionXEnd; x++) {
                 for (int y = spawnSectionYBegin; y < spawnSectionYEnd; y++) {
-                    server.NetMessage.SendSection(x, y, whoAmI);
+                    server.NetMessage.SendSection(whoAmI, x, y);
                     existingPos.Add(new Point(x, y));
                 }
             }
             server.PortalHelper.SyncPortalsOnPlayerJoin(whoAmI, 1, existingPos, out var portalSections);
             foreach (var section in portalSections) {
-                server.NetMessage.SendSection(section.X, section.Y, whoAmI);
+                server.NetMessage.SendSection(whoAmI, section.X, section.Y);
             }
         }
         static void SendWorldEntities(this ServerContext server, int whoAmI) {
@@ -79,7 +79,25 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         #endregion
 
         #region Sync Server Offline To Player
+        static void SendRawData(ServerContext offlineServer, int plr, byte[] data, int offset, int count) {
+            var client = offlineServer.Netplay.Clients[plr];
+            offlineServer.Hooks.NetMessage.InvokeSendBytes(client.Socket, data, offset, count, delegate (object state) {
+                client.ServerWriteCallBack(offlineServer, state);
+            },
+            null, plr);
+        }
         public static void SyncServerOfflineToPlayer(ServerContext offlineServer, int plr) {
+            byte[] data = [6, 0, MessageID.ItemOwner, default, default, 255];
+            for (int i = 0; i < Terraria.Main.maxItems; i++) {
+                var item = offlineServer.Main.item[i];
+                if (!item.active || item.playerIndexTheItemIsReservedFor != plr) {
+                    continue;
+                }
+                short itemSlot = (short)i;
+                data[3] = (byte)(itemSlot & 0xFF);
+                data[4] = (byte)(itemSlot >> 8);
+                SendRawData(offlineServer, plr, data, 0, 6);
+            }
             for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
                 var proj = offlineServer.Main.projectile[i];
                 if (!proj.active) {
@@ -89,7 +107,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             }
             for (int i = 0; i < Terraria.Main.maxPlayers; i++) {
                 var player = offlineServer.Main.player[i];
-                if (!player.active) { 
+                if (!player.active) {
                     continue;
                 }
                 offlineServer.NetMessage.TrySendData(MessageID.PlayerActive, plr, i, null, i, 0);
@@ -102,7 +120,6 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             var player = onlineServer.Main.player[whoAmI];
             onlineServer.NetMessage.TrySendData(MessageID.PlayerActive, -1, whoAmI, null, whoAmI);
             onlineServer.NetMessage.TrySendData(MessageID.SyncPlayer, -1, whoAmI, null, whoAmI);
-            onlineServer.NetMessage.TrySendData(68, -1, whoAmI, null, whoAmI);
             onlineServer.NetMessage.TrySendData(MessageID.PlayerLifeMana, -1, whoAmI, null, whoAmI);
             onlineServer.NetMessage.TrySendData(42, -1, whoAmI, null, whoAmI);
             onlineServer.NetMessage.TrySendData(MessageID.PlayerBuffs, -1, whoAmI, null, whoAmI);

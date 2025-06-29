@@ -13,7 +13,10 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         public int ListenPort { get; private set; }
         public static readonly RemoteClient[] globalClients = new RemoteClient[256];
         public static readonly MessageBuffer[] globalMsgBuffers = new MessageBuffer[257];
-        public readonly ServerContext[] clientCurrentlyServers = new ServerContext[256];
+        readonly ServerContext[] clientCurrentlyServers = new ServerContext[256];
+        public ServerContext GetClientCurrentlyServer(int clientIndex) => Volatile.Read(ref clientCurrentlyServers[clientIndex]);
+        public void SetClientCurrentlyServer(int clientIndex, ServerContext server) => Volatile.Write(ref clientCurrentlyServers[clientIndex], server);
+
         static Router() {
             for (int i = 0; i < 256; i++) {
                 globalClients[i] = new RemoteClient() {
@@ -50,13 +53,13 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         }
 
         private bool NetMessageSystemContext_CheckCanSend(On.Terraria.NetMessageSystemContext.orig_CheckCanSend orig, NetMessageSystemContext self, int clientIndex) {
-            return clientCurrentlyServers[clientIndex] == self.root && globalClients[clientIndex].IsConnected();
+            return GetClientCurrentlyServer(clientIndex) == self.root && globalClients[clientIndex].IsConnected();
         }
 
         private void UpdateServerInMainThread(On.Terraria.NetplaySystemContext.orig_mfwh_UpdateServerInMainThread orig, NetplaySystemContext self) {
             var server = self.root;
             for (int i = 0; i < 256; i++) {
-                if (server != clientCurrentlyServers[i]) {
+                if (server != GetClientCurrentlyServer(i)) {
                     continue;
                 }
                 if (server.NetMessage.buffer[i].checkBytes) {
@@ -93,7 +96,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                             unreadLength -= packetLength;
                             readPosition += packetLength;
 
-                            if (clientCurrentlyServers[clientIndex] != server) {
+                            if (GetClientCurrentlyServer(clientIndex) != server) {
                                 // If there is unprocessed data remaining, copy it to the beginning of the buffer for the next processing round.
                                 // Update buffer.totalData with the remaining byte count to prevent reprocessing of this data.
                                 for (int i = 0; i < unreadLength; i++) {
@@ -158,7 +161,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             try {
                 for (int i = 0; i < 256; i++) {
                     var client = globalClients[i];
-                    var server = clientCurrentlyServers[i];
+                    var server = GetClientCurrentlyServer(i);
 
                     if (client.PendingTermination) {
                         if (client.PendingTerminationApproved) {
@@ -171,7 +174,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                                 server.Player.Hooks.PlayerDisconnect(i);
                             }
 
-                            clientCurrentlyServers[i] = main;
+                            SetClientCurrentlyServer(i, main);
                         }
                         continue;
                     }
@@ -283,7 +286,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         void OnConnectionAccepted(ISocket client) {
             int id = FindNextEmptyClientSlot();
             if (id != -1) {
-                clientCurrentlyServers[id] = main;
+                SetClientCurrentlyServer(id, main);
                 globalClients[id].Reset(main);
                 globalClients[id].Socket = client;
             }
@@ -307,7 +310,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         }
 
         public void ServerWarp(byte plr, ServerContext to) {
-            var from = clientCurrentlyServers[plr];
+            var from = GetClientCurrentlyServer(plr);
 
             if (from == to) {
                 return;
@@ -331,7 +334,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 inactivePlayer.active = false;
                 activePlayer.active = true;
 
-                clientCurrentlyServers[plr] = to;
+                SetClientCurrentlyServer(plr, to);
                 client.ResetSections(to);
 
                 SyncHelper.SyncServerOnlineToPlayer(to, plr);
