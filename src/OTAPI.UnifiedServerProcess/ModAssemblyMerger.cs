@@ -306,9 +306,11 @@ namespace OTAPI.UnifiedServerProcess
         }
 
         static void AdjustInterfaces(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {
-            mappedType.Interfaces.Clear();
-            for (int i = 0; i < type.Interfaces.Count; i++) {
-                var interfImpl = type.Interfaces[i];
+            foreach (var interfImpl in type.Interfaces) {
+                var old = mappedType.Interfaces.FirstOrDefault(t => t.InterfaceType.FullName == interfImpl.InterfaceType.FullName);
+                if (old is not null) {
+                    mappedType.Interfaces.Remove(old);
+                }
                 AdjustMemberAttributes(target, mod, interfImpl.CustomAttributes);
                 var mappedInterfType = interfImpl.InterfaceType;
                 if (RedirectTypeRef(target, mod, ref mappedInterfType)) {

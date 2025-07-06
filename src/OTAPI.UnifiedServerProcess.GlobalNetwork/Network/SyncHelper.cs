@@ -107,17 +107,12 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             null, plr);
         }
         public static void SyncServerOfflineToPlayer(ServerContext offlineServer, int plr) {
-            byte[] data = [6, 0, MessageID.ItemOwner, default, default, 255];
             for (int i = 0; i < Terraria.Main.maxItems; i++) {
                 var item = offlineServer.Main.item[i];
                 if (!item.active || item.playerIndexTheItemIsReservedFor != plr) {
                     continue;
                 }
-                short itemSlot = (short)i;
-                data[3] = (byte)(itemSlot & 0xFF);
-                data[4] = (byte)(itemSlot >> 8);
-                SendRawData(offlineServer, plr, data, 0, 6);
-                SendSmallPacket(offlineServer, plr, new ItemOwner())
+                SendSmallPacket(offlineServer, plr, new ItemOwner((short)i, 255));
             }
             for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
                 var proj = offlineServer.Main.projectile[i];

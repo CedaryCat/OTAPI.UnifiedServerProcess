@@ -1,54 +1,20 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net9.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>preview</LangVersion>
-  </PropertyGroup>
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net9.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<LangVersion>preview</LangVersion>
+	</PropertyGroup>
 
 	<ItemGroup>
-		<Reference Include="ModFramework">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\ModFramework.dll</HintPath>
-		</Reference>
-		<Reference Include="Mono.Cecil">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.dll</HintPath>
-		</Reference>
-		<Reference Include="Mono.Cecil.Mdb">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.Mdb.dll</HintPath>
-		</Reference>
-		<Reference Include="Mono.Cecil.Pdb">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.Pdb.dll</HintPath>
-		</Reference>
-		<Reference Include="Mono.Cecil.Rocks">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\Mono.Cecil.Rocks.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod.Backports">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Backports.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod.Core">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Core.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod.Iced">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Iced.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod.ILHelpers">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.ILHelpers.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod.RuntimeDetour">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.RuntimeDetour.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod.RuntimeDetour.HookGen">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.RuntimeDetour.HookGen.dll</HintPath>
-		</Reference>
-		<Reference Include="MonoMod.Utils">
-			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\MonoMod.Utils.dll</HintPath>
-		</Reference>
+		<PackageReference Include="MonoMod.RuntimeDetour" Version="25.2.3" />
+		<PackageReference Include="MonoMod.RuntimeDetour.HookGen" Version="22.7.31.1" />
+		<PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.15" />
+	</ItemGroup>
+	<ItemGroup>
 		<Reference Include="OTAPI">
 			<HintPath>..\OTAPI.UnifiedServerProcess\bin\Debug\net9.0\output\OTAPI.dll</HintPath>
 		</Reference>
@@ -57,23 +23,23 @@
 		</Reference>
 	</ItemGroup>
 
-  <ItemGroup>
-    <Compile Update="TestWorlds.Designer.cs">
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-      <DependentUpon>TestWorlds.resx</DependentUpon>
-    </Compile>
-  </ItemGroup>
+	<ItemGroup>
+		<Compile Update="TestWorlds.Designer.cs">
+			<DesignTime>True</DesignTime>
+			<AutoGen>True</AutoGen>
+			<DependentUpon>TestWorlds.resx</DependentUpon>
+		</Compile>
+	</ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Update="TestWorlds.resx">
-      <Generator>ResXFileCodeGenerator</Generator>
-      <LastGenOutput>TestWorlds.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-  </ItemGroup>
+	<ItemGroup>
+		<EmbeddedResource Update="TestWorlds.resx">
+			<Generator>ResXFileCodeGenerator</Generator>
+			<LastGenOutput>TestWorlds.Designer.cs</LastGenOutput>
+		</EmbeddedResource>
+	</ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\OTAPI.UnifiedServerProcess.ConsoleClient\OTAPI.UnifiedServerProcess.ConsoleClient.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\OTAPI.UnifiedServerProcess.ConsoleClient\OTAPI.UnifiedServerProcess.ConsoleClient.csproj" />
+	</ItemGroup>
 
 </Project>
