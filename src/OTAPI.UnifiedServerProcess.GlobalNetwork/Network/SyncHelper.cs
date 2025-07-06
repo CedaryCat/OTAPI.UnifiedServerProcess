@@ -1,8 +1,12 @@
 ﻿using Microsoft.Xna.Framework;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
+using System.Runtime.CompilerServices;
 using Terraria;
 using Terraria.ID;
 using Terraria.Localization;
+using TrProtocol;
+using TrProtocol.NetPackets;
+using MessageID = Terraria.ID.MessageID;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 {
@@ -79,10 +83,26 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
         #endregion
 
         #region Sync Server Offline To Player
-        static void SendRawData(ServerContext offlineServer, int plr, byte[] data, int offset, int count) {
-            var client = offlineServer.Netplay.Clients[plr];
-            offlineServer.Hooks.NetMessage.InvokeSendBytes(client.Socket, data, offset, count, delegate (object state) {
-                client.ServerWriteCallBack(offlineServer, state);
+        static void SendRawData(ServerContext server, int plr, byte[] data, int offset, int count) {
+            var client = server.Netplay.Clients[plr];
+            server.Hooks.NetMessage.InvokeSendBytes(client.Socket, data, offset, count, delegate (object state) {
+                client.ServerWriteCallBack(server, state);
+            },
+            null, plr);
+        }
+        static unsafe void SendSmallPacket<TPacket>(ServerContext server, int plr, TPacket packet) where TPacket : unmanaged, INetPacket { 
+            var client = server.Netplay.Clients[plr];
+            short size = (short)(sizeof(TPacket) + 4);
+            var bufferArray = new byte[size];
+            fixed (byte* buffer = bufferArray) {
+                void* ptr = buffer + 2;
+                packet.WriteContent(ref ptr);
+                size = (short)((byte*)ptr - buffer);
+                Unsafe.Write(buffer, size);
+            }
+
+            server.Hooks.NetMessage.InvokeSendBytes(client.Socket, bufferArray, 0, size, delegate (object state) {
+                client.ServerWriteCallBack(server, state);
             },
             null, plr);
         }
@@ -97,6 +117,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 data[3] = (byte)(itemSlot & 0xFF);
                 data[4] = (byte)(itemSlot >> 8);
                 SendRawData(offlineServer, plr, data, 0, 6);
+                SendSmallPacket(offlineServer, plr, new ItemOwner())
             }
             for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
                 var proj = offlineServer.Main.projectile[i];

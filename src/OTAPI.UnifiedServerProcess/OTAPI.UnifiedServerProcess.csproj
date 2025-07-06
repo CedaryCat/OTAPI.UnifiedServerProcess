@@ -22,6 +22,10 @@
 	  <Folder Include="Core\Analysis\DataModels\CSharp\" />
 	</ItemGroup>
 
+	<ItemGroup>
+	  <ProjectReference Include="..\..\..\UnifierServerProcess.TrProtocol\src\UnifierServerProcess.TrProtocol\src\TrProtocol\TrProtocol.csproj" />
+	</ItemGroup>
+
 	<Target Name="PreBuild" BeforeTargets="PreBuildEvent">
 		<ItemGroup>
 			<Compile Remove="@(Mods)" />

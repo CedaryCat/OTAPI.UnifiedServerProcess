@@ -1,0 +1,45 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MSBuildAllProjects Condition="'$(MSBuildVersion)' == '' Or '$(MSBuildVersion)' &lt; '16.0'">$(MSBuildAllProjects);$(MSBuildThisFileFullPath)</MSBuildAllProjects>
+    <HasSharedItems>true</HasSharedItems>
+    <SharedGUID>768417b4-d342-4006-b196-5f7178582209</SharedGUID>
+  </PropertyGroup>
+  <PropertyGroup Label="Configuration">
+    <Import_RootNamespace>TrProtocol.Shared</Import_RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ArraySizeAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\C2SOnlyAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\CompressAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionArrayAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionEqualAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionGreaterThanAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionIgnoreSerializeAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionLessThanAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionLookupMatchAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionNotEqualAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExternalMemberAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExternalMemberValueSetterAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\IgnoreSerializeAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ImplementationClaimAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\InitDefaultValueAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\InitNullableAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\PolymorphicBaseAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\S2COnlyAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\SerializeAsAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Exceptions\UnknownDiscriminatorException.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IAutoSerializable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IBinarySerializable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IExtraData.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\ILengthAware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IPackedSerializable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IRepeatElement.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\ISerializableView.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\ISideSpecific.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)MessageID.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Models\BitsByte.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)NetPacket.cs" />
+  </ItemGroup>
+</Project>

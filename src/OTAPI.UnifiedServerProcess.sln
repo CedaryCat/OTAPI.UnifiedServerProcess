@@ -10,6 +10,12 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OTAPI.UnifiedServerProcess.
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OTAPI.UnifiedServerProcess.ConsoleClient", "OTAPI.UnifiedServerProcess.ConsoleClient\OTAPI.UnifiedServerProcess.ConsoleClient.csproj", "{5BFD176F-57B3-711D-14AE-097425D79738}"
 EndProject
+Project("{D954291E-2A0B-460D-934E-DC6B0785DB48}") = "TrProtocol.Shared", "..\..\UnifierServerProcess.TrProtocol\src\UnifierServerProcess.TrProtocol\src\TrProtocol.Shared\TrProtocol.Shared.shproj", "{768417B4-D342-4006-B196-5F7178582209}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrProtocol.SerializerGenerator", "..\..\UnifierServerProcess.TrProtocol\src\UnifierServerProcess.TrProtocol\src\TrProtocol.SerializerGenerator\TrProtocol.SerializerGenerator.csproj", "{524A7425-4B98-A45A-4CD0-52AEFA5B7FA2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TrProtocol", "..\..\UnifierServerProcess.TrProtocol\src\UnifierServerProcess.TrProtocol\src\TrProtocol\TrProtocol.csproj", "{6874627A-27F0-ABDA-5AF1-11D28225FD1B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -32,11 +38,24 @@ Global
 		{5BFD176F-57B3-711D-14AE-097425D79738}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5BFD176F-57B3-711D-14AE-097425D79738}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{5BFD176F-57B3-711D-14AE-097425D79738}.Release|Any CPU.Build.0 = Release|Any CPU
+		{524A7425-4B98-A45A-4CD0-52AEFA5B7FA2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{524A7425-4B98-A45A-4CD0-52AEFA5B7FA2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{524A7425-4B98-A45A-4CD0-52AEFA5B7FA2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{524A7425-4B98-A45A-4CD0-52AEFA5B7FA2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6874627A-27F0-ABDA-5AF1-11D28225FD1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6874627A-27F0-ABDA-5AF1-11D28225FD1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6874627A-27F0-ABDA-5AF1-11D28225FD1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6874627A-27F0-ABDA-5AF1-11D28225FD1B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A7CFB05D-AB46-4256-92A6-C8723719BBD5}
+	EndGlobalSection
+	GlobalSection(SharedMSBuildProjectFiles) = preSolution
+		..\..\UnifierServerProcess.TrProtocol\src\UnifierServerProcess.TrProtocol\src\TrProtocol.Shared\TrProtocol.Shared.projitems*{524a7425-4b98-a45a-4cd0-52aefa5b7fa2}*SharedItemsImports = 5
+		..\..\UnifierServerProcess.TrProtocol\src\UnifierServerProcess.TrProtocol\src\TrProtocol.Shared\TrProtocol.Shared.projitems*{6874627a-27f0-abda-5af1-11d28225fd1b}*SharedItemsImports = 5
+		..\..\UnifierServerProcess.TrProtocol\src\UnifierServerProcess.TrProtocol\src\TrProtocol.Shared\TrProtocol.Shared.projitems*{768417b4-d342-4006-b196-5f7178582209}*SharedItemsImports = 13
 	EndGlobalSection
 EndGlobal

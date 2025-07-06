@@ -79,9 +79,6 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 }
                 foreach (var inst in currentCheck.Body.Instructions) {
                     if (inst.Operand is FieldReference field) {
-                        if (field.Name == "recipe") {
-
-                        }
                         if (field.FieldType.FullName == Constants.RootContextFullName) {
                             return CacheReturn(true, useCache, methodId);
                         }
@@ -116,7 +113,13 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                     if (inst.OpCode == OpCodes.Ldftn || inst.OpCode == OpCodes.Ldvirtftn) {
                         var methodRef = (MethodReference)inst.Operand;
                         if (methodRef.DeclaringType.Name == "<>c") {
-                            worklist.Push(methodRef.Resolve());
+                            var mDef = methodRef.Resolve();
+                            if (mDef is not null) {
+                                worklist.Push(mDef);
+                            }
+                            else {
+                                var md = new MetadataResolver(checkMethod.Module.AssemblyResolver).Resolve(methodRef);
+                            }
                         }
                         else if (inheritanceGraph.CheckedMethodImplementationChains.TryGetValue(methodRef.GetIdentifier(), out var implMethods)) {
                             foreach (var implMethod in implMethods) {

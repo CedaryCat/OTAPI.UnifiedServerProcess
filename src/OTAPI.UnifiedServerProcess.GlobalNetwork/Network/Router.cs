@@ -221,8 +221,14 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             if (isListening || !main.IsRunning || GetClientSpace() <= 0) {
                 return;
             }
-            isListening = true;
-            listener.Start();
+            try {
+                isListening = true;
+                listener.Start();
+            }
+            catch {
+                isListening = false;
+                return;
+            }
             Task.Run(ListenLoop);
             Task.Run(LaunchBroadcast);
         }

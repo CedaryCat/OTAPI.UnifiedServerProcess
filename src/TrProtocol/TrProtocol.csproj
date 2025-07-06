@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+	<LangVersion>12.0</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyVersion>1.1.0.0</AssemblyVersion>
+    <FileVersion>1.1.0.0</FileVersion>
+	<Version>1.1.0</Version>
+	<PackageReleaseNotes>Initial 1.4.4.9 support</PackageReleaseNotes>
+	<PackageLicenseFile>COPYING.txt</PackageLicenseFile>
+	<PackageRequireLicenseAcceptance>True</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\TrProtocol.SerializerGenerator\TrProtocol.SerializerGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" PrivateAssets="All" />
+	</ItemGroup>
+
+	<Import Project="..\TrProtocol.Shared\TrProtocol.Shared.projitems" Label="Shared" />
+
+</Project>

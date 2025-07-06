@@ -676,16 +676,25 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 return true;
                             }
                         }
-                        if (inst.OpCode == OpCodes.Call) {
+                        else if (inst.OpCode == OpCodes.Call) {
                             var resolvedCallee = ((MethodReference)inst.Operand).TryResolve();
-                            if (resolvedCallee is not null
-                                && resolvedCallee.IsStatic
-                                && !resolvedCallee.IsConstructor
-                                && resolvedCallee.ReturnType.FullName == source.MainModule.TypeSystem.Void.FullName) {
-                                if (visited.Add(resolvedCallee.GetIdentifier())) {
-                                    stack.Push(resolvedCallee);
-                                }
+
+                            if (resolvedCallee is null
+                                || !resolvedCallee.IsStatic
+                                || resolvedCallee.IsConstructor
+                                || resolvedCallee.ReturnType.FullName != source.MainModule.TypeSystem.Void.FullName) {
+                                continue;
                             }
+
+                            if (!resolvedCallee.HasBody || resolvedCallee.Module.Name != method.Module.Name) {
+                                continue;
+                            }
+
+                            if (!visited.Add(resolvedCallee.GetIdentifier())) {
+                                continue;
+                            }
+
+                            stack.Push(resolvedCallee);
                         }
                     }
                 }
