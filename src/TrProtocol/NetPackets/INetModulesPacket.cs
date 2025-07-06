@@ -6,7 +6,7 @@ namespace TrProtocol.NetPackets {
 
     [PolymorphicBase(typeof(NetModuleType), nameof(ModuleType))]
     [ImplementationClaim(MessageID.NetModules)]
-    public partial interface NetModulesPacket : INetPacket, IAutoSerializable {
+    public partial interface INetModulesPacket : INetPacket, IAutoSerializable {
         public abstract NetModuleType ModuleType { get; }
     }
 }

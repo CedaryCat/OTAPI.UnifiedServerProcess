@@ -6,7 +6,7 @@ using Terraria.Localization;
 using System.Runtime.InteropServices;
 
 namespace TrProtocol.NetPackets.Modules {
-    public partial struct NetTextModule : NetModulesPacket, ISideSpecific
+    public partial struct NetTextModule : INetModulesPacket, ISideSpecific
     {
         public readonly NetModuleType ModuleType => NetModuleType.NetTextModule;
         [C2SOnly]

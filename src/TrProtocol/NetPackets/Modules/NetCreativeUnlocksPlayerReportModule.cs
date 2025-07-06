@@ -2,7 +2,7 @@
 
 namespace TrProtocol.NetPackets.Modules;
 
-public partial struct NetCreativeUnlocksPlayerReportModule : NetModulesPacket
+public partial struct NetCreativeUnlocksPlayerReportModule : INetModulesPacket
 {
     public readonly NetModuleType ModuleType => NetModuleType.NetCreativeUnlocksPlayerReportModule;
     public byte AlwaysZero = 0;

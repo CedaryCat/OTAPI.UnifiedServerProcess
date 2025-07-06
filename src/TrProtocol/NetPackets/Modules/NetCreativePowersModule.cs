@@ -3,7 +3,7 @@ using TrProtocol.Models;
 
 namespace TrProtocol.NetPackets.Modules;
 
-public partial struct NetCreativePowersModule : NetModulesPacket, IExtraData
+public partial struct NetCreativePowersModule : INetModulesPacket, IExtraData
 {
     public readonly NetModuleType ModuleType => NetModuleType.NetCreativePowersModule;
     public CreativePowerTypes PowerType;

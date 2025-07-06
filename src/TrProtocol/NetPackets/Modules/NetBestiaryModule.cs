@@ -3,7 +3,7 @@ using TrProtocol.Models;
 using Terraria.GameContent.NetModules;
 
 namespace TrProtocol.NetPackets.Modules;
-public partial struct NetBestiaryModule : NetModulesPacket
+public partial struct NetBestiaryModule : INetModulesPacket
 {
     public readonly NetModuleType ModuleType => NetModuleType.NetBestiaryModule;
     public NetBestiaryModule_BestiaryUnlockType UnlockType;

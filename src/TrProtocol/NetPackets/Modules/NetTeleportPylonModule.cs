@@ -5,7 +5,7 @@ using Terraria.GameContent.NetModules;
 
 namespace TrProtocol.NetPackets.Modules;
 
-public partial struct NetTeleportPylonModule : NetModulesPacket
+public partial struct NetTeleportPylonModule : INetModulesPacket
 {
     public readonly NetModuleType ModuleType => NetModuleType.NetTeleportPylonModule;
     public NetTeleportPylonModule_SubPacketType PylonPacketType { get; set; }

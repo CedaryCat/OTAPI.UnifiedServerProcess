@@ -4,7 +4,7 @@ using Terraria.GameContent.Ambience;
 
 namespace TrProtocol.NetPackets.Modules;
 
-public partial struct NetAmbienceModule : NetModulesPacket, IPlayerSlot
+public partial struct NetAmbienceModule : INetModulesPacket, IPlayerSlot
 {
     public readonly NetModuleType ModuleType => NetModuleType.NetAmbienceModule;
     public byte PlayerSlot { get; set; }
