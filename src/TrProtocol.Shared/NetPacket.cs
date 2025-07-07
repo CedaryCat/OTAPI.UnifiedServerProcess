@@ -1,4 +1,6 @@
-﻿namespace TrProtocol {
-    public partial interface INetPacket {
+﻿namespace TrProtocol
+{
+    public partial interface INetPacket
+    {
     }
 }

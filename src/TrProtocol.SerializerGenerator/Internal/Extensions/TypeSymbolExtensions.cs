@@ -1,9 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using TrProtocol.Attributes;
-using TrProtocol.SerializerGenerator;
 using TrProtocol.SerializerGenerator.Internal.Models;
 
 namespace TrProtocol.SerializerGenerator.Internal.Extensions
@@ -86,7 +83,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Extensions
             };
         }
         public static bool IsNumber(this ITypeSymbol type, bool includeEnum = false) {
-            if (includeEnum && type.TypeKind == TypeKind.Enum) { 
+            if (includeEnum && type.TypeKind == TypeKind.Enum) {
                 return true;
             }
             return type.Name switch {

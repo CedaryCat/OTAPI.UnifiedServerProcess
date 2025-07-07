@@ -718,7 +718,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 if (!UsedStaticField(resolvedCallee)) {
                     continue;
                 }
-                
+
 
                 HashSet<Instruction> tmp = [];
                 ExtractSources(this, method, tmp, inst);

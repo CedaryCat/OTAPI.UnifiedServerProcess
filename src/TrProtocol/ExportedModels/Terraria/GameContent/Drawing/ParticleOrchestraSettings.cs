@@ -1,8 +1,8 @@
-﻿using TrProtocol.Attributes;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 
 namespace Terraria.GameContent.Drawing;
-public struct ParticleOrchestraSettings {
+public struct ParticleOrchestraSettings
+{
     public Vector2 PositionInWorld;
 
     public Vector2 MovementVector;

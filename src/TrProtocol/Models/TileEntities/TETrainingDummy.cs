@@ -1,9 +1,10 @@
-﻿using TrProtocol.Attributes;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.Models.TileEntities;
 
-public partial class TETrainingDummy : TileEntity {
+public partial class TETrainingDummy : TileEntity
+{
     public sealed override TileEntityType EntityType => TileEntityType.TETrainingDummy;
     [ExternalMember]
     [IgnoreSerialize]

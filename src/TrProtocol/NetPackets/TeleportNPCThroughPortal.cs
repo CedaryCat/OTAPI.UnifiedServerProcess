@@ -1,9 +1,10 @@
-﻿using TrProtocol.Models.Interfaces;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct TeleportNPCThroughPortal : INetPacket, INPCSlot {
+public partial struct TeleportNPCThroughPortal : INetPacket, INPCSlot
+{
     public readonly MessageID Type => MessageID.TeleportNPCThroughPortal;
     public short NPCSlot { get; set; }
     public ushort Extra;

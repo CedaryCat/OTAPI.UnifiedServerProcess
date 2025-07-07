@@ -2,7 +2,8 @@
 
 namespace TrProtocol.NetPackets;
 
-public partial struct UpdatePlayerLuckFactors : INetPacket, IPlayerSlot {
+public partial struct UpdatePlayerLuckFactors : INetPacket, IPlayerSlot
+{
     public readonly MessageID Type => MessageID.UpdatePlayerLuckFactors;
     public byte PlayerSlot { get; set; }
     public int LadyBugTime;

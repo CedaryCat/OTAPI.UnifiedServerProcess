@@ -1,6 +1,6 @@
-﻿using TrProtocol.Attributes;
+﻿using Terraria.GameContent.NetModules;
+using TrProtocol.Attributes;
 using TrProtocol.Models;
-using Terraria.GameContent.NetModules;
 
 namespace TrProtocol.NetPackets.Modules;
 public partial struct NetBestiaryModule : INetModulesPacket

@@ -1,5 +1,5 @@
-﻿using TrProtocol.Models;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
+using TrProtocol.Models;
 
 namespace TrProtocol.NetPackets.Modules;
 

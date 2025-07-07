@@ -1,7 +1,7 @@
-﻿using TrProtocol.Models;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
 using Terraria.GameContent;
 using Terraria.GameContent.NetModules;
+using TrProtocol.Models;
 
 namespace TrProtocol.NetPackets.Modules;
 

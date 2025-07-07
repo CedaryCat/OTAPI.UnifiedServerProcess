@@ -1,10 +1,11 @@
-﻿using TrProtocol.Attributes;
-using Terraria;
+﻿using Terraria;
 using Terraria.DataStructures;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.Models.TileEntities;
 
-public partial class TEHatRack : TileEntity {
+public partial class TEHatRack : TileEntity
+{
     public sealed override TileEntityType EntityType => TileEntityType.TEHatRack;
     [ExternalMember]
     [IgnoreSerialize]

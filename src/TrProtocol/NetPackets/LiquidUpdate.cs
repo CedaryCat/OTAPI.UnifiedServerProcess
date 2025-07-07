@@ -1,6 +1,7 @@
 ﻿namespace TrProtocol.NetPackets;
 
-public partial struct LiquidUpdate : INetPacket {
+public partial struct LiquidUpdate : INetPacket
+{
     public readonly MessageID Type => MessageID.LiquidUpdate;
     public short TileX;
     public short TileY;

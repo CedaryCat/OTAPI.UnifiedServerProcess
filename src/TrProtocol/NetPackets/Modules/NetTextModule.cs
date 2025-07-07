@@ -1,11 +1,11 @@
-﻿using TrProtocol.Attributes;
+﻿using Microsoft.Xna.Framework;
+using Terraria.Localization;
+using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 using TrProtocol.Models;
-using Microsoft.Xna.Framework;
-using Terraria.Localization;
-using System.Runtime.InteropServices;
 
-namespace TrProtocol.NetPackets.Modules {
+namespace TrProtocol.NetPackets.Modules
+{
     public partial struct NetTextModule : INetModulesPacket, ISideSpecific
     {
         public readonly NetModuleType ModuleType => NetModuleType.NetTextModule;
@@ -25,11 +25,13 @@ namespace TrProtocol.NetPackets.Modules {
             }
         }
     }
-    public class TextC2S {
+    public class TextC2S
+    {
         public string? Command;
         public string? Text;
     }
-    public class TextS2C {
+    public class TextS2C
+    {
         public byte PlayerSlot;
         public NetworkText? Text;
         public Color Color;

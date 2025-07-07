@@ -1,5 +1,7 @@
-﻿namespace TrProtocol.Models {
-    public enum TileEntityType : byte {
+﻿namespace TrProtocol.Models
+{
+    public enum TileEntityType : byte
+    {
         TETrainingDummy = 0,
         TEItemFrame = 1,
         TELogicSensor = 2,

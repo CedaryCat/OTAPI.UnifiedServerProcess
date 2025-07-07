@@ -1,7 +1,9 @@
-﻿namespace TrProtocol.Attributes {
+﻿namespace TrProtocol.Attributes
+{
 
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public class ConditionEqualAttribute : Attribute {
+    public class ConditionEqualAttribute : Attribute
+    {
         public readonly string fieldOrProperty;
         public readonly int pred;
         public ConditionEqualAttribute(string fieldOrProperty, int pred) {

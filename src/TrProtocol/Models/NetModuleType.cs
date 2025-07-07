@@ -1,6 +1,7 @@
 ﻿namespace TrProtocol.Models;
 
-public enum NetModuleType : short {
+public enum NetModuleType : short
+{
     NetLiquidModule = 0,
     NetTextModule = 1,
     NetPingModule = 2,

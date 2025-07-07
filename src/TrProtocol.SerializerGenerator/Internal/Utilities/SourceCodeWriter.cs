@@ -1,8 +1,4 @@
-﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Text;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Text;
 
 namespace TrProtocol.SerializerGenerator.Internal.Utilities
 {
@@ -44,7 +40,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Utilities
             WriteNode(CompileUnit);
             return _writer.ToString();
         }
-        
+
         private void WriteNode(SourceNode node) {
             if (node is AppendTextNode append) {
                 if (_nextLine) {
@@ -64,7 +60,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Utilities
                 }
                 _nextLine = true;
             }
-            else if(node is SourceGroup group) {
+            else if (node is SourceGroup group) {
                 if (group is BlockNode b) {
                     WriteNode(new NewLineTextNode("{", b.Parent));
                     _indent++;
@@ -117,7 +113,8 @@ namespace TrProtocol.SerializerGenerator.Internal.Utilities
     {
         public SourceGroup Parent { get; }
     }
-    public abstract class SourceNode {
+    public abstract class SourceNode
+    {
     }
     public class AppendTextNode : SourceNode, IChildNode
     {

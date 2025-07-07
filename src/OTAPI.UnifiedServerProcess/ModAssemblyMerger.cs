@@ -3,7 +3,6 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using Mono.Collections.Generic;
-using Mono.CompilerServices.SymbolWriter;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
@@ -39,7 +38,7 @@ namespace OTAPI.UnifiedServerProcess
                         modder.PrePatchModule(mod);
                         modder.PatchModule(mod);
                         modderTypes = module.GetAllTypes().ToDictionary(x => x.FullName, x => x);
-                        
+
                         foreach (var type in mod.GetAllTypes()) {
                             var mappedType = module.GetType(type.FullName) ?? throw new NotSupportedException();
                             AdjustTypeInfo(module, mod, type, mappedType);
@@ -54,9 +53,10 @@ namespace OTAPI.UnifiedServerProcess
         }
 
         private static void AdjustTypeInfo(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {
-            if (mappedType.DeclaringType is not null && mappedType.DeclaringType.Name == "<PrivateImplementationDetails>") {
-                mappedType.Attributes = TypeAttributes.NestedPrivate | TypeAttributes.ExplicitLayout | TypeAttributes.Sealed;
-            }
+            mappedType.Attributes = type.Attributes;
+            //if (mappedType.DeclaringType is not null && mappedType.DeclaringType.Name == "<PrivateImplementationDetails>") {
+            //    mappedType.Attributes = TypeAttributes.NestedPrivate | TypeAttributes.ExplicitLayout | TypeAttributes.Sealed;
+            //}
             if (mappedType.IsStruct()) {
                 mappedType.ClassSize = type.ClassSize;
                 mappedType.PackingSize = type.PackingSize;
@@ -103,7 +103,7 @@ namespace OTAPI.UnifiedServerProcess
                 }
                 AdjustMemberAttributes(target, mod, property.CustomAttributes);
             }
-            foreach (var eventDef in mappedType.Events.ToArray()) { 
+            foreach (var eventDef in mappedType.Events.ToArray()) {
                 var eventType = eventDef.EventType;
                 if (RedirectTypeRef(target, mod, ref eventType)) {
                     eventDef.EventType = eventType;
@@ -123,7 +123,7 @@ namespace OTAPI.UnifiedServerProcess
                     }
                     AdjustMemberAttributes(target, mod, param.CustomAttributes);
                 }
-                foreach (var genericParam in method.GenericParameters) { 
+                foreach (var genericParam in method.GenericParameters) {
                     foreach (var constraint in genericParam.Constraints) {
                         var constraintType = constraint.ConstraintType;
                         if (RedirectTypeRef(target, mod, ref constraintType)) {
@@ -223,7 +223,7 @@ namespace OTAPI.UnifiedServerProcess
                         var returnType = callSite.ReturnType;
                         RedirectTypeRef(target, mod, ref returnType);
                         callSite.ReturnType = returnType;
-                        foreach (var arg in callSite.Parameters) { 
+                        foreach (var arg in callSite.Parameters) {
                             var argType = arg.ParameterType;
                             RedirectTypeRef(target, mod, ref argType);
                             arg.ParameterType = argType;
@@ -272,7 +272,7 @@ namespace OTAPI.UnifiedServerProcess
         }
         static void SetModTypePlaceholder(ModuleDefinition module, Dictionary<string, TypeDefinition> uspTypes, TypeDefinition modType, TypeDefinition? declaringType) {
             if (!uspTypes.TryGetValue(modType.FullName, out var target)) {
-                target = new TypeDefinition(modType.Namespace, modType.Name, modType.Attributes, modType.BaseType) { 
+                target = new TypeDefinition(modType.Namespace, modType.Name, modType.Attributes, modType.BaseType) {
                     Attributes = modType.Attributes,
                 };
                 if (declaringType is not null) {
@@ -324,7 +324,7 @@ namespace OTAPI.UnifiedServerProcess
             attributes.Clear();
             foreach (var attr in array) {
                 var mappedAttr = MapCustomAttribute(target, mod, attr);
-                if (mappedAttr != null) { 
+                if (mappedAttr != null) {
                     attributes.Add(mappedAttr);
                 }
             }

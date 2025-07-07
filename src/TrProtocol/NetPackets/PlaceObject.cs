@@ -2,7 +2,8 @@
 
 namespace TrProtocol.NetPackets;
 
-public partial struct PlaceObject : INetPacket {
+public partial struct PlaceObject : INetPacket
+{
     public readonly MessageID Type => MessageID.PlaceObject;
     public Point16 Position;
     public short ObjectType;

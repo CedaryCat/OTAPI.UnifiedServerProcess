@@ -1,6 +1,6 @@
-﻿using TrProtocol.Models;
+﻿using Terraria.GameContent.Ambience;
+using TrProtocol.Models;
 using TrProtocol.Models.Interfaces;
-using Terraria.GameContent.Ambience;
 
 namespace TrProtocol.NetPackets.Modules;
 

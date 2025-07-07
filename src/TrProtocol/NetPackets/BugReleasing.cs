@@ -2,7 +2,8 @@
 
 namespace TrProtocol.NetPackets;
 
-public partial struct BugReleasing : INetPacket {
+public partial struct BugReleasing : INetPacket
+{
     public readonly MessageID Type => MessageID.BugReleasing;
     public Point Position;
     public short NPCType;

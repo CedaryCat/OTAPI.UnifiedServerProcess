@@ -2,6 +2,7 @@
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SocialHandshake : INetPacket, IExtraData {
+public partial struct SocialHandshake : INetPacket, IExtraData
+{
     public readonly MessageID Type => MessageID.SocialHandshake;
 }

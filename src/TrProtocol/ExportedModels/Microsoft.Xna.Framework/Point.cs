@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 
 namespace Microsoft.Xna.Framework

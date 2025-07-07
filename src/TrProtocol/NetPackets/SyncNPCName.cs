@@ -5,7 +5,8 @@ using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncNPCName : INetPacket, INPCSlot, ISideSpecific {
+public partial struct SyncNPCName : INetPacket, INPCSlot, ISideSpecific
+{
     public readonly MessageID Type => MessageID.SyncNPCName;
     public short NPCSlot { get; set; }
     [S2COnly]

@@ -1,11 +1,12 @@
-﻿using TrProtocol.Attributes;
-using TrProtocol.Models.Interfaces;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Terraria;
+using TrProtocol.Attributes;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncProjectile : INetPacket, IProjSlot, IPlayerSlot {
+public partial struct SyncProjectile : INetPacket, IProjSlot, IPlayerSlot
+{
     public readonly MessageID Type => MessageID.SyncProjectile;
     public short ProjSlot { get; set; }
     public Vector2 Position;

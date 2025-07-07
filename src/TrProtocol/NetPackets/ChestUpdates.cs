@@ -1,9 +1,10 @@
-﻿using TrProtocol.Models.Interfaces;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct ChestUpdates : INetPacket, IChestSlot {
+public partial struct ChestUpdates : INetPacket, IChestSlot
+{
     public readonly MessageID Type => MessageID.ChestUpdates;
     public byte Operation;
     public Point16 Position;

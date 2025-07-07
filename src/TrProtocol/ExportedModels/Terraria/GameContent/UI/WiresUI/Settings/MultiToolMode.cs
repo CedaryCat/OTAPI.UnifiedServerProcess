@@ -1,7 +1,6 @@
-﻿using TrProtocol.Attributes;
-
-namespace Terraria.GameContent.UI.WiresUI.Settings;
-public enum MultiToolMode {
+﻿namespace Terraria.GameContent.UI.WiresUI.Settings;
+public enum MultiToolMode
+{
     Red = 1,
     Green = 2,
     Blue = 4,

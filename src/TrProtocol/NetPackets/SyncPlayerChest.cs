@@ -1,9 +1,10 @@
-﻿using TrProtocol.Attributes;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncPlayerChest : INetPacket {
+public partial struct SyncPlayerChest : INetPacket
+{
     public readonly MessageID Type => MessageID.SyncPlayerChest;
     public short Chest;
     public Point16 Position;

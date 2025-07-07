@@ -1,6 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Xml.Linq;
 using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 using TrProtocol.SerializerGenerator.Internal.Diagnostics;

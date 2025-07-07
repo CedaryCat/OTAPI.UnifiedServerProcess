@@ -1,5 +1,5 @@
-﻿using TrProtocol.SerializerGenerator.Internal.Utilities;
-using TrProtocol.SerializerGenerator.Internal.Models;
+﻿using TrProtocol.SerializerGenerator.Internal.Models;
+using TrProtocol.SerializerGenerator.Internal.Utilities;
 
 namespace TrProtocol.SerializerGenerator.Internal.SyntaxTemplates
 {

@@ -1,7 +1,9 @@
-﻿namespace TrProtocol.Attributes {
+﻿namespace TrProtocol.Attributes
+{
 
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public class ConditionLessThanAttribute : Attribute {
+    public class ConditionLessThanAttribute : Attribute
+    {
         public readonly string fieldOrProperty;
         public readonly int check;
         public ConditionLessThanAttribute(string fieldOrProperty, int check) {
@@ -9,7 +11,8 @@
             this.check = check;
         }
     }
-    public class ConditionLessThanEqualAttribute : Attribute {
+    public class ConditionLessThanEqualAttribute : Attribute
+    {
         public readonly string fieldOrProperty;
         public readonly int check;
         public ConditionLessThanEqualAttribute(string fieldOrProperty, int check) {

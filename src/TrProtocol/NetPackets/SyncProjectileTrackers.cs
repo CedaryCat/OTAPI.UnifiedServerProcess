@@ -3,7 +3,8 @@ using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncProjectileTrackers : INetPacket, IPlayerSlot {
+public partial struct SyncProjectileTrackers : INetPacket, IPlayerSlot
+{
     public readonly MessageID Type => MessageID.SyncProjectileTrackers;
     public byte PlayerSlot { get; set; }
 

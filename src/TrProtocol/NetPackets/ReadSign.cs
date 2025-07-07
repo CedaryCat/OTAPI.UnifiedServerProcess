@@ -1,9 +1,10 @@
-﻿using TrProtocol.Models.Interfaces;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct ReadSign : INetPacket, IPlayerSlot {
+public partial struct ReadSign : INetPacket, IPlayerSlot
+{
     public readonly MessageID Type => MessageID.ReadSign;
     public short SignSlot;
     public Point16 Position;

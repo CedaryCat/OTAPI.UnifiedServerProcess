@@ -1,5 +1,7 @@
-﻿namespace TrProtocol.NetPackets.Mobile {
-    public partial struct ServerInfo : INetPacket {
+﻿namespace TrProtocol.NetPackets.Mobile
+{
+    public partial struct ServerInfo : INetPacket
+    {
         public readonly MessageID Type => MessageID.ServerInfo;
         public int ListenPort;
         public string WorldName;

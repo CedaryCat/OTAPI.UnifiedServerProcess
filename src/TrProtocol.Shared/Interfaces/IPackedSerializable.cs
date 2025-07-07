@@ -1,4 +1,5 @@
-﻿namespace TrProtocol.Interfaces {
+﻿namespace TrProtocol.Interfaces
+{
     /// <summary>
     /// Marker interface for structs where auto layout is guaranteed to be identical to sequential layout with no padding.
     /// 
@@ -12,6 +13,7 @@
     /// 
     /// When in doubt, explicitly apply [StructLayout(LayoutKind.Sequential, Pack = 1)] to the struct.
     /// </summary>
-    public interface IPackedSerializable {
+    public interface IPackedSerializable
+    {
     }
 }

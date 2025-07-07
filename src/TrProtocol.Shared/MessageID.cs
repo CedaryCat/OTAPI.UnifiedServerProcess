@@ -1,5 +1,7 @@
-﻿namespace TrProtocol {
-    public enum MessageID : byte {
+﻿namespace TrProtocol
+{
+    public enum MessageID : byte
+    {
         NeverCalled = 0,
         ClientHello = 1,
         Kick = 2,

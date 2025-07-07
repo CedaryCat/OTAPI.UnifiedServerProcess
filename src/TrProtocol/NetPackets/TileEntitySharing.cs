@@ -3,7 +3,8 @@ using TrProtocol.Models.TileEntities;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct TileEntitySharing : INetPacket {
+public partial struct TileEntitySharing : INetPacket
+{
     public readonly MessageID Type => MessageID.TileEntitySharing;
     public int ID;
     public bool IsNew;

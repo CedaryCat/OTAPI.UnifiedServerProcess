@@ -1,4 +1,5 @@
-﻿namespace TrProtocol.NetPackets.Mobile {
+﻿namespace TrProtocol.NetPackets.Mobile
+{
     public enum Platform : byte // TypeDefIndex: 5205
     {
         None = 0,

@@ -1,10 +1,11 @@
-﻿using TrProtocol.Attributes;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Terraria;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct PlayLegacySound : INetPacket {
+public partial struct PlayLegacySound : INetPacket
+{
     public readonly MessageID Type => MessageID.PlayLegacySound;
     public Vector2 Point;
     public ushort Sound;

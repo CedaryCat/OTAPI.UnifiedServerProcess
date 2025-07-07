@@ -1,4 +1,5 @@
-﻿namespace TrProtocol.Exceptions {
+﻿namespace TrProtocol.Exceptions
+{
     public class UnknownDiscriminatorException : Exception
     {
         public UnknownDiscriminatorException(Type baseType, Enum id, long value)

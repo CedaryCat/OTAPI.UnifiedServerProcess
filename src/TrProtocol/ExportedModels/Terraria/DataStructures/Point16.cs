@@ -1,7 +1,6 @@
-﻿using TrProtocol.Attributes;
-using TrProtocol.Interfaces;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using System.Runtime.InteropServices;
+using TrProtocol.Interfaces;
 
 namespace Terraria.DataStructures
 {

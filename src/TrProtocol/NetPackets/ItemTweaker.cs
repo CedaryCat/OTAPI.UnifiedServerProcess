@@ -1,10 +1,11 @@
-﻿using TrProtocol.Attributes;
+﻿using Terraria;
+using TrProtocol.Attributes;
 using TrProtocol.Models.Interfaces;
-using Terraria;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct ItemTweaker : INetPacket, IItemSlot {
+public partial struct ItemTweaker : INetPacket, IItemSlot
+{
     public readonly MessageID Type => MessageID.ItemTweaker;
     public short ItemSlot { get; set; }
     public BitsByte Bit1;

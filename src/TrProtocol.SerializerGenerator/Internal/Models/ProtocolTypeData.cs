@@ -2,7 +2,8 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Diagnostics.CodeAnalysis;
 
-namespace TrProtocol.SerializerGenerator.Internal.Models {
+namespace TrProtocol.SerializerGenerator.Internal.Models
+{
     public class ProtocolTypeData
     {
         public ProtocolTypeData(TypeDeclarationSyntax classDeclaration, INamedTypeSymbol symbol, string name, string @namespace, string[] imports, SerializationExpandContext[] members) {

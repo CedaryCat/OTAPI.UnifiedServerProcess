@@ -2,7 +2,8 @@
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncRevengeMarker : INetPacket {
+public partial struct SyncRevengeMarker : INetPacket
+{
     public readonly MessageID Type => MessageID.SyncRevengeMarker;
     public int ID;
     public Vector2 Position;

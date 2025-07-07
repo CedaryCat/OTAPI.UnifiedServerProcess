@@ -1,6 +1,8 @@
-﻿namespace TrProtocol.Attributes {
+﻿namespace TrProtocol.Attributes
+{
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
-    public class ConditionArrayAttribute : Attribute {
+    public class ConditionArrayAttribute : Attribute
+    {
         public readonly string field;
         public readonly byte indexStart;
         public readonly bool pred;

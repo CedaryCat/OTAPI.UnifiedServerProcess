@@ -1,9 +1,10 @@
-using TrProtocol.Models.Interfaces;
 using Microsoft.Xna.Framework;
 using Terraria;
+using TrProtocol.Models.Interfaces;
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncPlayer : INetPacket, IPlayerSlot {
+public partial struct SyncPlayer : INetPacket, IPlayerSlot
+{
     public readonly MessageID Type => MessageID.SyncPlayer;
     public byte PlayerSlot { get; set; }
     public byte SkinVariant;

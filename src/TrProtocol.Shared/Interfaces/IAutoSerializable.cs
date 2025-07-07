@@ -1,4 +1,6 @@
-﻿namespace TrProtocol.Interfaces {
-    public interface IAutoSerializable : IBinarySerializable {
+﻿namespace TrProtocol.Interfaces
+{
+    public interface IAutoSerializable : IBinarySerializable
+    {
     }
 }

@@ -1,5 +1,5 @@
-﻿using TrProtocol.Models;
-using Terraria.GameContent.Drawing;
+﻿using Terraria.GameContent.Drawing;
+using TrProtocol.Models;
 
 namespace TrProtocol.NetPackets.Modules;
 

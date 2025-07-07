@@ -1,11 +1,8 @@
-﻿using TrProtocol.SerializerGenerator.Internal.Utilities;
-using Microsoft.CodeAnalysis;
-using System;
-using System.Collections.Generic;
+﻿using Microsoft.CodeAnalysis;
 using System.Runtime.InteropServices;
-using System.Text;
 using TrProtocol.SerializerGenerator.Internal.Extensions;
 using TrProtocol.SerializerGenerator.Internal.Models;
+using TrProtocol.SerializerGenerator.Internal.Utilities;
 
 namespace TrProtocol.SerializerGenerator.Internal.SyntaxTemplates
 {

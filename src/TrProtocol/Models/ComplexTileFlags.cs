@@ -1,9 +1,4 @@
 ﻿using TrProtocol.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace TrProtocol.Models
 {
@@ -89,7 +84,7 @@ namespace TrProtocol.Models
     }
     public enum LiquidMode : byte
     {
-        None = 0, 
+        None = 0,
         WaterOrShimmer = 0b01,
         Lava = 0b10,
         Honey = 0b11,
@@ -133,7 +128,8 @@ namespace TrProtocol.Models
             return result;
         }
     }
-    public enum TileSolpeMode {
+    public enum TileSolpeMode
+    {
         None = 0,
         HalfBrick = 1,
     }

@@ -1,7 +1,4 @@
 ﻿using Microsoft.CodeAnalysis;
-using System;
-using System.Collections.Generic;
-using System.Text;
 using TrProtocol.SerializerGenerator.Internal.Extensions;
 
 namespace TrProtocol.SerializerGenerator.Internal.Models

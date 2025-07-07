@@ -1,4 +1,5 @@
-﻿namespace TrProtocol.Attributes {
+﻿namespace TrProtocol.Attributes
+{
 
     /// <summary>
     /// Used on fields or properties that are allowed to remain null after the constructor is executed
@@ -6,6 +7,7 @@
     /// <para></para>
     /// </summary>
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public class InitNullableAttribute : Attribute {
+    public class InitNullableAttribute : Attribute
+    {
     }
 }

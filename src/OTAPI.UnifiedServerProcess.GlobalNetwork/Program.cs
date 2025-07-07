@@ -1,11 +1,6 @@
-﻿using OTAPI.UnifiedServerProcess.GlobalNetwork.CLI;
-using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
+﻿using OTAPI.UnifiedServerProcess.GlobalNetwork.Network;
 using OTAPI.UnifiedServerProcess.GlobalNetwork.Servers;
 using ReLogic.OS;
-using System.Diagnostics;
-using System.Diagnostics.Metrics;
-using System.Reflection;
-using System.Threading.Tasks;
 using UnifiedServerProcess;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork
@@ -24,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
             Console.WriteLine(@"---------------------------------------------------------------------------------------------------");
             Console.WriteLine(@"                       Demonstration For Terraria v{0} & OTAPI v{1}                         ", version.TerrariaVersion, version.OTAPIVersion);
             Console.WriteLine(@"---------------------------------------------------------------------------------------------------");
-            
+
             WorkRunner.RunTimedWork("Global initialization started...", () => {
                 SynchronizedGuard.Load();
                 NetworkPatcher.Load();
@@ -57,7 +52,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
                 var tcs = new TaskCompletionSource();
                 router.Started += () => tcs.SetResult();
                 return tcs;
-            }, 
+            },
             () => {
                 Console.WriteLine();
                 Console.WriteLine("[USP] Unified Server Process Launched successfully.");

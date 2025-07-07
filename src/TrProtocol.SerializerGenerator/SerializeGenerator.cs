@@ -1,12 +1,7 @@
-﻿using TrProtocol.SerializerGenerator.Internal.SyntaxTemplates;
-using TrProtocol.SerializerGenerator.Internal.Utilities;
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Immutable;
-using System.Diagnostics;
-using System.IO.Compression;
-using System.Reflection;
 using System.Text;
 using Terraria;
 using TrProtocol.Attributes;
@@ -16,11 +11,15 @@ using TrProtocol.SerializerGenerator.Internal.Diagnostics;
 using TrProtocol.SerializerGenerator.Internal.Extensions;
 using TrProtocol.SerializerGenerator.Internal.Models;
 using TrProtocol.SerializerGenerator.Internal.Serialization;
+using TrProtocol.SerializerGenerator.Internal.SyntaxTemplates;
+using TrProtocol.SerializerGenerator.Internal.Utilities;
 
-namespace TrProtocol.SerializerGenerator {
+namespace TrProtocol.SerializerGenerator
+{
 
     [Generator(LanguageNames.CSharp)]
-    public partial class SerializeGenerator : IIncrementalGenerator {
+    public partial class SerializeGenerator : IIncrementalGenerator
+    {
         private static bool FilterTypes(SyntaxNode syntaxNode, CancellationToken token) {
             if (syntaxNode is TypeDeclarationSyntax td /*&& td.Keyword.ToString() is not "interface"*/ && td.Keyword.ToString() is not "record" && td.BaseList is not null) {
                 return true;
@@ -1003,7 +1002,7 @@ namespace TrProtocol.SerializerGenerator {
                                                     m.MemberName));
                                         }
 
-                                        serializeAsType = typeAsAttr.ConstructorArguments[0].Value as INamedTypeSymbol 
+                                        serializeAsType = typeAsAttr.ConstructorArguments[0].Value as INamedTypeSymbol
                                         ?? throw new DiagnosticException(
                                             Diagnostic.Create(
                                                 new DiagnosticDescriptor(

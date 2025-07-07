@@ -4,7 +4,6 @@ using System.Net.Sockets;
 using Terraria;
 using Terraria.Localization;
 using Terraria.Net.Sockets;
-using UnifiedServerProcess;
 
 namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 {
@@ -284,7 +283,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 }
                 while (keepBroadcasting);
             }
-            catch { 
+            catch {
                 keepBroadcasting = false;
             }
         }

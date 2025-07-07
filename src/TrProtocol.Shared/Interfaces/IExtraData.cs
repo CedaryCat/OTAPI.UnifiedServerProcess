@@ -1,4 +1,5 @@
-﻿namespace TrProtocol.Interfaces {
+﻿namespace TrProtocol.Interfaces
+{
     /// <summary>
     /// This interface is used only for those packets whose data cannot be deserialized directly by the protocol library,
     /// <para>usually because the deserialization of such packets is state-dependent and the protocol library does not store any information</para>

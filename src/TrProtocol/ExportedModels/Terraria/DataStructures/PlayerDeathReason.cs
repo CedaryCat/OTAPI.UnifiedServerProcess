@@ -1,8 +1,10 @@
 ﻿using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 
-namespace Terraria.DataStructures {
-    public class PlayerDeathReason {
+namespace Terraria.DataStructures
+{
+    public class PlayerDeathReason
+    {
         public DeathSourceFlags Flags {
             get {
                 DeathSourceFlags flags = default;
@@ -53,7 +55,8 @@ namespace Terraria.DataStructures {
         [Condition(nameof(Flags.HasCustomReason))]
         public string? _sourceCustomReason;
     }
-    public struct DeathSourceFlags : IPackedSerializable {
+    public struct DeathSourceFlags : IPackedSerializable
+    {
         public byte Value;
         public bool HasPlayerSource {
             readonly get => (Value & 1) != 0;

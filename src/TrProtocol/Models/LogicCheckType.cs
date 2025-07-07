@@ -1,5 +1,7 @@
-﻿namespace TrProtocol.Models {
-    public enum LogicCheckType : byte {
+﻿namespace TrProtocol.Models
+{
+    public enum LogicCheckType : byte
+    {
         None,
         Day,
         Night,

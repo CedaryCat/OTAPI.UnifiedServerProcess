@@ -1,7 +1,9 @@
 ﻿using TrProtocol.Attributes;
 
-namespace TrProtocol.Models {
-    public struct ChestData {
+namespace TrProtocol.Models
+{
+    public struct ChestData
+    {
         public readonly override string ToString() {
             return $"[{TileX}, {TileY}] {Name}";
         }
@@ -10,7 +12,7 @@ namespace TrProtocol.Models {
         public short TileY;
         [IgnoreSerialize]
         private string? name;
-        public string Name { 
+        public string Name {
             readonly get => name ?? string.Empty;
             set => name = value;
         }

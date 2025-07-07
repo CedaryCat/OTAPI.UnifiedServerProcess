@@ -1,11 +1,12 @@
-﻿using TrProtocol.Attributes;
-using TrProtocol.Interfaces;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Terraria;
+using TrProtocol.Attributes;
+using TrProtocol.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncNPC : INetPacket, IExtraData {
+public partial struct SyncNPC : INetPacket, IExtraData
+{
     public readonly MessageID Type => MessageID.SyncNPC;
     public short NPCSlot;
     public Vector2 Offset;

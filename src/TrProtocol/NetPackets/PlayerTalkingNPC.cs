@@ -2,7 +2,8 @@
 
 namespace TrProtocol.NetPackets;
 
-public partial struct PlayerTalkingNPC : INetPacket, IPlayerSlot, INPCSlot {
+public partial struct PlayerTalkingNPC : INetPacket, IPlayerSlot, INPCSlot
+{
     public readonly MessageID Type => MessageID.PlayerTalkingNPC;
     public byte PlayerSlot { get; set; }
     public short NPCSlot { get; set; }

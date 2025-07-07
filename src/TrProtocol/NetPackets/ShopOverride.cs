@@ -2,7 +2,8 @@
 
 namespace TrProtocol.NetPackets;
 
-public partial struct ShopOverride : INetPacket {
+public partial struct ShopOverride : INetPacket
+{
     public readonly MessageID Type => MessageID.ShopOverride;
     public byte ItemSlot;
     public short ItemType;

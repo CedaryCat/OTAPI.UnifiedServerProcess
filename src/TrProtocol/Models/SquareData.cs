@@ -2,7 +2,8 @@
 using TrProtocol.Interfaces;
 
 namespace TrProtocol.Models;
-public partial struct SquareData : IAutoSerializable {
+public partial struct SquareData : IAutoSerializable
+{
     public short TilePosX;
     public short TilePosY;
     public byte Width;

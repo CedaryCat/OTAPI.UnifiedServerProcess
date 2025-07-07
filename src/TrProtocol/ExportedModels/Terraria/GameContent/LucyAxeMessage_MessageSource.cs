@@ -1,5 +1,7 @@
-﻿namespace Terraria.GameContent {
-    public enum LucyAxeMessage_MessageSource : byte {
+﻿namespace Terraria.GameContent
+{
+    public enum LucyAxeMessage_MessageSource : byte
+    {
         Idle,
         Storage,
         ThrownAway,

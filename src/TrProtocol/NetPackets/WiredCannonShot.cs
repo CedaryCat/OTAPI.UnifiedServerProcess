@@ -1,9 +1,10 @@
-﻿using TrProtocol.Models.Interfaces;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct WiredCannonShot : INetPacket, IPlayerSlot {
+public partial struct WiredCannonShot : INetPacket, IPlayerSlot
+{
     public readonly MessageID Type => MessageID.WiredCannonShot;
     public short Damage;
     public float Knockback;

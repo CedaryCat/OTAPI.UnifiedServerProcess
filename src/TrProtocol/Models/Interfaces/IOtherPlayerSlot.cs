@@ -1,5 +1,7 @@
-﻿namespace TrProtocol.Models.Interfaces {
-    public interface IOtherPlayerSlot {
+﻿namespace TrProtocol.Models.Interfaces
+{
+    public interface IOtherPlayerSlot
+    {
         byte OtherPlayerSlot { get; set; }
     }
 }

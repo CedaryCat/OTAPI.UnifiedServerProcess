@@ -1,8 +1,10 @@
-﻿using TrProtocol.Interfaces;
-using System.Globalization;
+﻿using System.Globalization;
+using TrProtocol.Interfaces;
 
-namespace Microsoft.Xna.Framework {
-    public struct Vector2 : IPackedSerializable {
+namespace Microsoft.Xna.Framework
+{
+    public struct Vector2 : IPackedSerializable
+    {
         public float X;
         public float Y;
 

@@ -1,4 +1,6 @@
-﻿namespace Terraria {
-    public partial struct BitsByte {
+﻿namespace Terraria
+{
+    public partial struct BitsByte
+    {
     }
 }

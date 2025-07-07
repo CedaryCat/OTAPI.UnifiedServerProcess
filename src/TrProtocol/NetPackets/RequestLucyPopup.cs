@@ -3,7 +3,8 @@ using Terraria.GameContent;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct RequestLucyPopup : INetPacket {
+public partial struct RequestLucyPopup : INetPacket
+{
     public readonly MessageID Type => MessageID.RequestLucyPopup;
     public LucyAxeMessage_MessageSource Source;
     public byte Variation;

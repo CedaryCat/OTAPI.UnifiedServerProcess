@@ -1,6 +1,7 @@
 ﻿namespace TrProtocol.Models;
 
-public enum CreativePowerTypes : short {
+public enum CreativePowerTypes : short
+{
     // Token: 0x04000552 RID: 1362
     FreezeTime,
     // Token: 0x04000553 RID: 1363

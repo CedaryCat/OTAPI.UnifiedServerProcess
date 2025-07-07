@@ -1,14 +1,12 @@
-﻿using System;
-using System.Buffers;
-using System.IO.Compression;
+﻿using System.IO.Compression;
 using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 
-namespace TrProtocol {
-    public unsafe static class CommonCode {
+namespace TrProtocol
+{
+    public unsafe static class CommonCode
+    {
         static delegate*<int, string> FastAllocateString;
         static CommonCode() {
             FastAllocateString = (delegate*<int, string>)typeof(string).GetRuntimeMethods().First(m => m.Name == "FastAllocateString").MethodHandle.GetFunctionPointer();

@@ -1,6 +1,7 @@
 ﻿namespace TrProtocol.Models;
 
-public enum TileChangeType : byte {
+public enum TileChangeType : byte
+{
     None,
     LavaWater,
     HoneyWater,

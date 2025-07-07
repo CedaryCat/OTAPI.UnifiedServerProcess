@@ -1,11 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using TrProtocol;
 using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
-using TrProtocol.SerializerGenerator;
 using TrProtocol.SerializerGenerator.Internal.Diagnostics;
 using TrProtocol.SerializerGenerator.Internal.Extensions;
 using TrProtocol.SerializerGenerator.Internal.Models;
@@ -21,7 +16,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
             if (classes.Length != 1) {
                 throw new DiagnosticException(
                     Diagnostic.Create(
-                        new DiagnosticDescriptor("SCG01", "INetPacket DefSymbol error", "Netpacket '{0}' should be a non-nested class", 
+                        new DiagnosticDescriptor("SCG01", "INetPacket DefSymbol error", "Netpacket '{0}' should be a non-nested class",
                         "",
                         DiagnosticSeverity.Error,
                         true),
@@ -32,10 +27,10 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
             if (fullNamespace is null) {
                 throw new DiagnosticException(
                     Diagnostic.Create(
-                        new DiagnosticDescriptor("SCG02", "Namespace missing", "Namespace of netpacket '{0}' missing", 
-                        "", 
+                        new DiagnosticDescriptor("SCG02", "Namespace missing", "Namespace of netpacket '{0}' missing",
+                        "",
                         DiagnosticSeverity.Error,
-                        true), 
+                        true),
                     defSyntax.GetLocation(),
                     typeName));
             }

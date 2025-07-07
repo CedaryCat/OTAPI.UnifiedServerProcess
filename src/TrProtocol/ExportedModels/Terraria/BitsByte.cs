@@ -1,10 +1,10 @@
 ﻿
 // Terraria.BitsByte
-using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 
 namespace Terraria;
-public partial struct BitsByte : IPackedSerializable {
+public partial struct BitsByte : IPackedSerializable
+{
     private static bool Null;
 
     public byte value;

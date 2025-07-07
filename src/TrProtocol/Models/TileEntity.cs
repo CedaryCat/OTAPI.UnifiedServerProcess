@@ -1,11 +1,13 @@
-﻿using TrProtocol.Attributes;
+﻿using Terraria.DataStructures;
+using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
-using Terraria.DataStructures;
 
-namespace TrProtocol.Models.TileEntities {
+namespace TrProtocol.Models.TileEntities
+{
 
     [PolymorphicBase(typeof(TileEntityType), nameof(EntityType))]
-    public abstract partial class TileEntity : IAutoSerializable {
+    public abstract partial class TileEntity : IAutoSerializable
+    {
         public abstract TileEntityType EntityType { get; }
         [Condition(nameof(NetworkSend), false)]
         public abstract int ID { get; set; }

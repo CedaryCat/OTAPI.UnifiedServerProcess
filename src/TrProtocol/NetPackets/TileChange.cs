@@ -1,9 +1,10 @@
-﻿using TrProtocol.Models;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
+using TrProtocol.Models;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct TileChange : INetPacket {
+public partial struct TileChange : INetPacket
+{
     public readonly MessageID Type => MessageID.TileChange;
     public TileEditAction ChangeType;
     public Point16 Position;

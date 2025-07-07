@@ -1,9 +1,9 @@
-﻿using TrProtocol.Attributes;
+﻿using System.Runtime.InteropServices;
+using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
-namespace TrProtocol.Models {
+namespace TrProtocol.Models
+{
     [StructLayout(LayoutKind.Explicit)]
     public partial struct ComplexTileData : IRepeatElement<short>, IAutoSerializable
     {

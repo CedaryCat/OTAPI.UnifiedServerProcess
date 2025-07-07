@@ -1,7 +1,6 @@
-﻿using TrProtocol.Attributes;
-
-namespace Terraria.GameContent.Drawing;
-public enum ParticleOrchestraType : byte {
+﻿namespace Terraria.GameContent.Drawing;
+public enum ParticleOrchestraType : byte
+{
     Keybrand,
     FlameWaders,
     StellarTune,

@@ -1,6 +1,8 @@
-﻿namespace TrProtocol.Models.Interfaces {
+﻿namespace TrProtocol.Models.Interfaces
+{
 
-    public interface IChestSlot {
+    public interface IChestSlot
+    {
         short ChestSlot { get; set; }
     }
 }

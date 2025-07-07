@@ -1,10 +1,11 @@
-﻿using TrProtocol.Attributes;
-using Terraria;
+﻿using Terraria;
 using Terraria.DataStructures;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.Models.TileEntities;
 
-public partial class TEDisplayDoll : TileEntity {
+public partial class TEDisplayDoll : TileEntity
+{
     public sealed override TileEntityType EntityType => TileEntityType.TEDisplayDoll;
     [ExternalMember]
     [IgnoreSerialize]

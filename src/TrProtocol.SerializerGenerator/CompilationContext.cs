@@ -3,8 +3,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Diagnostics.CodeAnalysis;
 using TrProtocol.SerializerGenerator.Internal.Extensions;
 
-namespace TrProtocol.SerializerGenerator {
-    public class CompilationContext : IEqualityComparer<Compilation> {
+namespace TrProtocol.SerializerGenerator
+{
+    public class CompilationContext : IEqualityComparer<Compilation>
+    {
         bool IEqualityComparer<Compilation>.Equals(Compilation x, Compilation y) {
             var ax = x.Assembly;
             var ay = y.Assembly;
@@ -136,33 +138,25 @@ namespace TrProtocol.SerializerGenerator {
                         ForEachChild(child, null, null);
                     }
                 }
-                if (node is NamespaceDeclarationSyntax nd)
-                {
-                    if (parentName is null)
-                    {
+                if (node is NamespaceDeclarationSyntax nd) {
+                    if (parentName is null) {
                         parentName = nd.Name.ToString();
                     }
-                    else
-                    {
+                    else {
                         parentName = $"{parentName}.{nd.Name}";
                     }
-                    foreach (var child in node.ChildNodes())
-                    {
+                    foreach (var child in node.ChildNodes()) {
                         ForEachChild(child, parentName, null);
                     }
                 }
-                else if (node is FileScopedNamespaceDeclarationSyntax fsnd)
-                {
-                    if (parentName is null)
-                    {
+                else if (node is FileScopedNamespaceDeclarationSyntax fsnd) {
+                    if (parentName is null) {
                         parentName = fsnd.Name.ToString();
                     }
-                    else
-                    {
+                    else {
                         parentName = $"{parentName}.{fsnd.Name}";
                     }
-                    foreach (var child in node.ChildNodes())
-                    {
+                    foreach (var child in node.ChildNodes()) {
                         ForEachChild(child, parentName, null);
                     }
                 }

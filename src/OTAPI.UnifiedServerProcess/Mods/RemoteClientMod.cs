@@ -29,7 +29,7 @@ namespace Terraria
         public new void mfwh_orig_ctor_RemoteClient() {
             Name = "Anonymous";
             StatusText = "";
-            TileSections = new bool[2,2];
+            TileSections = new bool[2, 2];
             SpamProjectileMax = 100f;
             SpamAddBlockMax = 100f;
             SpamDeleteBlockMax = 500f;

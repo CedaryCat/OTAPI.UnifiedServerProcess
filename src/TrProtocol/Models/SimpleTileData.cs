@@ -1,8 +1,9 @@
-﻿using TrProtocol.Attributes;
-using Terraria;
+﻿using Terraria;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.Models;
-public struct SimpleTileData {
+public struct SimpleTileData
+{
     public BitsByte Flags1;
     public BitsByte Flags2;
     public BitsByte Flags3;

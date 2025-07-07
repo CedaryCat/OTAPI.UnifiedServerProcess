@@ -39,7 +39,8 @@ void NetplayConnectionCheck(ModFwModder modder) {
     }
 }
 
-namespace Terraria {
+namespace Terraria
+{
     public class NetMessage
     {
         public static bool CheckCanSend(int clientIndex) {

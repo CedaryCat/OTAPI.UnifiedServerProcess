@@ -1,7 +1,6 @@
-﻿using TrProtocol.Attributes;
-
-namespace Terraria.GameContent;
-public enum TeleportPylonType : byte {
+﻿namespace Terraria.GameContent;
+public enum TeleportPylonType : byte
+{
     SurfacePurity,
     Jungle,
     Hallow,

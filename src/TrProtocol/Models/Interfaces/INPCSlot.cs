@@ -1,4 +1,5 @@
 ﻿namespace TrProtocol.Models.Interfaces;
-public interface INPCSlot {
+public interface INPCSlot
+{
     short NPCSlot { get; set; }
 }

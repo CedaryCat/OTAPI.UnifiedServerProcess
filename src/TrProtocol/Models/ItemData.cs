@@ -1,10 +1,10 @@
-﻿using TrProtocol.Interfaces;
-using System.Runtime.InteropServices;
-using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
+﻿using System.Diagnostics.CodeAnalysis;
+using TrProtocol.Interfaces;
 
-namespace TrProtocol.Models {
-    public partial struct ItemData : IEquatable<ItemData>, IAutoSerializable {
+namespace TrProtocol.Models
+{
+    public partial struct ItemData : IEquatable<ItemData>, IAutoSerializable
+    {
         public short ItemID;
         public byte Prefix;
         public short Stack;

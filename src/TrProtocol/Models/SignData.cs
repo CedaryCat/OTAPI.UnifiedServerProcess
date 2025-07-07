@@ -1,7 +1,9 @@
 ﻿using TrProtocol.Attributes;
 
-namespace TrProtocol.Models {
-    public partial struct SignData {
+namespace TrProtocol.Models
+{
+    public partial struct SignData
+    {
         public readonly override string ToString() {
             return $"[{TileX}, {TileY}] {Text}";
         }

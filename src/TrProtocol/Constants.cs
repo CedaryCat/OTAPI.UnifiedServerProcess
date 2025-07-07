@@ -1,7 +1,8 @@
 ﻿namespace TrProtocol;
 
-public static class Constants {
-    public static readonly bool[] tileFrameImportant = Create(693, true, 
+public static class Constants
+{
+    public static readonly bool[] tileFrameImportant = Create(693, true,
         3, 4, 5,
         10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 24, 26, 27, 28, 29, 31, 33, 34,
         35, 36, 42, 49, 50, 55, 61, 71, 72, 73, 74, 77, 78, 79, 81, 82, 83, 84, 85, 86,
@@ -26,7 +27,7 @@ public static class Constants {
     private static T[] Create<T>(int count, T nonDefaultValue, params int[] indexes) {
         var result = new T[count];
         foreach (var item in indexes) {
-            result[item] = nonDefaultValue; 
+            result[item] = nonDefaultValue;
         }
         return result;
     }

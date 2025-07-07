@@ -90,7 +90,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             },
             null, plr);
         }
-        static unsafe void SendSmallPacket<TPacket>(ServerContext server, int plr, TPacket packet) where TPacket : unmanaged, INetPacket { 
+        static unsafe void SendSmallPacket<TPacket>(ServerContext server, int plr, TPacket packet) where TPacket : unmanaged, INetPacket {
             var client = server.Netplay.Clients[plr];
             short size = (short)(sizeof(TPacket) + 4);
             var bufferArray = new byte[size];

@@ -1,9 +1,10 @@
-﻿using TrProtocol.Attributes;
-using Terraria.DataStructures;
+﻿using Terraria.DataStructures;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.Models.TileEntities;
 
-public partial class TEItemFrame : TileEntity {
+public partial class TEItemFrame : TileEntity
+{
     public sealed override TileEntityType EntityType => TileEntityType.TEItemFrame;
     [ExternalMember]
     [IgnoreSerialize]

@@ -1,7 +1,9 @@
-﻿namespace TrProtocol.Attributes {
+﻿namespace TrProtocol.Attributes
+{
 
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
-    public class ConditionAttribute : Attribute {
+    public class ConditionAttribute : Attribute
+    {
         public readonly string field;
         public readonly int bit;
         public readonly bool pred;

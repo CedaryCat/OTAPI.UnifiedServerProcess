@@ -1,6 +1,8 @@
-﻿namespace TrProtocol.Attributes {
+﻿namespace TrProtocol.Attributes
+{
     [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public class ArraySizeAttribute : Attribute {
+    public class ArraySizeAttribute : Attribute
+    {
         private object[] LengthOfEachRank;
         /// <summary>
         /// 

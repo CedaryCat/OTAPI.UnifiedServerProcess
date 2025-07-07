@@ -1,9 +1,10 @@
-﻿using TrProtocol.Attributes;
-using Terraria;
+﻿using Terraria;
+using TrProtocol.Attributes;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct WorldData : INetPacket {
+public partial struct WorldData : INetPacket
+{
     public readonly MessageID Type => MessageID.WorldData;
     [InitDefaultValue] public int Time;
     [InitDefaultValue] public BitsByte DayAndMoonInfo;
@@ -23,7 +24,7 @@ public partial struct WorldData : INetPacket {
     [ArraySize(16)] public byte[] WorldUniqueIDData;
 
     [IgnoreSerialize]
-    public Guid WorldUniqueID { 
+    public Guid WorldUniqueID {
         get => new Guid(WorldUniqueIDData);
         set => WorldUniqueIDData = value.ToByteArray();
     }

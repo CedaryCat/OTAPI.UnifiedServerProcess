@@ -1,10 +1,11 @@
-﻿using TrProtocol.Attributes;
+﻿using Microsoft.Xna.Framework;
+using TrProtocol.Attributes;
 using TrProtocol.Models.Interfaces;
-using Microsoft.Xna.Framework;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct ShimmerActions : INetPacket, INPCSlot {
+public partial struct ShimmerActions : INetPacket, INPCSlot
+{
     public readonly MessageID Type => MessageID.ShimmerActions;
     public byte ShimmerType;
     [ConditionEqual(nameof(ShimmerType), 0)]

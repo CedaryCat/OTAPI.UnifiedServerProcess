@@ -1,11 +1,12 @@
-﻿using TrProtocol.Attributes;
-using TrProtocol.Models.Interfaces;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
 using Terraria;
+using TrProtocol.Attributes;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct Teleport : INetPacket, IPlayerSlot {
+public partial struct Teleport : INetPacket, IPlayerSlot
+{
     public readonly MessageID Type => MessageID.Teleport;
     public BitsByte Bit1;
     public byte PlayerSlot { get; set; }

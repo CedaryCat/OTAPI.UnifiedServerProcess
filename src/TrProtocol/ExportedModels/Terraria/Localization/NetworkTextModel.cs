@@ -1,7 +1,7 @@
-﻿using TrProtocol.Interfaces;
-using System.Diagnostics.CodeAnalysis;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using TrProtocol;
+using TrProtocol.Interfaces;
 
 namespace Terraria.Localization;
 public partial class NetworkText : IBinarySerializable

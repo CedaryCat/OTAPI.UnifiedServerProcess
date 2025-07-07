@@ -3,7 +3,8 @@ using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct TamperWithNPC : INetPacket, INPCSlot, IOtherPlayerSlot {
+public partial struct TamperWithNPC : INetPacket, INPCSlot, IOtherPlayerSlot
+{
     public readonly MessageID Type => MessageID.TamperWithNPC;
     public short NPCSlot { get; set; }
     public byte UniqueImmune;

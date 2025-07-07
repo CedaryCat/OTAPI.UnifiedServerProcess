@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace TrProtocol.Interfaces
+﻿namespace TrProtocol.Interfaces
 {
     /// <summary>
     /// Indicates that the implementing type requires knowledge of its total serialized length

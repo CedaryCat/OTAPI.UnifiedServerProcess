@@ -1,9 +1,10 @@
-﻿using TrProtocol.Models.Interfaces;
-using Microsoft.Xna.Framework;
+﻿using Microsoft.Xna.Framework;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct SyncItemsWithShimmer : INetPacket, IItemSlot {
+public partial struct SyncItemsWithShimmer : INetPacket, IItemSlot
+{
     public readonly MessageID Type => MessageID.SyncItemsWithShimmer;
     public short ItemSlot { get; set; }
     public Vector2 Position;

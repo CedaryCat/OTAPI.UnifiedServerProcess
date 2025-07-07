@@ -1,7 +1,6 @@
-﻿using TrProtocol.Attributes;
-
-namespace Terraria.GameContent.Ambience;
-public enum SkyEntityType : byte {
+﻿namespace Terraria.GameContent.Ambience;
+public enum SkyEntityType : byte
+{
     BirdsV,
     Wyvern,
     Airship,
