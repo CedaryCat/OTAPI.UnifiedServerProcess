@@ -1,10 +1,12 @@
-﻿using System.IO.Compression;
+﻿using System.Buffers;
+using System.IO.Compression;
 using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 using TrProtocol.Models.TileEntities;
 
 namespace TrProtocol.Models;
 
+[ExplicitImportType(typeof(ArrayPool<byte>))]
 [Compress(CompressionLevel.SmallestSize, 1024 * 128)]
 public partial struct SectionData : IAutoSerializable, ILengthAware
 {
@@ -13,7 +15,7 @@ public partial struct SectionData : IAutoSerializable, ILengthAware
     public short Width;
     public short Height;
 
-    public int ComplexTileCount => Width * Height;
+    public readonly int ComplexTileCount => Width * Height;
 
     [ArraySize(nameof(ComplexTileCount))]
     public ComplexTileData[] Tiles;

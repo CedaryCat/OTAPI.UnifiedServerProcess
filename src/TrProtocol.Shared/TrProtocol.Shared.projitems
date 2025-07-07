@@ -6,7 +6,7 @@
     <SharedGUID>768417b4-d342-4006-b196-5f7178582209</SharedGUID>
   </PropertyGroup>
   <PropertyGroup Label="Configuration">
-    <Import_RootNamespace>TrProtocol.Shared</Import_RootNamespace>
+    <Import_RootNamespace>TrProtocol</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ArraySizeAttribute.cs" />
@@ -20,6 +20,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionLessThanAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionLookupMatchAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionNotEqualAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExplicitImportTypeAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExternalMemberAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExternalMemberValueSetterAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\IgnoreSerializeAttribute.cs" />
