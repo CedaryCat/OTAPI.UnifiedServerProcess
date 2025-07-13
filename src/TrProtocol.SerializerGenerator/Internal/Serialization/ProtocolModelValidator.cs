@@ -208,7 +208,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
                         polymorphicModels.Add(inheritFrom.discriminatorEnum.Name, polymorphicData = new(models.First(m => m.TypeName == inheritFrom.type.Name), inheritFrom));
                     }
                     polymorphicData.Implementations.Add(enumMemberAcess.Name.Identifier.Text, model);
-                    model.IsConcreteType = true;
+                    model.IsConcreteImpl = true;
                     model.ConcreteImplData = new ConcreteImplData(model, polymorphicData, enumMemberAcess);
                 }
 
@@ -307,7 +307,104 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
             foreach (var polymorphicModel in polymorphicModels.Values) {
                 polymorphicModel.PolymorphicBaseType.IsPolymorphic = true;
             }
+
+            var globalIDRootTypes = VaidateGlobalTypeID(polymorphicTypes, polymorphicModels, models);
+            AllocateGlobalTypeID(polymorphicTypes, polymorphicModels, globalIDRootTypes);
+
             return polymorphicModels;
+        }
+        static void AllocateGlobalTypeID(
+            Dictionary<string, PolymorphicImplsInfo> polymorphicInfos,
+            Dictionary<string, PolymorphicImplsData> polymorphicImpls,
+            ProtocolTypeData[] globalIDRootTypes) {
+
+            foreach (var globalIDRootType in globalIDRootTypes) {
+                int id = 0;
+                foreach (var impl in EnumerateConcreteImpl(polymorphicInfos, polymorphicImpls, globalIDRootType)) {
+                    impl.GlobalID = id++;
+                }
+                globalIDRootType.AllocatedGlobalIDCount = id;
+            }
+        }
+        static IEnumerable<ProtocolTypeData> EnumerateConcreteImpl(
+            Dictionary<string, PolymorphicImplsInfo> polymorphicInfos,
+            Dictionary<string, PolymorphicImplsData> polymorphicImpls, 
+            ProtocolTypeData type) {
+            if (!type.IsPolymorphic) {
+                yield return type;
+                yield break;
+            }
+            else {
+                var info = polymorphicInfos[type.DefSymbol.GetFullName()];
+                var data = polymorphicImpls[info.discriminatorEnum.Name];
+                int index = 0;
+                Dictionary<string, int> enumOrder = [];
+                foreach (var enumMember in info.discriminatorEnum.GetMembers()) {
+                    enumOrder[enumMember.Name] = index++;
+                }
+                foreach (var impl in data.Implementations.OrderBy(x => enumOrder[x.Key]).Select(x => x.Value)) {
+                    foreach (var child in EnumerateConcreteImpl(polymorphicInfos, polymorphicImpls, impl)) {
+                        yield return child;
+                    }
+                }
+            }
+        }
+        static ProtocolTypeData[] VaidateGlobalTypeID(
+            Dictionary<string, PolymorphicImplsInfo> polymorphicInfos, 
+            Dictionary<string, PolymorphicImplsData> polymorphicImpls,
+            ProtocolTypeData[] models) {
+            var rootTypes = models.Where(m => m.IsPolymorphic && !m.IsConcreteImpl);
+            List<ProtocolTypeData> globalIDRootTypes = [];
+            foreach (var type in rootTypes) {
+                VaidateGlobalTypeID(globalIDRootTypes, polymorphicInfos, polymorphicImpls, type, false);
+            }
+            return [.. globalIDRootTypes];
+        }
+        static void VaidateGlobalTypeID(
+            List<ProtocolTypeData> globalIDRootTypes,
+            Dictionary<string, PolymorphicImplsInfo> polymorphicInfos,
+            Dictionary<string, PolymorphicImplsData> polymorphicImpls, 
+            ProtocolTypeData type, 
+            bool hasAttribute) {
+
+            if (type.DefSyntax.AttributeMatch<GenerateGlobalIDAttribute>(out var match)) {
+                if (hasAttribute) {
+                    throw new DiagnosticException(
+                        Diagnostic.Create(
+                            new DiagnosticDescriptor(
+                                "SCG10",
+                                $"Redundant [GenerateGlobalId] attribute on derived type",
+                                "GenerateGlobalIDAttribute should not be applied to type '{0}' derived from another type already marked with GenerateGlobalIDAttribute.",
+                                "PolymorphicGlobalId",
+                                DiagnosticSeverity.Error,
+                                true),
+                            match.GetLocation(),
+                            type.TypeName));
+                }
+                hasAttribute = true;
+                globalIDRootTypes.Add(type);
+            }
+
+            if (hasAttribute && type.IsPolymorphic && type.IsAbstract) {
+                throw new DiagnosticException(
+                    Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "SCG10",
+                            $"invaild model declaration",
+                            "The interface marked with GenerateGlobalIDAttribute cannot be implemented by an abstract class.",
+                            "",
+                            DiagnosticSeverity.Error,
+                            true),
+                        type.DefSyntax.BaseList!.GetLocation(),
+                        type.TypeName));
+            }
+
+            if (polymorphicInfos.TryGetValue(type.DefSymbol.GetFullName(), out var polymorphicInfo)) {
+                var impls = polymorphicImpls[polymorphicInfo.discriminatorEnum.Name];
+                foreach (var impl in impls.Implementations) {
+                    VaidateGlobalTypeID(globalIDRootTypes, polymorphicInfos, polymorphicImpls, impl.Value, hasAttribute);
+                }
+            }
         }
     }
 }

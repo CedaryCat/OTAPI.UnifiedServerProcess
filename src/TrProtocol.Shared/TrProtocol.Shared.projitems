@@ -23,6 +23,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExplicitImportTypeAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExternalMemberAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ExternalMemberValueSetterAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\GenerateGlobalIDAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\IgnoreSerializeAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ImplementationClaimAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\InitDefaultValueAttribute.cs" />

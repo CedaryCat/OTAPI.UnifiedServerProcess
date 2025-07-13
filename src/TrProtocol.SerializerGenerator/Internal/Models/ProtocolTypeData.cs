@@ -6,12 +6,12 @@ namespace TrProtocol.SerializerGenerator.Internal.Models
 {
     public class ProtocolTypeData
     {
-        public ProtocolTypeData(TypeDeclarationSyntax classDeclaration, INamedTypeSymbol symbol, string name, string @namespace, string[] imports, SerializationExpandContext[] members) {
+        public ProtocolTypeData(TypeDeclarationSyntax classDeclaration, INamedTypeSymbol symbol, string name, string nameSpace, string[] imports, SerializationExpandContext[] members) {
             DefSyntax = classDeclaration;
             DefSymbol = symbol;
             TypeName = name;
             Members = members;
-            Namespace = @namespace;
+            Namespace = nameSpace;
             Imports = new HashSet<string>(imports);
         }
         public readonly INamedTypeSymbol DefSymbol;
@@ -29,7 +29,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Models
         public bool IsNetPacket;
         public bool IsPolymorphic;
         [MemberNotNullWhen(true, nameof(ConcreteImplData))]
-        public bool IsConcreteType { get; set; }
+        public bool IsConcreteImpl { get; set; }
         public ConcreteImplData? ConcreteImplData;
 
         public bool HasExtraData;
@@ -44,5 +44,9 @@ namespace TrProtocol.SerializerGenerator.Internal.Models
 
         public readonly string TypeName;
         public readonly IReadOnlyList<SerializationExpandContext> Members;
+
+        public int GlobalID = -1;
+        public int AllocatedGlobalIDCount = -1;
+        public bool IsGlobalIDRoot => AllocatedGlobalIDCount >= 0;
     }
 }

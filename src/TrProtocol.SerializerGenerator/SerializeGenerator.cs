@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Text;
 using Terraria;
 using TrProtocol.Attributes;
@@ -21,7 +22,7 @@ namespace TrProtocol.SerializerGenerator
     public partial class SerializeGenerator : IIncrementalGenerator
     {
         private static bool FilterTypes(SyntaxNode syntaxNode, CancellationToken token) {
-            if (syntaxNode is TypeDeclarationSyntax td /*&& td.Keyword.ToString() is not "interface"*/ && td.Keyword.ToString() is not "record" && td.BaseList is not null) {
+            if (syntaxNode is TypeDeclarationSyntax td/* && td.Keyword.ToString() is not "interface" && td.Keyword.ToString() is not "record" && td.BaseList is not null*/) {
                 return true;
             }
             return false;
@@ -65,7 +66,7 @@ namespace TrProtocol.SerializerGenerator
         }
         #endregion
 
-        static readonly string[] NeccessaryUsings = new string[] {
+        static readonly string[] NeccessaryUsings = [
             "System.Runtime.CompilerServices",
             "System.Runtime.InteropServices",
             "System.Diagnostics.CodeAnalysis",
@@ -73,7 +74,7 @@ namespace TrProtocol.SerializerGenerator
             "TrProtocol.Interfaces",
             "TrProtocol.Exceptions",
             "TrProtocol.Models",
-        };
+        ];
 
         // TODO: Split the serialization code generation process into more smaller SyntaxTemplates
         private static void Execute(SourceProductionContext context, (Compilation compilation, ImmutableArray<ProtocolTypeInfo> infos) data) {
@@ -173,25 +174,31 @@ namespace TrProtocol.SerializerGenerator
                         var classNode = namespaceBlock.WriteTypeDefinition(model);
                         classNode.WriteAutoDiscriminator(model);
 
-                        #region Manage type constructors and special behavior
+                        #region Add Global ID
+                        if (model.GlobalID >= 0) {
+                            classNode.WriteLine($"public static int GlobalID => {model.GlobalID};");
+                        }
+                        #endregion
+
+                        #region Add type constructors and special behavior
 
                         List<(string memberName, string memberType)> externalMembers = model.DefSyntax.Members
-                        .Where(m => m.AttributeLists
-                        .SelectMany(a => a.Attributes)
-                        .Any(a => a.AttributeMatch<ExternalMemberAttribute>()))
-                        .Select((m) => {
-                            if (m is PropertyDeclarationSyntax prop) {
-                                return new List<(string, string)>() { (prop.Identifier.ToString(), prop.Type.ToString()) };
-                            }
-                            else {
-                                var field = (FieldDeclarationSyntax)m;
-                                var list = new List<(string memberName, string memberType)>();
-                                foreach (var variable in field.Declaration.Variables) {
-                                    list.Add((variable.Identifier.ToString(), field.Declaration.Type.ToString()));
+                            .Where(m => m.AttributeLists
+                            .SelectMany(a => a.Attributes)
+                            .Any(a => a.AttributeMatch<ExternalMemberAttribute>()))
+                            .Select((m) => {
+                                if (m is PropertyDeclarationSyntax prop) {
+                                    return new List<(string, string)>() { (prop.Identifier.ToString(), prop.Type.ToString()) };
                                 }
-                                return list;
-                            }
-                        }).SelectMany(m => m).ToList();
+                                else {
+                                    var field = (FieldDeclarationSyntax)m;
+                                    var list = new List<(string memberName, string memberType)>();
+                                    foreach (var variable in field.Declaration.Variables) {
+                                        list.Add((variable.Identifier.ToString(), field.Declaration.Type.ToString()));
+                                    }
+                                    return list;
+                                }
+                            }).SelectMany(m => m).ToList();
 
                         string externalMemberParams;
                         if (externalMembers.Count == 0) {
@@ -1489,7 +1496,7 @@ namespace TrProtocol.SerializerGenerator
 
                         writeNode.WriteLine("var ptr_current = ptr;");
                         writeNode.WriteLine();
-                        if (model.IsConcreteType) {
+                        if (model.IsConcreteImpl) {
                             INamedTypeSymbol[] ExtractAbstractModelInheritance(INamedTypeSymbol type) {
                                 var abstractModelAncestors = type.GetFullInheritanceTree()
                                     .Where(t => t.HasAbstractModelAttribute())
@@ -1603,7 +1610,7 @@ namespace TrProtocol.SerializerGenerator
                             }
                             return false;
                         })) {
-                            classNode.Write($"public unsafe {((model.IsConcreteType && !model.IsValueType) ? "override " : "")}void WriteContent(ref void* ptr) ");
+                            classNode.Write($"public unsafe {((model.IsConcreteImpl && !model.IsValueType) ? "override " : "")}void WriteContent(ref void* ptr) ");
                             classNode.Sources.Add(writeNode);
                         }
                         #endregion
@@ -1630,7 +1637,7 @@ namespace TrProtocol.SerializerGenerator
                                 classNode.WriteLine("/// This operation is not supported and always throws a System.NotSupportedException.");
                                 classNode.WriteLine("/// </summary>");
                                 classNode.WriteLine($"[Obsolete]");
-                                if ((model.IsConcreteType && !model.IsValueType)) {
+                                if ((model.IsConcreteImpl && !model.IsValueType)) {
                                     classNode.WriteLine($"public override void ReadContent(ref void* ptr) => throw new {nameof(NotSupportedException)}();");
                                 }
                                 else {
@@ -1641,7 +1648,7 @@ namespace TrProtocol.SerializerGenerator
                             }
                             else {
                                 classNode.WriteLine($"[MemberNotNull({string.Join(", ", memberNullables.Select(m => $"nameof({m})"))})]");
-                                classNode.Write($"public unsafe {((model.IsConcreteType && !model.IsValueType) ? "override " : "")}void ReadContent(ref void* ptr) ");
+                                classNode.Write($"public unsafe {((model.IsConcreteImpl && !model.IsValueType) ? "override " : "")}void ReadContent(ref void* ptr) ");
                             }
                             classNode.Sources.Add(readNode);
                         }
@@ -1683,16 +1690,15 @@ namespace TrProtocol.SerializerGenerator
                         l.DefSyntax.GetNamespace(out _, out var ns, out _);
                         return ns;
                     })).Distinct()) {
-
                         source.WriteLine($"using {us};");
                     }
 
 
-                    List<(string memberName, string memberType)> externalMembers = polymorphicBase.DefSyntax.Members
+                    List<(string memberName, string memberType)> externalMembers = [.. polymorphicBase.DefSyntax.Members
                         .Where(m => m.AttributeLists
                         .SelectMany(a => a.Attributes)
                         .Any(a => a.AttributeMatch<ExternalMemberAttribute>()))
-                        .Select((m) => {
+                        .SelectMany((m) => {
                             if (m is PropertyDeclarationSyntax prop) {
                                 return new List<(string, string)>() { (prop.Identifier.ToString(), prop.Type.ToString()) };
                             }
@@ -1704,7 +1710,7 @@ namespace TrProtocol.SerializerGenerator
                                 }
                                 return list;
                             }
-                        }).SelectMany(m => m).ToList();
+                        })];
                     string externalMemberParams;
                     string externalMemberParamsCall;
                     if (externalMembers.Count == 0) {
@@ -1721,6 +1727,12 @@ namespace TrProtocol.SerializerGenerator
                         var typeKind = polymorphicBase.IsInterface ? "interface" : polymorphicBase.IsValueType ? "struct" : "class";
                         source.Write($"public unsafe partial {typeKind} {polymorphicBase.TypeName} ");
                         source.BlockWrite((source) => {
+
+                            if (polymorphicBase.IsGlobalIDRoot) {
+                                source.WriteLine($"public const int GlobalIDCount = {polymorphicBase.AllocatedGlobalIDCount};");
+                                source.WriteLine("public static abstract int GlobalID { get; }");
+                            }
+
                             source.Write($"public unsafe static {polymorphicBase.TypeName} Read{polymorphicBase.TypeName}(ref void* ptr{(polymorphicBase.IsNetPacket ? ", void* ptr_end" : "")}{(polymorphicBase.IsNetPacket ? ", bool isServerSide" : "")}{externalMemberParams}) ");
                             source.BlockWrite((source) => {
                                 source.WriteLine($"{enumType.Name} identity = ({enumType.Name})Unsafe.Read<{enumType.EnumUnderlyingType}>(ptr);");
@@ -1753,13 +1765,6 @@ namespace TrProtocol.SerializerGenerator
         static CompilationContext Compilation = new CompilationContext();
 
         public void Initialize(IncrementalGeneratorInitializationContext initContext) {
-
-#if DEBUG
-            //if (!Debugger.IsAttached) {
-            //    Debugger.Launch();
-            //}
-#endif
-
             initContext.RegisterSourceOutput(initContext.CompilationProvider.WithComparer(Compilation), Compilation.LoadCompilation);
 
 

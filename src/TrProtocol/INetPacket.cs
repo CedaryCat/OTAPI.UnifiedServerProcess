@@ -3,7 +3,7 @@ using TrProtocol.Interfaces;
 
 namespace TrProtocol
 {
-
+    [GenerateGlobalID]
     [PolymorphicBase(typeof(MessageID), nameof(Type))]
     public partial interface INetPacket : IAutoSerializable
     {
