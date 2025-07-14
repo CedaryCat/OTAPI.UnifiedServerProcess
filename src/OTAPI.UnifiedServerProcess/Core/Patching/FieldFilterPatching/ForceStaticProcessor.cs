@@ -26,6 +26,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.Localization.GameCulture",
             // ignore hit tile, it should not run on server
             "Terraria.HitTile",
+            // global share buffer pool
+            "Terraria.Net.LegacyNetBufferPool"
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var modified in source.ModifiedStaticFields.ToArray()) {
