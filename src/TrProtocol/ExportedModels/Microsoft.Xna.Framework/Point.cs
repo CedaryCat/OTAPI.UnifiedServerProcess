@@ -6,12 +6,9 @@ namespace Microsoft.Xna.Framework
     [StructLayout(LayoutKind.Explicit, Size = 8)]
     public struct Point(int x, int y) : IPackedSerializable, IEquatable<Point>
     {
-        [FieldOffset(0)]
-        public int X = x;
-        [FieldOffset(4)]
-        public int Y = y;
-        [FieldOffset(0)]
-        private ulong packedValue;
+        [FieldOffset(0)] public int X = x;
+        [FieldOffset(4)] public int Y = y;
+        [FieldOffset(0)] private ulong packedValue;
 
         public static bool operator ==(Point a, Point b) => a.Equals(b);
         public static bool operator !=(Point a, Point b) => !a.Equals(b);

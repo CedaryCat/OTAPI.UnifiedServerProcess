@@ -283,6 +283,7 @@ namespace OTAPI.UnifiedServerProcess
                 }
                 foreach (var method in modType.Methods) {
                     PrepareMethod(target, method, null);
+                    SetMemberReplace(module, method.CustomAttributes, false);
                 }
             }
             else {
@@ -292,6 +293,19 @@ namespace OTAPI.UnifiedServerProcess
                         existingMethod = null;
                     }
                     PrepareMethod(target, method, existingMethod);
+                    SetMemberReplace(module, method.CustomAttributes, false);
+                }
+                if (modType.IsEnum) {
+                    SetMemberReplace(module, modType.CustomAttributes, true);
+                }
+                foreach (var field in modType.Fields) {
+                    SetMemberReplace(module, field.CustomAttributes, modType.IsEnum);
+                }
+                foreach (var prop in modType.Properties) {
+                    SetMemberReplace(module, prop.CustomAttributes, false);
+                }
+                foreach (var ev in modType.Events) {
+                    SetMemberReplace(module, ev.CustomAttributes, false);
                 }
             }
             foreach (var nested in modType.NestedTypes) {
@@ -300,9 +314,17 @@ namespace OTAPI.UnifiedServerProcess
         }
         static void PrepareMethod(TypeDefinition targetType, MethodDefinition modMethod, MethodDefinition? originalMethod) {
             if (modMethod.IsConstructor && !modMethod.IsStatic) {
-                var attType = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
-                modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType) { HasThis = true }));
+                var attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
+                modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
             }
+        }
+        static void SetMemberReplace(ModuleDefinition module, Collection<CustomAttribute> attributes, bool isEnum) {
+            var type = isEnum ? typeof(MonoMod.MonoModEnumReplace) : typeof(MonoMod.MonoModReplace);
+            if (attributes.Any(a => a.AttributeType.Name == type.Name)) {
+                return;
+            }
+            var attType_replace = module.ImportReference(type);
+            attributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, attType_replace) { HasThis = true }));
         }
 
         static void AdjustInterfaces(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {

@@ -7,16 +7,9 @@ namespace Terraria.DataStructures
     [StructLayout(LayoutKind.Explicit)]
     public struct Point16 : IPackedSerializable, IEquatable<Point16>
     {
-        [FieldOffset(0)]
-        public short X;
-        [FieldOffset(1)]
-        public short Y;
-        [FieldOffset(0)]
-        uint packedValue;
-
-        public readonly static Point16 Zero = new(0, 0);
-        public readonly static Point16 NegativeOne = new(-1, -1);
-
+        [FieldOffset(0)] public short X;
+        [FieldOffset(2)] public short Y;
+        [FieldOffset(0)] uint packedValue;
         public Point16(Point point) {
             X = (short)point.X;
             Y = (short)point.Y;
@@ -31,7 +24,6 @@ namespace Terraria.DataStructures
             this.X = X;
             this.Y = Y;
         }
-
         public static bool operator ==(Point16 first, Point16 second) => first.Equals(second);
         public static bool operator !=(Point16 first, Point16 second) => !first.Equals(second);
         public readonly override bool Equals(object? obj) => obj is Point16 point && Equals(point);

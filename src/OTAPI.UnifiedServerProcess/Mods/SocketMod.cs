@@ -19,6 +19,7 @@ namespace Terraria.Net.Sockets
 {
     public interface ISocket
     {
+        [MonoMod.MonoModIgnore]
         void Close();
         void AsyncSendNoCopy(byte[] data, int offset, int size, SocketSendCallback callback, object state = null);
         void AsyncSend(ReadOnlyMemory<byte> data, SocketSendCallback callback, object state = null);
@@ -28,7 +29,7 @@ namespace Terraria.Net.Sockets
         [MonoMod.MonoModIgnore]
         void ISocket.Close() { }
         public TcpClient _connection;
-        void ISocket.AsyncSendNoCopy(byte[] data, int offset, int size, SocketSendCallback callback, object state = null) {
+        void ISocket.AsyncSendNoCopy(byte[] data, int offset, int size, SocketSendCallback callback, object state) {
             _connection.GetStream().BeginWrite(data, offset, size, static result => {
                 var tuple = (Tuple<TcpSocket, SocketSendCallback, object>)result.AsyncState;
                 try {
@@ -40,7 +41,7 @@ namespace Terraria.Net.Sockets
                 }
             }, new Tuple<TcpSocket, SocketSendCallback, object>(this, callback, state));
         }
-        void ISocket.AsyncSend(ReadOnlyMemory<byte> data, SocketSendCallback callback, object state = null) {
+        void ISocket.AsyncSend(ReadOnlyMemory<byte> data, SocketSendCallback callback, object state) {
             var array = ArrayPool<byte>.Shared.Rent(data.Length);
             data.CopyTo(array);
             _connection.GetStream().BeginWrite(array, 0, data.Length, static result => {
@@ -63,7 +64,7 @@ namespace Terraria.Net.Sockets
         [MonoMod.MonoModIgnore]
         void ISocket.Close() { }
         public RemoteAddress _remoteAddress;
-        void ISocket.AsyncSendNoCopy(byte[] data, int offset, int size, SocketSendCallback callback, object state = null) {
+        void ISocket.AsyncSendNoCopy(byte[] data, int offset, int size, SocketSendCallback callback, object state) {
             if (offset is not 0) {
                 var copy = ArrayPool<byte>.Shared.Rent(size);
                 Buffer.BlockCopy(data, offset, copy, 0, size);
@@ -76,7 +77,7 @@ namespace Terraria.Net.Sockets
                 callback.BeginInvoke(state, null, null);
             }
         }
-        void ISocket.AsyncSend(ReadOnlyMemory<byte> data, SocketSendCallback callback, object state = null) {
+        void ISocket.AsyncSend(ReadOnlyMemory<byte> data, SocketSendCallback callback, object state) {
             var copy = ArrayPool<byte>.Shared.Rent(data.Length);
             data.CopyTo(copy);
             SocialAPI.Network.Send(_remoteAddress, copy, data.Length);
