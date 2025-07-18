@@ -28,7 +28,7 @@ namespace TrProtocol.SerializerGenerator.Internal.SyntaxTemplates
                 if (!typeData.IsSideSpecific) {
                     interfaces.Add(nameof(INonSideSpecific));
                 }
-                if (!typeData.DefSymbol.IsUnmanagedType) {
+                if (!typeData.DefSymbol.IsUnmanagedType || typeData.HasExtraData) {
                     interfaces.Add(nameof(IManagedPacket));
                 }
             }
