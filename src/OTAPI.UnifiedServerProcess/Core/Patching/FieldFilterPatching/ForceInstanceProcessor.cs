@@ -12,7 +12,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.GameContent.PressurePlateHelper.EntityCreationLock",
             "Terraria.GameContent.Creative.CreativePowerManager._initialized",
             "Terraria.Recipe.numRecipes",
-            "Terraria.ID.ContentSamples.NpcBestiarySortingId"
+            "Terraria.ID.ContentSamples.NpcBestiarySortingId",
+            "Terraria.Main.autoGen",
+            "Terraria.Main.AutogenSeedName",
+            "Terraria.Main.AutogenProgress",
         };
         readonly static string[] types = new string[] {
             "Terraria.ObjectData.TileObjectData",
