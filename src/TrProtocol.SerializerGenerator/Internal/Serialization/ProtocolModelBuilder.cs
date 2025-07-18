@@ -1,4 +1,5 @@
 ﻿using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 using TrProtocol.SerializerGenerator.Internal.Diagnostics;
@@ -79,6 +80,58 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
                 }
 
                 model.HasExtraData = true;
+            }
+
+            if (modelSym.AllInterfaces.Any(i => i.Name == nameof(INonSideSpecific))) {
+                var location = baseList!.GetLocation();
+                var foundInterface = baseList!.Types.First(t => t.ToString() == nameof(INonSideSpecific));
+                if (foundInterface is not null) {
+                    location = foundInterface.GetLocation();
+                }
+                throw new DiagnosticException(
+                    Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "SCG32",
+                            "Do not manually implement INonSideSpecific",
+                            "The interface 'INonSideSpecific' is automatically provided by the source generator. Do not declare it explicitly in the inheritance list.",
+                            "SourceGeneration",
+                            DiagnosticSeverity.Error,
+                            true),
+                        location));
+            }
+            if (modelSym.AllInterfaces.Any(i => i.Name == nameof(INonLengthAware))) {
+                var location = baseList!.GetLocation();
+                var foundInterface = baseList!.Types.First(t => t.ToString() == nameof(INonLengthAware));
+                if (foundInterface is not null) {
+                    location = foundInterface.GetLocation();
+                }
+                throw new DiagnosticException(
+                    Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "SCG32",
+                            "Do not manually implement INonLengthAware",
+                            "The interface 'INonLengthAware' is automatically provided by the source generator. Do not declare it explicitly in the inheritance list.",
+                            "SourceGeneration",
+                            DiagnosticSeverity.Error,
+                            true),
+                        location));
+            }
+            if (modelSym.AllInterfaces.Any(i => i.Name == nameof(IManagedPacket))) {
+                var location = baseList!.GetLocation();
+                var foundInterface = baseList!.Types.First(t => t.ToString() == nameof(IManagedPacket));
+                if (foundInterface is not null) {
+                    location = foundInterface.GetLocation();
+                }
+                throw new DiagnosticException(
+                    Diagnostic.Create(
+                        new DiagnosticDescriptor(
+                            "SCG32",
+                            "Do not manually implement IManagedPacket",
+                            "The interface 'IManagedPacket' is automatically provided by the source generator. Do not declare it explicitly in the inheritance list.",
+                            "SourceGeneration",
+                            DiagnosticSeverity.Error,
+                            true),
+                        location));
             }
 
             if (modelSym.AllInterfaces.Any(i => i.Name == nameof(ISideSpecific))) {

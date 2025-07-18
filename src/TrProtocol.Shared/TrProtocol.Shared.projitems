@@ -36,6 +36,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IBinarySerializable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IExtraData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\ILengthAware.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IManagedStruct.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IPackedSerializable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IRepeatElement.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\ISerializableView.cs" />
