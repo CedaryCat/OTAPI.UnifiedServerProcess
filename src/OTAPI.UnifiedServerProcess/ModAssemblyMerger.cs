@@ -293,19 +293,15 @@ namespace OTAPI.UnifiedServerProcess
                         existingMethod = null;
                     }
                     PrepareMethod(target, method, existingMethod);
-                    SetMemberReplace(module, method.CustomAttributes, false);
+                    if (!method.IsSpecialName) {
+                        SetMemberReplace(module, method.CustomAttributes, false);
+                    }
                 }
                 if (modType.IsEnum) {
                     SetMemberReplace(module, modType.CustomAttributes, true);
                 }
                 foreach (var field in modType.Fields) {
                     SetMemberReplace(module, field.CustomAttributes, modType.IsEnum);
-                }
-                foreach (var prop in modType.Properties) {
-                    SetMemberReplace(module, prop.CustomAttributes, false);
-                }
-                foreach (var ev in modType.Events) {
-                    SetMemberReplace(module, ev.CustomAttributes, false);
                 }
             }
             foreach (var nested in modType.NestedTypes) {
