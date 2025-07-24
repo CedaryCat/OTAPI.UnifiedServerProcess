@@ -13,20 +13,20 @@ namespace OTAPI.UnifiedServerProcess
 {
     public class ModAssemblyMerger
     {
-        public ModAssemblyMerger(ModContext context, params System.Reflection.Assembly[] mods) {
-
-            Dictionary<string, ModuleDefinition> modModules = [];
-
+        readonly Dictionary<string, ModuleDefinition> modModules = [];
+        public ModAssemblyMerger(params System.Reflection.Assembly[] mods) {
+            foreach (var assembly in mods) {
+                var mod = AssemblyDefinition.ReadAssembly(assembly.Location);
+                modModules.TryAdd(mod.FullName, mod.MainModule);
+            }
+        }
+        public void Attach(ModContext context) {
             context.OnApply += (progress, modder) => {
                 if (modder is null) {
                     return ModContext.EApplyResult.Continue;
                 }
                 var module = modder.Module;
                 if (progress == ModType.PreRead) {
-                    foreach (var assembly in mods) {
-                        var mod = AssemblyDefinition.ReadAssembly(assembly.Location);
-                        modModules.TryAdd(mod.FullName, mod.MainModule);
-                    }
                 }
                 else if (progress == ModType.PrePatch) {
                     var modderTypes = module.GetAllTypes().ToDictionary(x => x.FullName, x => x);

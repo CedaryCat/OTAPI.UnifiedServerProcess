@@ -22,10 +22,14 @@ namespace TrProtocol.SerializerGenerator
     public partial class SerializeGenerator : IIncrementalGenerator
     {
         private static bool FilterTypes(SyntaxNode syntaxNode, CancellationToken token) {
-            if (syntaxNode is TypeDeclarationSyntax td/* && td.Keyword.ToString() is not "interface" && td.Keyword.ToString() is not "record" && td.BaseList is not null*/) {
-                return true;
+            if (syntaxNode is not TypeDeclarationSyntax td/* && td.Keyword.ToString() is not "interface" && td.Keyword.ToString() is not "record" && td.BaseList is not null*/) {
+                return false;
             }
-            return false;
+            td.GetNamespace(out _, out var nameSpace, out _);
+            if (nameSpace is null) {
+                return false;
+            }
+            return true;
         }
 
         #region Transform type synatx to data

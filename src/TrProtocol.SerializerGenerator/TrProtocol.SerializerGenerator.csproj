@@ -8,6 +8,7 @@
 	<EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
 	<Deterministic>true</Deterministic>
 	<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	<DisableGitVersion>true</DisableGitVersion>
   </PropertyGroup>
 
   <ItemGroup>

@@ -1,14 +1,13 @@
 ﻿using ModFramework;
 using ModFramework.Relinker;
 using Mono.Cecil;
+using System;
 using System.IO;
 
 namespace OTAPI.UnifiedServerProcess.Extensions
 {
-    [MonoMod.MonoModIgnore]
     public static class ModFwModderExt
     {
-        [MonoMod.MonoModIgnore]
         public static void CreateRuntimeHooks(this ModFwModder modder, string output) {
             modder.Log("[OTAPI-ProC] Generating OTAPI.Runtime.dll");
             var gen = new MonoMod.RuntimeDetour.HookGen.HookGenerator(modder, "OTAPI.Runtime.dll");
@@ -40,6 +39,17 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             mm.AutoPatch();
 
             mm.Write();
+        }
+
+        public static void AddEnvMetadata(this ModFwModder modder) {
+            var commitSha = Utilities.GetGitCommitSha();
+            var run = Environment.GetEnvironmentVariable("GITHUB_RUN_NUMBER")?.Trim();
+
+            if (!string.IsNullOrWhiteSpace(commitSha))
+                modder.AddMetadata("GitHub.Commit", commitSha);
+
+            if (!string.IsNullOrWhiteSpace(run))
+                modder.AddMetadata("GitHub.Action.RunNo", run);
         }
     }
 }

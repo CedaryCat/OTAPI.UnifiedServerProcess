@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace OTAPI.UnifiedServerProcess
@@ -58,17 +59,19 @@ namespace OTAPI.UnifiedServerProcess
             }
         }
 
-        public bool Patch() {
-            DirectoryInfo outputDir = new DirectoryInfo(Path.Combine(Directory.GetCurrentDirectory(), "output"));
+        public bool Patch(DirectoryInfo outputDir) {
             outputDir.Create();
             var output = Path.Combine(outputDir.FullName, "OTAPI.dll");
             var hookOutput = Path.Combine(outputDir.FullName, "OTAPI.Runtime.dll");
 
             var input = typeof(Terraria.Main).Assembly.Location;
+            var version = typeof(Terraria.Main).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+                ?.InformationalVersion ?? throw new NullReferenceException();
 
             var modcontext = new ModContext("Terraria");
-            modcontext.ReferenceFiles.AddRange(new[]
-            {
+            modcontext.ReferenceFiles.AddRange(
+            [
                 "ModFramework.dll",
                 "MonoMod.dll",
                 "MonoMod.Utils.dll",
@@ -79,7 +82,7 @@ namespace OTAPI.UnifiedServerProcess
                 "Steamworks.NET.dll",
                 input,
                 typeof(Program).Assembly.Location,
-            });
+            ]);
 
             using ModFwModder mm = new(modcontext) {
                 InputPath = input,
@@ -87,10 +90,10 @@ namespace OTAPI.UnifiedServerProcess
                 MissingDependencyThrow = false,
                 PublicEverything = false,
                 LogVerboseEnabled = true,
-                GACPaths = new string[] { }, // avoid MonoMod looking up the GAC, which causes an exception on .netcore
+                GACPaths = [], // avoid MonoMod looking up the GAC, which causes an exception on .netcore
             };
 
-            List<MethodDefinition> virtualMaked = new List<MethodDefinition>();
+            List<MethodDefinition> virtualMaked = [];
 
             var embeddedResources = modcontext.ExtractResources(input);
 
@@ -100,7 +103,8 @@ namespace OTAPI.UnifiedServerProcess
 
             var logger = new DefaultLogger(Logger.DEBUG);
 
-            _ = new ModAssemblyMerger(modcontext, typeof(TrProtocol.MessageID).Assembly);
+            new ModAssemblyMerger(typeof(TrProtocol.MessageID).Assembly)
+                .Attach(modcontext);
 
             modcontext.OnApply += (modType, modder) => {
 
@@ -114,10 +118,14 @@ namespace OTAPI.UnifiedServerProcess
                     else if (modType == ModType.PreWrite) {
                         PatchingLogic.Patch(logger, modder.Module);
                         modder.ModContext.TargetAssemblyName = "OTAPI";
+                        modder.AddEnvMetadata();
                     }
                     else if (modType == ModType.Write) {
                         modder.ModContext = new("OTAPI.Runtime");
                         modder.CreateRuntimeHooks(hookOutput);
+
+                        new NugetPackageBuilder("OTAPI.USP", "../../../../../docs")
+                            .Build(modder, version, outputDir);
                     }
                 }
 
