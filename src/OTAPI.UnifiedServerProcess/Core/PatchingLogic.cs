@@ -34,6 +34,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             new PatchChain(logger)
                 .Then(new SimplifyMacrosPatcher(logger, module))
                 .Then(new RemoveUnusedCodePatcherAtBegin(logger, module))
+                .Then(new LangManagerPrePatcher(logger, module, analyzers.MethodCallGraph))
 
                 .DefineArgument(new FilterArgumentSource(module, initialMethods))
                 .RegisterProcessor(new AddModifiedFieldsProcessor(rawModifiedStaticFields, initialStaticFields))
@@ -71,6 +72,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .Finalize()
 
                 .Then(new AdjustAutoPropertiesPatcher(logger, module))
+                .Then(new LangManagerPostPatcher(logger, module))
                 .Then(new RemoveUnusedCodePatcherAtEnd(logger, rootContextDef, module))
                 .Then(new OptimizeMacrosPatcher(logger, module))
 

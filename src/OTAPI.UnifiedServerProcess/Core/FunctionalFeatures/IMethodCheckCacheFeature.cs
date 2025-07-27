@@ -23,6 +23,17 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             string methodId) {
             return PredefineMethodUsedContext.Add(methodId);
         }
+        static readonly Dictionary<string, bool> overwriteContextBoundCheck = [];
+        public static void ForceOverrideContextBoundCheck<TFeature>(
+            this TFeature _, 
+            string methodId, bool isContextBound) {
+            overwriteContextBoundCheck[methodId] = isContextBound;
+        }
+        public static bool ForceOverrideContextBoundCheck<TFeature>(
+            this TFeature _,
+            MethodDefinition method, bool isContextBound) {
+            return overwriteContextBoundCheck[method.GetIdentifier()] = isContextBound;
+        }
         private static bool ParamCheck(MethodReferenceData referenceData, MethodDefinition callee, out bool shouldAddToCheckList) {
             shouldAddToCheckList = true;
             if (!callee.HasBody) {
@@ -57,6 +68,10 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             }
 
             var methodId = checkMethod.GetIdentifier();
+
+            if (overwriteContextBoundCheck.TryGetValue(methodId, out bool isContextBound)) {
+                return isContextBound;
+            }
 
             if (useCache && checkUsedContextBountFieldCache.TryGetValue(methodId, out bool value) && value) {
                 return value;
@@ -150,25 +165,33 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                             continue;
                         }
                         foreach (var callee in useds.ImplementedMethods()) {
-                            if (PredefineMethodUsedContext.Contains(callee.GetIdentifier())) {
-                                return CacheReturn(true, useCache, methodId);
+
+                            if (overwriteContextBoundCheck.TryGetValue(callee.GetIdentifier(), out bool isCalleeContextBound)) {
+                                if (isCalleeContextBound) {
+                                    return CacheReturn(true, useCache, methodId);
+                                }
                             }
-                            if (ParamCheck(useds, callee, out var shouldAddToCheckList)) {
-                                return CacheReturn(true, useCache, methodId);
-                            }
-                            if (shouldAddToCheckList) {
-                                worklist.Push(callee);
-                            }
-                            if (callee.Name == ".ctor" && callee.DeclaringType.Name.OrdinalStartsWith('<')) {
-                                foreach (var autoGenerate in callee.DeclaringType.Methods) {
-                                    if (autoGenerate.Name == ".ctor") {
-                                        continue;
-                                    }
-                                    if (ParamCheck(useds, autoGenerate, out shouldAddToCheckList)) {
-                                        return CacheReturn(true, useCache, methodId);
-                                    }
-                                    if (shouldAddToCheckList) {
-                                        worklist.Push(autoGenerate);
+                            else {
+                                if (PredefineMethodUsedContext.Contains(callee.GetIdentifier())) {
+                                    return CacheReturn(true, useCache, methodId);
+                                }
+                                if (ParamCheck(useds, callee, out var shouldAddToCheckList)) {
+                                    return CacheReturn(true, useCache, methodId);
+                                }
+                                if (shouldAddToCheckList) {
+                                    worklist.Push(callee);
+                                }
+                                if (callee.Name == ".ctor" && callee.DeclaringType.Name.OrdinalStartsWith('<')) {
+                                    foreach (var autoGenerate in callee.DeclaringType.Methods) {
+                                        if (autoGenerate.Name == ".ctor") {
+                                            continue;
+                                        }
+                                        if (ParamCheck(useds, autoGenerate, out shouldAddToCheckList)) {
+                                            return CacheReturn(true, useCache, methodId);
+                                        }
+                                        if (shouldAddToCheckList) {
+                                            worklist.Push(autoGenerate);
+                                        }
                                     }
                                 }
                             }
