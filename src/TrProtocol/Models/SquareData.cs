@@ -1,4 +1,5 @@
 ﻿using TrProtocol.Attributes;
+using Terraria.ID;
 using TrProtocol.Interfaces;
 
 namespace TrProtocol.Models;

@@ -73,6 +73,7 @@ namespace UnifiedServerProcess
         public virtual int Read() => Console.Read();
         public virtual ConsoleKeyInfo ReadKey() => Console.ReadKey();
         public virtual ConsoleKeyInfo ReadKey(bool intercept) => Console.ReadKey(intercept);
+        public virtual void ResetColor() => Console.ResetColor();
 
         #endregion
 
