@@ -1,3 +1,4 @@
+next-version: 1.0.3
 mode: ContinuousDeployment
 branches:
   main:
