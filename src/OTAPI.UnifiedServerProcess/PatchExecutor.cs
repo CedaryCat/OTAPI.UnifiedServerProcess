@@ -118,6 +118,7 @@ namespace OTAPI.UnifiedServerProcess
                     else if (modType == ModType.PreWrite) {
                         PatchingLogic.Patch(logger, modder.Module);
                         modder.ModContext.TargetAssemblyName = "OTAPI";
+                        modder.AddMetadata("USPBuildVersion", typeof(PatchExecutor).Assembly.GetName().Version!.ToString());
                         modder.AddEnvMetadata();
                     }
                     else if (modType == ModType.Write) {
