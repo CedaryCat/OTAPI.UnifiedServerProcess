@@ -1,5 +1,5 @@
 next-version: 1.0.3
-mode: ContinuousDeployment
+# mode: ContinuousDeployment
 branches:
   main:
     increment: Patch
