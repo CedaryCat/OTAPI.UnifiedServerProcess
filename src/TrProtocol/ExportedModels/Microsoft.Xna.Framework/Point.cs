@@ -12,8 +12,8 @@ namespace Microsoft.Xna.Framework
 
         public static bool operator ==(Point a, Point b) => a.Equals(b);
         public static bool operator !=(Point a, Point b) => !a.Equals(b);
-        public readonly override bool Equals(object? obj) => obj is Point other && Equals(other);
-        public readonly override int GetHashCode() => packedValue.GetHashCode();
+        public override readonly bool Equals(object? obj) => obj is Point other && Equals(other);
+        public override readonly int GetHashCode() => packedValue.GetHashCode();
         public readonly bool Equals(Point other) => packedValue == other.packedValue;
     }
 }

@@ -9,7 +9,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.S2C
         public static int ID => 0x0A;
         public ReadFlags Flag = mode;
         public long Order = Order;
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(CONFIRM_READ_FLAG) + ':' + Flag.ToString();
         }
     }

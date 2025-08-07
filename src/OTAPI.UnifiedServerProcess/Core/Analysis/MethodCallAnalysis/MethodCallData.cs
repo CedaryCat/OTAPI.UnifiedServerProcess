@@ -33,7 +33,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                 }
             }
         }
-        public readonly override int GetHashCode() {
+        public override readonly int GetHashCode() {
             return DirectlyCalledMethod.GetIdentifier().GetHashCode();
         }
         public readonly bool Equals(MethodReferenceData other) => DirectlyCalledMethod.GetIdentifier() == other.DirectlyCalledMethod.GetIdentifier();

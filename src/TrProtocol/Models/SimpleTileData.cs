@@ -26,32 +26,39 @@ public struct SimpleTileData
     public byte LiquidType;
 
 
-    [IgnoreSerialize] public bool Wire {
+    [IgnoreSerialize]
+    public bool Wire {
         get => Flags1[4];
         set => Flags1[4] = value;
     }
-    [IgnoreSerialize] public bool HalfBrick {
+    [IgnoreSerialize]
+    public bool HalfBrick {
         get => Flags1[5];
         set => Flags1[5] = value;
     }
-    [IgnoreSerialize] public bool Actuator {
+    [IgnoreSerialize]
+    public bool Actuator {
         get => Flags1[6];
         set => Flags1[6] = value;
     }
-    [IgnoreSerialize] public bool InActive {
+    [IgnoreSerialize]
+    public bool InActive {
         get => Flags1[7];
         set => Flags1[7] = value;
     }
-    [IgnoreSerialize] public bool Wire2 {
+    [IgnoreSerialize]
+    public bool Wire2 {
         get => Flags2[0];
         set => Flags2[0] = value;
     }
-    [IgnoreSerialize] public bool Wire3 {
+    [IgnoreSerialize]
+    public bool Wire3 {
         get => Flags2[1];
         set => Flags2[1] = value;
     }
 
-    [IgnoreSerialize] public byte Slope {
+    [IgnoreSerialize]
+    public byte Slope {
         get {
             byte slope = 0;
             if (Flags2[4]) {

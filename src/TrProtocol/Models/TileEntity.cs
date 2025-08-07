@@ -16,8 +16,8 @@ namespace TrProtocol.Models.TileEntities
         [IgnoreSerialize]
         public abstract bool NetworkSend { get; set; }
 
-        public unsafe abstract void ReadContent(ref void* ptr);
+        public abstract unsafe void ReadContent(ref void* ptr);
 
-        public unsafe abstract void WriteContent(ref void* ptr);
+        public abstract unsafe void WriteContent(ref void* ptr);
     }
 }

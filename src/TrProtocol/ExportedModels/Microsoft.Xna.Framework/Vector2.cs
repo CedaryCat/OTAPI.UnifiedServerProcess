@@ -55,7 +55,7 @@ namespace Microsoft.Xna.Framework
             X = value;
         }
 
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             CultureInfo currentCulture = CultureInfo.CurrentCulture;
             return string.Format(currentCulture, "{{X:{0} Y:{1}}}", new object[2]
             {
@@ -68,14 +68,14 @@ namespace Microsoft.Xna.Framework
             return X == other.X && Y == other.Y;
         }
 
-        public readonly override bool Equals(object? obj) {
+        public override readonly bool Equals(object? obj) {
             bool result = false;
             if (obj is Vector2 other)
                 result = Equals(other);
             return result;
         }
 
-        public readonly override int GetHashCode() {
+        public override readonly int GetHashCode() {
             return X.GetHashCode() + Y.GetHashCode();
         }
 

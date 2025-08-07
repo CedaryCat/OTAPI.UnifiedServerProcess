@@ -5,7 +5,7 @@ using System.Text;
 
 namespace TrProtocol
 {
-    public unsafe static class CommonCode
+    public static unsafe class CommonCode
     {
         static delegate*<int, string> FastAllocateString;
         static CommonCode() {
@@ -54,7 +54,7 @@ namespace TrProtocol
         #endregion
 
         #region Compression
-        public unsafe static void ReadDecompressedData(void* source, ref void* destination, int compressedDataLength) {
+        public static unsafe void ReadDecompressedData(void* source, ref void* destination, int compressedDataLength) {
             using var st = new UnmanagedMemoryStream((byte*)source, compressedDataLength, compressedDataLength, FileAccess.Read);
             using (var dst = new DeflateStream(st, CompressionMode.Decompress, true)) {
                 int readed;
@@ -65,7 +65,7 @@ namespace TrProtocol
                 while (readed > 0);
             }
         }
-        public unsafe static void WriteCompressedData(void* source, ref void* destination, int rawDataLength, CompressionLevel level) {
+        public static unsafe void WriteCompressedData(void* source, ref void* destination, int rawDataLength, CompressionLevel level) {
             using var st = new UnmanagedMemoryStream((byte*)destination, 1024 * 64, 1024 * 64, FileAccess.Write);
             using (var dst = new DeflateStream(st, level, true)) {
                 dst.Write(new Span<byte>(source, rawDataLength));

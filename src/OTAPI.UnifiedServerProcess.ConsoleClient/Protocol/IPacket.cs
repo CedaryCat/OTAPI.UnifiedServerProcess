@@ -17,7 +17,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol
         public static TPacket ReadEmpty<TPacket>(Span<byte> content) where TPacket : unmanaged, IEmptyPacket<TPacket> {
             return IEmptyPacket<TPacket>.ReadEmpty(content);
         }
-        public unsafe static void Write<TSelf>(Stream stream, TSelf packet) where TSelf : unmanaged, IPacket<TSelf> {
+        public static unsafe void Write<TSelf>(Stream stream, TSelf packet) where TSelf : unmanaged, IPacket<TSelf> {
             var bufferSize = sizeof(TSelf) + PacketHeaderSize;
             byte* bufferPtr = stackalloc byte[bufferSize];
             var buffer = new Span<byte>(bufferPtr, bufferSize);
@@ -31,7 +31,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol
 
             stream.Write(buffer[..len]);
         }
-        public unsafe static void WriteManaged<TSelf>(Stream stream, TSelf packet) where TSelf : struct, IPacket<TSelf> {
+        public static unsafe void WriteManaged<TSelf>(Stream stream, TSelf packet) where TSelf : struct, IPacket<TSelf> {
             var bufferSize = packet.GetBufferSize();
             var buffer = ArrayPool<byte>.Shared.Rent(bufferSize);
             try {

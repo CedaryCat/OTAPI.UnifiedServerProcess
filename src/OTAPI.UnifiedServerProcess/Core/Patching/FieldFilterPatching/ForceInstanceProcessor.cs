@@ -5,7 +5,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 {
     public class ForceInstanceProcessor() : IFieldFilterArgProcessor
     {
-        readonly static string[] fields = new string[] {
+        static readonly string[] fields = new string[] {
             // "Terraria.Main.AnnouncementBoxRange",
             "Terraria.DataStructures.TileEntity.manager",
             "Terraria.DataStructures.TileEntity.EntityCreationLock",
@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.NPC.defaultMaxSpawns",
             "Terraria.NPC.defaultSpawnRate",
         };
-        readonly static string[] types = new string[] {
+        static readonly string[] types = new string[] {
             "Terraria.ObjectData.TileObjectData",
         };
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {

@@ -4,7 +4,7 @@ namespace TrProtocol.Models
 {
     public struct ChestData
     {
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return $"[{TileX}, {TileY}] {Name}";
         }
         public short ID;

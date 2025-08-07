@@ -25,7 +25,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
         }
         static readonly Dictionary<string, bool> overwriteContextBoundCheck = [];
         public static void ForceOverrideContextBoundCheck<TFeature>(
-            this TFeature _, 
+            this TFeature _,
             string methodId, bool isContextBound) {
             overwriteContextBoundCheck[methodId] = isContextBound;
         }

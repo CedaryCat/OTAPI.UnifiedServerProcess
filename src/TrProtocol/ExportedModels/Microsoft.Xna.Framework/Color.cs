@@ -49,9 +49,9 @@ namespace Microsoft.Xna.Framework
             set => packedValue = value;
         }
 
-        public readonly override string ToString() => string.Format(CultureInfo.CurrentCulture, "{{R:{0} G:{1} B:{2} A:{3}}}", r, g, b, a);
-        public readonly override int GetHashCode() => packedValue.GetHashCode();
-        public readonly override bool Equals(object? obj) => obj is Color other && Equals(other);
+        public override readonly string ToString() => string.Format(CultureInfo.CurrentCulture, "{{R:{0} G:{1} B:{2} A:{3}}}", r, g, b, a);
+        public override readonly int GetHashCode() => packedValue.GetHashCode();
+        public override readonly bool Equals(object? obj) => obj is Color other && Equals(other);
         public readonly bool Equals(Color other) => packedValue.Equals(other.packedValue);
         public bool Equals(RGBColor other) => R == other.R && G == other.G && B == other.B;
         public static bool operator ==(Color a, Color b) => a.Equals(b);

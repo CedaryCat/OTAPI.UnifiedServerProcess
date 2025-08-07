@@ -24,7 +24,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.S2C
         public readonly int GetBufferSize() {
             return IPacket.PacketHeaderSize + IPacket.GetStringBufferSize(Line);
         }
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(PUSH_READLINE) + $":[{Order}]" + Line;
         }
     }

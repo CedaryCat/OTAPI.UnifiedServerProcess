@@ -4,7 +4,7 @@ namespace TrProtocol.Models
 {
     public partial struct SignData
     {
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return $"[{TileX}, {TileY}] {Text}";
         }
         public short ID;

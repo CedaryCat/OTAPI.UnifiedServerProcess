@@ -8,7 +8,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.C2S
         public const int id = 0x05;
         public static int ID => id;
         public ConsoleColor Color = color;
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(SET_FG_COLOR) + ':' + Color;
         }
     }

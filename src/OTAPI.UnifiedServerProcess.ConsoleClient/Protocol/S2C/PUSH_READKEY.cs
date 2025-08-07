@@ -9,7 +9,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.S2C
         public static int ID => id;
         public ConsoleKeyInfo KeyInfo = key;
         public long Order = order;
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(PUSH_READKEY) + $":[{Order}]" + KeyInfo;
         }
     }

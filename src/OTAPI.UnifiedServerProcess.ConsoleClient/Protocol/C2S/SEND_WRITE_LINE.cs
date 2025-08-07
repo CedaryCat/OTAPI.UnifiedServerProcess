@@ -18,7 +18,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.C2S
         public readonly int GetBufferSize() {
             return IPacket.PacketHeaderSize + IPacket.GetStringBufferSize(Text);
         }
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(SEND_WRITE_LINE) + ':' + Text;
         }
     }

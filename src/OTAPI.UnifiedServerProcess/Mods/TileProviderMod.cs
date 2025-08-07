@@ -2421,7 +2421,7 @@ namespace Terraria
 
         public class DefaultTileCollection(int width, int height) : TileCollection
         {
-            static unsafe readonly delegate*<object?, nint, ref TileData> cached_RefTileData_GetTileRef = &RefTileData_GetTileRef;
+            static readonly unsafe delegate*<object?, nint, ref TileData> cached_RefTileData_GetTileRef = &RefTileData_GetTileRef;
             static ref TileData RefTileData_GetTileRef(object? managedData, nint unmanagedData) {
                 return ref ((TileData[,])managedData!)[(short)((uint)(unmanagedData) >> 16), (short)((uint)(unmanagedData) & 0xFFFF)];
             }
@@ -2433,7 +2433,7 @@ namespace Terraria
             readonly TileData[,]
                 data = new TileData[width, height];
             public sealed override ref TileData this[int x, int y] => ref data[x, y];
-            public unsafe sealed override RefTileData GetRefTile(int x, int y) => new(data, (nint)((uint)((ushort)x << 16) | (ushort)y), cached_RefTileData_GetTileRef);
+            public sealed override unsafe RefTileData GetRefTile(int x, int y) => new(data, (nint)((uint)((ushort)x << 16) | (ushort)y), cached_RefTileData_GetTileRef);
             public sealed override int Width => width;
             public sealed override int Height => height;
 
@@ -2441,7 +2441,7 @@ namespace Terraria
         }
         public unsafe class UnsafeTileCollection(int width, int height) : TileCollection
         {
-            static unsafe readonly delegate*<object?, nint, ref TileData> cached_RefTileData_GetTileRef = &RefTileData_GetTileRef;
+            static readonly unsafe delegate*<object?, nint, ref TileData> cached_RefTileData_GetTileRef = &RefTileData_GetTileRef;
             static ref TileData RefTileData_GetTileRef(object? _, nint unmanagedData) {
                 return ref *(TileData*)unmanagedData;
             }
@@ -2488,10 +2488,10 @@ namespace Terraria
             get => ref getRefFunc(managedData, unmanagedData);
         }
         public readonly bool Equals(RefTileData other) => managedData == other.managedData && unmanagedData == other.unmanagedData;
-        public readonly override bool Equals(object? obj) => obj is RefTileData refTile && Equals(refTile);
+        public override readonly bool Equals(object? obj) => obj is RefTileData refTile && Equals(refTile);
         public static bool operator ==(RefTileData left, RefTileData right) => left.Equals(right);
         public static bool operator !=(RefTileData left, RefTileData right) => !(left == right);
-        public readonly override int GetHashCode() => HashCode.Combine(managedData, unmanagedData);
+        public override readonly int GetHashCode() => HashCode.Combine(managedData, unmanagedData);
     }
     public struct TileData : IEquatable<TileData>
     {
@@ -2557,7 +2557,7 @@ namespace Terraria
         public byte bTileHeader2;
         public byte bTileHeader3;
 
-        public readonly override bool Equals(object? obj) => obj is TileData other && Equals(other);
+        public override readonly bool Equals(object? obj) => obj is TileData other && Equals(other);
         public readonly bool Equals(TileData other) {
             return type == other.type &&
                 wall == other.wall &&
@@ -2569,7 +2569,7 @@ namespace Terraria
                 bTileHeader2 == other.bTileHeader2 &&
                 bTileHeader3 == other.bTileHeader3;
         }
-        public readonly override int GetHashCode() {
+        public override readonly int GetHashCode() {
             return HashCode.Combine(
                 type << 16 | wall,
                 sTileHeader,
@@ -3168,7 +3168,7 @@ namespace Terraria
             invisibleWall(invisibleWall: false);
         }
 
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return "Tile Type:" + type + " Active:" + active().ToString() + " Wall:" + wall + " Slope:" + slope() + " fX:" + frameX + " fY:" + frameY;
         }
 

@@ -26,10 +26,10 @@ namespace Terraria.DataStructures
         }
         public static bool operator ==(Point16 first, Point16 second) => first.Equals(second);
         public static bool operator !=(Point16 first, Point16 second) => !first.Equals(second);
-        public readonly override bool Equals(object? obj) => obj is Point16 point && Equals(point);
+        public override readonly bool Equals(object? obj) => obj is Point16 point && Equals(point);
         public readonly bool Equals(Point16 other) => packedValue == other.packedValue;
-        public readonly override int GetHashCode() => packedValue.GetHashCode();
-        public readonly override string ToString() {
+        public override readonly int GetHashCode() => packedValue.GetHashCode();
+        public override readonly string ToString() {
             return $"{{{X}, {Y}}}";
         }
     }

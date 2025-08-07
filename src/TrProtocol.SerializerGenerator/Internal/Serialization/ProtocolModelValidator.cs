@@ -328,7 +328,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
         }
         static IEnumerable<ProtocolTypeData> EnumerateConcreteImpl(
             Dictionary<string, PolymorphicImplsInfo> polymorphicInfos,
-            Dictionary<string, PolymorphicImplsData> polymorphicImpls, 
+            Dictionary<string, PolymorphicImplsData> polymorphicImpls,
             ProtocolTypeData type) {
             if (!type.IsPolymorphic) {
                 yield return type;
@@ -350,7 +350,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
             }
         }
         static ProtocolTypeData[] VaidateGlobalTypeID(
-            Dictionary<string, PolymorphicImplsInfo> polymorphicInfos, 
+            Dictionary<string, PolymorphicImplsInfo> polymorphicInfos,
             Dictionary<string, PolymorphicImplsData> polymorphicImpls,
             ProtocolTypeData[] models) {
             var rootTypes = models.Where(m => m.IsPolymorphic && !m.IsConcreteImpl);
@@ -363,8 +363,8 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
         static void VaidateGlobalTypeID(
             List<ProtocolTypeData> globalIDRootTypes,
             Dictionary<string, PolymorphicImplsInfo> polymorphicInfos,
-            Dictionary<string, PolymorphicImplsData> polymorphicImpls, 
-            ProtocolTypeData type, 
+            Dictionary<string, PolymorphicImplsData> polymorphicImpls,
+            ProtocolTypeData type,
             bool hasAttribute) {
 
             if (type.DefSyntax.AttributeMatch<GenerateGlobalIDAttribute>(out var match)) {

@@ -20,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.C2S
             return IPacket.PacketHeaderSize + IPacket.GetStringBufferSize(Title);
         }
 
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(SET_TITLE) + ':' + Title;
         }
     }

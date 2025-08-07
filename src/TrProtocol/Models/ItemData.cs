@@ -13,7 +13,7 @@ namespace TrProtocol.Models
             ItemID == other.ItemID && Prefix == other.Prefix && Stack == other.Stack;
         public override bool Equals([NotNullWhen(true)] object? obj) => obj is ItemData data && Equals(data);
 
-        public readonly override int GetHashCode() => HashCode.Combine(ItemID, Prefix, Stack);
+        public override readonly int GetHashCode() => HashCode.Combine(ItemID, Prefix, Stack);
 
         public static bool operator ==(ItemData left, ItemData right) => left.Equals(right);
 

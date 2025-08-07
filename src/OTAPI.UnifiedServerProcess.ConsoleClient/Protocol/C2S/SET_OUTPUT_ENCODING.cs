@@ -17,7 +17,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.C2S
                 encodingCodePage = value.CodePage;
             }
         }
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(SET_OUTPUT_ENCODING) + ':' + Encoding;
         }
     }

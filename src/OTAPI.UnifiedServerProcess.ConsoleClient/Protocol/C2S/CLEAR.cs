@@ -7,7 +7,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.C2S
     {
         public const int id = 0x01;
         public static int ID => id;
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(CLEAR);
         }
     }

@@ -9,7 +9,7 @@ namespace OTAPI.UnifiedServerProcess.ConsoleClient.Protocol.C2S
         public static int ID => id;
         public int Left = left;
         public int Top = top;
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return nameof(SET_WINDOW_POS) + ':' + Left + ',' + Top;
         }
     }
