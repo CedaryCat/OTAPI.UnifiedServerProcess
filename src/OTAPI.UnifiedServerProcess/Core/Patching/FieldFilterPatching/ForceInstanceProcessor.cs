@@ -16,6 +16,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.Main.autoGen",
             "Terraria.Main.AutogenSeedName",
             "Terraria.Main.AutogenProgress",
+            "Terraria.NPC.defaultMaxSpawns",
+            "Terraria.NPC.defaultSpawnRate",
         };
         readonly static string[] types = new string[] {
             "Terraria.ObjectData.TileObjectData",
