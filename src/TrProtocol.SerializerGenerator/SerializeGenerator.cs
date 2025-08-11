@@ -25,6 +25,9 @@ namespace TrProtocol.SerializerGenerator
             if (syntaxNode is not TypeDeclarationSyntax td/* && td.Keyword.ToString() is not "interface" && td.Keyword.ToString() is not "record" && td.BaseList is not null*/) {
                 return false;
             }
+            if (td.BaseList is null || td.BaseList.Types.Count == 0) {
+                return false;
+            }
             td.GetNamespace(out _, out var nameSpace, out _);
             if (nameSpace is null) {
                 return false;
@@ -1662,6 +1665,9 @@ namespace TrProtocol.SerializerGenerator
                     #region Write using
                     foreach (var us in model.Imports.Concat(NeccessaryUsings).Distinct()) {
                         usingTarget.NewLineAfter($"using {us};");
+                    }
+                    foreach (var staticUsing in model.StaticImports) {
+                        usingTarget.NewLineAfter($"using static {staticUsing};");
                     }
                     #endregion
 

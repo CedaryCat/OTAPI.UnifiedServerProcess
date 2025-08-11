@@ -1,5 +1,5 @@
 ﻿using Terraria.DataStructures;
-using Terraria.GameContent.UI.WiresUI.Settings;
+using static Terraria.GameContent.UI.WiresUI.Settings;
 
 namespace TrProtocol.NetPackets;
 

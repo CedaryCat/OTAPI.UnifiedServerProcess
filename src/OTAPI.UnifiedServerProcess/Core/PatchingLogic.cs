@@ -14,6 +14,7 @@ namespace OTAPI.UnifiedServerProcess.Core
     {
         public static void Patch(ILogger logger, ModuleDefinition module) {
 
+            PatchLogic.PatchCollision(module);
             new NetworkLogicPruner(module).Prune();
 
             var analyzers = new AnalyzerGroups(logger, module);

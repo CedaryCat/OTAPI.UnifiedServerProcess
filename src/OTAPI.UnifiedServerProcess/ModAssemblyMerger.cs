@@ -301,7 +301,12 @@ namespace OTAPI.UnifiedServerProcess
                     SetMemberReplace(module, modType.CustomAttributes, true);
                 }
                 foreach (var field in modType.Fields) {
-                    SetMemberReplace(module, field.CustomAttributes, modType.IsEnum);
+                    if (modType.IsEnum && !field.IsStatic) {
+                        SetMemberReplace(module, field.CustomAttributes, false);
+                    }
+                    else {
+                        SetMemberReplace(module, field.CustomAttributes, modType.IsEnum);
+                    }
                 }
             }
             foreach (var nested in modType.NestedTypes) {

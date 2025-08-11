@@ -1,5 +1,6 @@
 ﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TrProtocol.Attributes;
 using TrProtocol.Interfaces;
 using TrProtocol.SerializerGenerator.Internal.Diagnostics;
@@ -38,12 +39,19 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
 
             var Namespace = fullNamespace;
             var imports = unit!.Usings
+                .Where(u => u.StaticKeyword == default && u.GlobalKeyword == default)
+                .Select(u => u.Name?.ToString())
+                .Where(u => u is not null)
+                .OfType<string>()
+                .ToArray();
+            var staticImports = unit.Usings
+                .Where(u => u.StaticKeyword != default && u.GlobalKeyword == default)
                 .Select(u => u.Name?.ToString())
                 .Where(u => u is not null)
                 .OfType<string>()
                 .ToArray();
 
-            if (!context.TryGetTypeSymbol(typeName, out var modelSym, fullNamespace, Array.Empty<string>())) {
+            if (!context.TryGetTypeSymbol(typeName, out var modelSym, fullNamespace, [])) {
                 throw new DiagnosticException(
                     Diagnostic.Create(
                         new DiagnosticDescriptor(
@@ -56,7 +64,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Serialization
                         defSyntax.GetLocation(),
                         typeName));
             }
-            var model = new ProtocolTypeData(defSyntax, modelSym, typeName, Namespace, imports, info.Members);
+            var model = new ProtocolTypeData(defSyntax, modelSym, typeName, Namespace, imports, staticImports, info.Members);
 
             if (modelSym.IsOrInheritFrom(nameof(INetPacket))) {
                 model.IsNetPacket = true;

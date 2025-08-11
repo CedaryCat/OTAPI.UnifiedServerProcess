@@ -331,7 +331,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             if (arguments.ContextTypes.TryGetValue(method.DeclaringType.FullName, out var predefined) && predefined.IsPredefined) {
                 return;
             }
-
             var methodId = method.GetIdentifier();
 
             if (arguments.OriginalToContextType.TryGetValue(method.DeclaringType.FullName, out var contextType)

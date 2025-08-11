@@ -6,19 +6,21 @@ namespace TrProtocol.SerializerGenerator.Internal.Models
 {
     public class ProtocolTypeData
     {
-        public ProtocolTypeData(TypeDeclarationSyntax classDeclaration, INamedTypeSymbol symbol, string name, string nameSpace, string[] imports, SerializationExpandContext[] members) {
+        public ProtocolTypeData(TypeDeclarationSyntax classDeclaration, INamedTypeSymbol symbol, string name, string nameSpace, string[] imports, string[] staticImports, SerializationExpandContext[] members) {
             DefSyntax = classDeclaration;
             DefSymbol = symbol;
             TypeName = name;
             Members = members;
             Namespace = nameSpace;
-            Imports = new HashSet<string>(imports);
+            Imports = [.. imports];
+            StaticImports = [.. staticImports];
         }
         public readonly INamedTypeSymbol DefSymbol;
         public readonly TypeDeclarationSyntax DefSyntax;
 
         public string Namespace;
         public HashSet<string> Imports;
+        public HashSet<string> StaticImports;
 
         public List<(INamedTypeSymbol EnumType, string DiscriminatorName, MemberAccessExpressionSyntax value)> AutoDiscriminators = new();
 
