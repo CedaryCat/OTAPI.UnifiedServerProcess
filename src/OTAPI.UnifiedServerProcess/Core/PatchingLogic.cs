@@ -36,6 +36,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .Then(new SimplifyMacrosPatcher(logger, module))
                 .Then(new RemoveUnusedCodePatcherAtBegin(logger, module))
                 .Then(new LangManagerPrePatcher(logger, module, analyzers.MethodCallGraph))
+                .Then(new SetThreadStatePatcher(logger, module, analyzers.MethodCallGraph))
 
                 .DefineArgument(new FilterArgumentSource(module, initialMethods))
                 .RegisterProcessor(new AddModifiedFieldsProcessor(rawModifiedStaticFields, initialStaticFields))
