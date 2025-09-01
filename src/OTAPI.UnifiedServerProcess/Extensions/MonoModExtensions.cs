@@ -278,6 +278,16 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 "(" + string.Join(",", paramStrs) + ")";
         }
 
+        public static string GetSimpleIdentifier(this System.Reflection.MethodBase method, bool withTypeName = true) {
+            var type = method.DeclaringType;
+            if (type is null && withTypeName) {
+                throw new ArgumentException("DeclaringType is null", nameof(method));
+            }
+            var typeName = withTypeName ? method.DeclaringType!.FullName + "." : "";
+
+            return typeName + method.Name + "(" + string.Join(",", method.GetParameters().Select(p => p.ParameterType.FullName)) + ")";
+        }
+
         public static string GetIdentifier(this MethodReference method, bool withTypeName = true, params TypeDefinition[] ignoreParams) {
             var originalType = method.DeclaringType;
             if (method.DeclaringType is null && withTypeName) {

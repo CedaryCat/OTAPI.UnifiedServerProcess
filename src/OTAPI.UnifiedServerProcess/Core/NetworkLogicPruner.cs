@@ -19,28 +19,33 @@ namespace OTAPI.UnifiedServerProcess.Core
         // TODO: support more cases
         // readonly FieldDefinition netMode = module.GetType("Terraria.Main").Field("netMode");
 
-        public void Prune() {
-
+        public void Prune(params string[] skippedTypeFullNames) {
+            var skipTypes = skippedTypeFullNames.ToHashSet();
             foreach (var type in module.GetAllTypes()) {
-                foreach (var method in type.Methods) {
+
+                if (skipTypes.Contains(type.FullName)) { 
+                    continue;
+                }
+
+                foreach (var method in type.Methods.ToArray()) {
                     if (!method.HasBody) {
                         continue;
                     }
 
                     Dictionary<Instruction, Instruction> switchBlockEnd = [];
 
-                    bool goingOn = false;
+                    bool anyTargetField = false;
                     foreach (var inst in method.Body.Instructions) {
                         if (inst.Operand is not FieldReference fieldReference) {
                             continue;
                         }
                         if (fieldReference.FullName == dedServ.FullName || fieldReference.FullName == skipMenu.FullName) {
-                            goingOn = true;
+                            anyTargetField = true;
                             break;
                         }
                     }
 
-                    if (!goingOn) {
+                    if (!anyTargetField) {
                         continue;
                     }
 
@@ -118,12 +123,31 @@ namespace OTAPI.UnifiedServerProcess.Core
                         indexMap[method.Body.Instructions[i]] = i;
                     }
 
-                    var data = (-1, -1);
+                    HashSet<int> visited = [];
+                    Stack<(int current, int end1, int end2)> paths = [];
+                    paths.Push((0, -1, -1));
 
-                    for (int i = 0; i < method.Body.Instructions.Count;) {
-                        var reachableInst = method.Body.Instructions[i];
-                        CanReachCurrentInstruction(method.Body, jumpSites, switchBlockEnd, reachableInst, removes, indexMap, ref i, ref data);
-                        reachableInstructions.Add(reachableInst);
+                    while (paths.TryPop(out var pathDetail)) {
+
+                        while (pathDetail.current < method.Body.Instructions.Count) {
+                            if (!visited.Add(pathDetail.current)) {
+                                break;
+                            }
+
+                            var reachableInst = method.Body.Instructions[pathDetail.current];
+                            CanReachCurrentInstruction(method.Body, jumpSites, switchBlockEnd, reachableInst, removes, indexMap, ref pathDetail);
+
+                            if (pathDetail.end1 == -1 && pathDetail.end2 == -1
+                                && reachableInst.Operand is Instruction jumpTo 
+                                && pathDetail.current < method.Body.Instructions.Count
+                                && method.Body.Instructions[pathDetail.current] != jumpTo
+                                && !visited.Contains(indexMap[jumpTo])) {
+
+                                paths.Push((indexMap[jumpTo], pathDetail.end1, pathDetail.end2));
+                            }
+
+                            reachableInstructions.Add(reachableInst);
+                        }
                     }
 
                     foreach (var rm in removes) {
@@ -136,6 +160,8 @@ namespace OTAPI.UnifiedServerProcess.Core
             }
         }
 
+
+
         void CanReachCurrentInstruction(
 
             MethodBody body,
@@ -143,16 +169,16 @@ namespace OTAPI.UnifiedServerProcess.Core
             Dictionary<Instruction, Instruction> switchBlockToEnd,
             Instruction instruction,
             List<Instruction> rm,
-            Dictionary<Instruction, int> indexMap,
+            Dictionary<Instruction, int> inst2Index,
 
-            ref int index, ref (int end_dedServIsTrueBlock, int end_skipMenuIsFalseBlock) data) {
+            ref (int index, int end_dedServIsTrueBlock, int end_skipMenuIsFalseBlock) data) {
 
 
-            if (index > data.end_dedServIsTrueBlock) {
+            if (data.index > data.end_dedServIsTrueBlock) {
                 data.end_dedServIsTrueBlock = -1;
             }
 
-            if (index > data.end_skipMenuIsFalseBlock) {
+            if (data.index > data.end_skipMenuIsFalseBlock) {
                 data.end_skipMenuIsFalseBlock = -1;
             }
 
@@ -162,10 +188,10 @@ namespace OTAPI.UnifiedServerProcess.Core
                     var nextInst = instruction.Next;
 
                     if (nextInst.OpCode == OpCodes.Brtrue || nextInst.OpCode == OpCodes.Brtrue_S) {
-                        var jumpTarget = (Instruction)nextInst.Operand;
+                        var jumpTo = (Instruction)nextInst.Operand;
 
-                        var jumpIndex = indexMap[jumpTarget];
-                        index = jumpIndex;
+                        var jumpToIndex = inst2Index[jumpTo];
+                        data.index = jumpToIndex;
 
                         if (switchBlockToEnd.TryGetValue(instruction, out var blockEnd)) {
                             if (blockEnd.OpCode != OpCodes.Ret
@@ -173,9 +199,9 @@ namespace OTAPI.UnifiedServerProcess.Core
                                 && blockEnd.OpCode != OpCodes.Br_S) {
                                 blockEnd = blockEnd.Next;
                             }
-                            var switchEndIndex = indexMap[blockEnd];
-                            if (switchEndIndex < jumpIndex) {
-                                index = switchEndIndex;
+                            var switchEndIndex = inst2Index[blockEnd];
+                            if (switchEndIndex < jumpToIndex) {
+                                data.index = switchEndIndex;
                             }
                             rm.Add(instruction);
                             return;
@@ -183,9 +209,9 @@ namespace OTAPI.UnifiedServerProcess.Core
 
                         // else block
                         if (instruction.Previous is not null && (instruction.Previous.OpCode == OpCodes.Br || instruction.Previous.OpCode == OpCodes.Br_S)) {
-                            jumpTarget = (Instruction)instruction.Previous.Operand;
-                            jumpIndex = indexMap[jumpTarget];
-                            data.end_dedServIsTrueBlock = jumpIndex;
+                            jumpTo = (Instruction)instruction.Previous.Operand;
+                            jumpToIndex = inst2Index[jumpTo];
+                            data.end_dedServIsTrueBlock = jumpToIndex;
                         }
 
                         rm.Add(instruction);
@@ -195,7 +221,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                     if (nextInst.OpCode == OpCodes.Brfalse || nextInst.OpCode == OpCodes.Brfalse_S) {
                         var jumpTarget = (Instruction)nextInst.Operand;
                         if (jumpSites[jumpTarget].Count == 1) {
-                            data.end_dedServIsTrueBlock = indexMap[jumpTarget];
+                            data.end_dedServIsTrueBlock = inst2Index[jumpTarget];
                             rm.Add(instruction);
                             rm.Add(nextInst);
                         }
@@ -207,8 +233,8 @@ namespace OTAPI.UnifiedServerProcess.Core
                     if (nextInst.OpCode == OpCodes.Brfalse || nextInst.OpCode == OpCodes.Brfalse_S) {
                         var jumpTarget = (Instruction)nextInst.Operand;
 
-                        var jumpIndex = indexMap[jumpTarget];
-                        index = jumpIndex;
+                        var jumpIndex = inst2Index[jumpTarget];
+                        data.index = jumpIndex;
 
                         if (switchBlockToEnd.TryGetValue(instruction, out var blockEnd)) {
                             if (blockEnd.OpCode != OpCodes.Ret
@@ -216,9 +242,9 @@ namespace OTAPI.UnifiedServerProcess.Core
                                 && blockEnd.OpCode != OpCodes.Br_S) {
                                 blockEnd = blockEnd.Next;
                             }
-                            var switchEndIndex = indexMap[blockEnd];
+                            var switchEndIndex = inst2Index[blockEnd];
                             if (switchEndIndex < jumpIndex) {
-                                index = switchEndIndex;
+                                data.index = switchEndIndex;
                             }
                             rm.Add(instruction);
                             return;
@@ -227,7 +253,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                         // else block
                         if (instruction.Previous is not null && (instruction.Previous.OpCode == OpCodes.Br || instruction.Previous.OpCode == OpCodes.Br_S)) {
                             jumpTarget = (Instruction)instruction.Previous.Operand;
-                            jumpIndex = indexMap[jumpTarget];
+                            jumpIndex = inst2Index[jumpTarget];
                             data.end_skipMenuIsFalseBlock = jumpIndex;
                         }
 
@@ -238,7 +264,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                     if (nextInst.OpCode == OpCodes.Brtrue || nextInst.OpCode == OpCodes.Brtrue_S) {
                         var jumpTarget = (Instruction)nextInst.Operand;
                         if (jumpSites[jumpTarget].Count == 1) {
-                            data.end_skipMenuIsFalseBlock = indexMap[jumpTarget];
+                            data.end_skipMenuIsFalseBlock = inst2Index[jumpTarget];
                             rm.Add(instruction);
                             rm.Add(nextInst);
                         }
@@ -246,15 +272,15 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
             }
 
-            if (CheckIsJumpOutOfBlock(body, instruction, switchBlockToEnd, rm, indexMap, ref index, data.end_dedServIsTrueBlock)) {
+            if (CheckIsJumpOutOfBlock(body, instruction, switchBlockToEnd, rm, inst2Index, ref data.index, data.end_dedServIsTrueBlock)) {
                 return;
             }
 
-            if (CheckIsJumpOutOfBlock(body, instruction, switchBlockToEnd, rm, indexMap, ref index, data.end_skipMenuIsFalseBlock)) {
+            if (CheckIsJumpOutOfBlock(body, instruction, switchBlockToEnd, rm, inst2Index, ref data.index, data.end_skipMenuIsFalseBlock)) {
                 return;
             }
 
-            index += 1;
+            data.index += 1;
 
             return;
 

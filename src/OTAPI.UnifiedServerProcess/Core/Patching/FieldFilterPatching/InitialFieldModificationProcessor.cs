@@ -839,7 +839,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     method.Body.ExceptionHandlers.Clear();
                 }
                 else {
-                    Dictionary<Instruction, Instruction> instMap = [];
+                    Dictionary<Instruction, Instruction> instOrig2GenMap = [];
+
+                    instOrig2GenMap[method.Body.Instructions.Last()] = returnInst;
 
                     Dictionary<Instruction, List<LoopBlockData>> instToLoopBlocks = [];
                     foreach (var loopBlock in loopBlocks.Values) {
@@ -935,7 +937,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                                     foreach (var init in loopBlock.InitLoopVariable) {
                                         if (addedInsts.Add(init)) {
-                                            var cloneInit = CloneAndUpdateMap(instMap, init);
+                                            var cloneInit = CloneAndUpdateMap(instOrig2GenMap, init);
                                             MapLocal(method, localMap, init, cloneInit, loopBlock);
                                             ilProcessor.InsertBefore(returnInst, cloneInit);
                                         }
@@ -945,7 +947,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 if (restInsts.Remove(inst)) {
                                     if (addedInsts.Add(inst)) {
                                         removedInsts.Add(inst);
-                                        Instruction clone = CloneAndUpdateMap(instMap, inst);
+                                        Instruction clone = CloneAndUpdateMap(instOrig2GenMap, inst);
                                         MapLocal(method, localMap, inst, clone, loopBlock);
                                         ilProcessor.InsertBefore(returnInst, clone);
                                     }
@@ -954,20 +956,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 if (restInsts.Count == 0) {
                                     foreach (var post in loopBlock.PostLoop) {
                                         if (addedInsts.Add(post)) {
-                                            var clonePost = CloneAndUpdateMap(instMap, post);
+                                            var clonePost = CloneAndUpdateMap(instOrig2GenMap, post);
                                             MapLocal(method, localMap, post, clonePost, loopBlock);
                                             ilProcessor.InsertBefore(returnInst, clonePost);
                                         }
                                     }
                                     foreach (var cond in loopBlock.LoopCond) {
                                         if (addedInsts.Add(cond)) {
-                                            var cloneCond = CloneAndUpdateMap(instMap, cond);
+                                            var cloneCond = CloneAndUpdateMap(instOrig2GenMap, cond);
                                             MapLocal(method, localMap, cond, cloneCond, loopBlock);
                                             ilProcessor.InsertBefore(returnInst, cloneCond);
                                         }
                                     }
-                                    var mapped = (Instruction)(instMap[loopBlock.LoopCond.Last()].Operand = instMap[loopBlock.JumpToLoopHead].Next);
-                                    instMap[mapped] = mapped;
+                                    var mapped = (Instruction)(instOrig2GenMap[loopBlock.LoopCond.Last()].Operand = instOrig2GenMap[loopBlock.JumpToLoopHead].Next);
+                                    instOrig2GenMap[mapped] = mapped;
 
                                     checkingLoops.Remove(loopBlock);
                                     processedLoops.Add(loopBlock);
@@ -976,7 +978,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         }
                         else if (addedInsts.Add(inst) && extractedStaticInsts.Contains(inst)) {
                             removedInsts.Add(inst);
-                            Instruction clone = CloneAndUpdateMap(instMap, inst);
+                            Instruction clone = CloneAndUpdateMap(instOrig2GenMap, inst);
                             MapLocal(method, localMap, inst, clone, null);
                             ilProcessor.InsertBefore(returnInst, clone);
                         }
@@ -984,11 +986,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                     foreach (var inst in generated.Body.Instructions) {
                         if (inst.Operand is Instruction jumpTarget) {
-                            inst.Operand = instMap[jumpTarget];
+                            inst.Operand = instOrig2GenMap[jumpTarget];
                         }
                         else if (inst.Operand is Instruction[] jumpTargets) {
                             for (int i = 0; i < jumpTargets.Length; i++) {
-                                jumpTargets[i] = instMap[jumpTargets[i]];
+                                jumpTargets[i] = instOrig2GenMap[jumpTargets[i]];
                             }
                         }
                     }

@@ -179,11 +179,11 @@ namespace OTAPI.UnifiedServerProcess.Core
             }
 
             HashSet<string> predefined = [
-                MonoModCommon.Reference.ImportMethod(module, () => Collision.SlopeCollision(default,default,default,default,default,default)).GetIdentifier(),
-                MonoModCommon.Reference.ImportMethod(module, () => Collision.noSlopeCollision(default,default,default,default,default,default)).GetIdentifier(),
-                MonoModCommon.Reference.ImportMethod(module, () => Collision.TileCollision(default,default,default,default,default,default,default)).GetIdentifier(),
-                MonoModCommon.Reference.ImportMethod(module, () => Collision.AdvancedTileCollision(default, default, default, default, default, default, default, default)).GetIdentifier(),
-                MonoModCommon.Reference.ImportMethod(module, () => default(Player)!.SlopingCollision(default,default)).GetIdentifier(),
+                MonoModCommon.Reference.Method(() => Collision.SlopeCollision(default,default,default,default,default,default)).GetSimpleIdentifier(),
+                MonoModCommon.Reference.Method(() => Collision.noSlopeCollision(default,default,default,default,default,default)).GetSimpleIdentifier(),
+                MonoModCommon.Reference.Method(() => Collision.TileCollision(default, default, default, default, default, default, default)).GetSimpleIdentifier(),
+                MonoModCommon.Reference.Method(() => Collision.AdvancedTileCollision(default, default, default, default, default, default, default, default)).GetSimpleIdentifier(),
+                MonoModCommon.Reference.Method(() => default(Player)!.SlopingCollision(default,default)).GetSimpleIdentifier(),
             ];
 
             foreach (var m in methodsWithVariables.Values.ToArray()) {
