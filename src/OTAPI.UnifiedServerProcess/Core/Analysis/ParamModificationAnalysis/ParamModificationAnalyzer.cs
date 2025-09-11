@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
     public class ParamModificationAnalyzer : Analyzer, IMethodImplementationFeature
     {
         public sealed override string Name => "ParamModificationAnalyzer";
-        public readonly ImmutableDictionary<string, ImmutableDictionary<int, ParamModifications>> ModifiedParameters;
+        public readonly ImmutableDictionary<string, ImmutableDictionary<int, ParameterMutationInfo>> ModifiedParameters;
         readonly TypeInheritanceGraph typeInheritanceGraph;
 
         readonly DelegateInvocationGraph delegateInvocationGraph;
@@ -39,7 +39,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
             delegateInvocationGraph = invocationGraph;
             this.methodInheritanceGraph = methodInheritanceGraph;
 
-            var modifiedParameters = new Dictionary<string, Dictionary<int, ParamModifications>>();
+            var modifiedParameters = new Dictionary<string, Dictionary<int, ParameterMutationInfo>>();
 
             var workQueue = new Dictionary<string, MethodDefinition>(
                 module.GetAllTypes()
@@ -67,7 +67,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
                     if (dataChanged) {
                         foreach (var modification in modifiedParameters[method.GetIdentifier()].Values) {
-                            Progress(iteration, progress, currentWorkBatch.Length, "modified modifications: {0}", indent: 2, modification.TrackingParameter.GetDebugName());
+                            Progress(iteration, progress, currentWorkBatch.Length, "modified modifications: {0}", indent: 2, modification.Parameter.GetDebugName());
                         }
                     }
                     if (dataChanged && callGraph.MediatedCallGraph.TryGetValue(method.GetIdentifier(), out var callers)) {
@@ -82,8 +82,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
             ModifiedParameters = BuildResultDictionary(modifiedParameters);
         }
-        static ImmutableDictionary<string, ImmutableDictionary<int, ParamModifications>> BuildResultDictionary(Dictionary<string, Dictionary<int, ParamModifications>> contents) {
-            var builder = ImmutableDictionary.CreateBuilder<string, ImmutableDictionary<int, ParamModifications>>();
+        static ImmutableDictionary<string, ImmutableDictionary<int, ParameterMutationInfo>> BuildResultDictionary(Dictionary<string, Dictionary<int, ParameterMutationInfo>> contents) {
+            var builder = ImmutableDictionary.CreateBuilder<string, ImmutableDictionary<int, ParameterMutationInfo>>();
             foreach (var (key, value) in contents) {
                 builder.Add(key, value.ToImmutableDictionary(x => x.Key, x => x.Value));
             }
@@ -94,7 +94,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
             ModuleDefinition module,
             MethodDefinition method,
             ParameterFlowAnalyzer parameterFlowAnalyzer,
-            Dictionary<string, Dictionary<int, ParamModifications>> modifiedParametersAllMethods,
+            Dictionary<string, Dictionary<int, ParameterMutationInfo>> modifiedParametersAllMethods,
             out bool dataChanged) {
 
             var hasExternalChange = false;
@@ -128,7 +128,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 if (CheckIsCatchBlock(method.Body, instruction, ref isCatchBlock)) {
                     continue;
                 }
-                // the modifications in a catch block is a unexpected behavior
+                // the Mutations in a catch block is a unexpected behavior
                 // we can ignore it (such as Terraria.Localization.NetworkText.ToString() will SetToEmptyLiteral() when cause an exception)
                 if (isCatchBlock) {
                     continue;
@@ -163,24 +163,24 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
             dataChanged = hasExternalChange;
 
-            static bool CheckAndAddModifications(Dictionary<string, Dictionary<int, ParamModifications>> modifiedParametersAllMethods, string processingMethodId, MethodDefinition method, ParameterTrackingManifest modified) {
+            static bool CheckAndAddModifications(Dictionary<string, Dictionary<int, ParameterMutationInfo>> modifiedParametersAllMethods, string processingMethodId, MethodDefinition method, ParameterProvenance modified) {
 
                 if (!modifiedParametersAllMethods.TryGetValue(processingMethodId, out var modifiedParametersCurrentMethod)) {
                     modifiedParametersCurrentMethod = [];
                 }
 
-                var id = modified.TrackedParameter.IndexWithThis(method);
+                var id = modified.TracedParameter.IndexWithThis(method);
 
                 if (!modifiedParametersCurrentMethod.TryGetValue(id, out var modifications)) {
-                    modifications = new ParamModifications(modified.TrackedParameter);
+                    modifications = new ParameterMutationInfo(modified.TracedParameter);
                 }
 
                 var result = false;
-                foreach (var part in modified.PartTrackingPaths) {
+                foreach (var part in modified.PartTracingPaths) {
                     if (part.ComponentAccessPath.Length == 0) {
                         continue;
                     }
-                    if (!modifications.modifications.Add(new ModifiedComponent(modifications.TrackingParameter, part.ComponentAccessPath))) {
+                    if (!modifications.Mutations.Add(new ModifiedComponent(modifications.Parameter, part.ComponentAccessPath))) {
                         continue;
                     }
                     result = true;
@@ -194,7 +194,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 return result;
             }
 
-            static bool TryAddModifications(Dictionary<string, Dictionary<int, ParamModifications>> modifiedParametersAllMethods, string processingMethodId, MethodDefinition method, ParameterDefinition parameter, IEnumerable<MemberAccessStep[]> modifications) {
+            static bool TryAddModifications(Dictionary<string, Dictionary<int, ParameterMutationInfo>> modifiedParametersAllMethods, string processingMethodId, MethodDefinition method, ParameterDefinition parameter, IEnumerable<MemberAccessStep[]> modifications) {
 
                 if (!modifiedParametersAllMethods.TryGetValue(processingMethodId, out var modifiedParametersCurrentMethod)) {
                     modifiedParametersCurrentMethod = [];
@@ -203,12 +203,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 var id = parameter.IndexWithThis(method);
 
                 if (!modifiedParametersCurrentMethod.TryGetValue(id, out var modification)) {
-                    modification = new ParamModifications(parameter);
+                    modification = new ParameterMutationInfo(parameter);
                 }
 
                 bool result = false;
                 foreach (var modified in modifications) {
-                    if (!modification.modifications.Add(new ModifiedComponent(modification.TrackingParameter, modified))) {
+                    if (!modification.Mutations.Add(new ModifiedComponent(modification.Parameter, modified))) {
                         continue;
                     }
                     result = true;
@@ -230,23 +230,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                         if (!parameterFlowAnalyzer.AnalyzedMethods.TryGetValue(processingMethodId, out var tracedMethodData)) {
                             continue;
                         }
-                        if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
+                        if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterUsageTrack.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
                             continue;
                         }
 
                         if (tracedStackData.ReferencedParameters.Values
-                            .SelectMany(p => p.PartTrackingPaths)
+                            .SelectMany(p => p.PartTracingPaths)
                             .Any(o => o.EncapsulationHierarchy.Length >= 1 && o.EncapsulationHierarchy.Last() is RealMemberLayer memberLayer && memberLayer.Member.FullName == field.FullName)) {
                             continue;
                         }
 
-                        if (!tracedStackData.TryExtendTrackingWithMemberAccess(field, out var modified)) {
+                        if (!tracedStackData.TryExtendTracingWithMemberAccess(field, out var modified)) {
                             continue;
                         }
 
                         foreach (var modifiedParameter in modified.ReferencedParameters.Values) {
                             // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
-                            if (modifiedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
+                            if (modifiedParameter.TracedParameter.IsParameterThis(method) && method.IsConstructor) {
                                 continue;
                             }
                             if (CheckAndAddModifications(modifiedParametersAllMethods, processingMethodId, method, modifiedParameter)) {
@@ -274,20 +274,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
                 HandleModifyArrayElementInner(tracedMethodData, loadParamsInEveryPaths);
             }
-            void HandleModifyArrayElementInner(ParameterReferenceData tracedMethodData, MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths) {
+            void HandleModifyArrayElementInner(ParameterUsageTrack tracedMethodData, MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths) {
                 foreach (var paramGroup in loadParamsInEveryPaths) {
                     var loadModifyingInstance = paramGroup[0];
 
-                    // If loadModifyingInstance.RealPushValueInstruction is not coming from the modifications of caller method, skip
-                    if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
+                    // If loadModifyingInstance.RealPushValueInstruction is not coming from the Mutations of caller method, skip
+                    if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterUsageTrack.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
                         continue;
                     }
-                    //if (!tracedStackData.TryExtendTrackingWithArrayAccess((ArrayType)loadModifyingInstance.StackTopType!, out var modified)) {
+                    //if (!tracedStackData.TryExtendTracingWithArrayAccess((ArrayType)loadModifyingInstance.StackTopType!, out var modified)) {
                     //    continue;
                     //}
                     foreach (var modifiedParameter in tracedStackData.ReferencedParameters.Values) {
                         // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
-                        if (modifiedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
+                        if (modifiedParameter.TracedParameter.IsParameterThis(method) && method.IsConstructor) {
                             continue;
                         }
                         if (CheckAndAddModifications(modifiedParametersAllMethods, processingMethodId, method, modifiedParameter)) {
@@ -296,22 +296,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                     }
                 }
             }
-            void HandleModifyCollectionElement(ParameterReferenceData tracedMethodData, MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths, Instruction modifyingInstruction) {
+            void HandleModifyCollectionElement(ParameterUsageTrack tracedMethodData, MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths, Instruction modifyingInstruction) {
                 foreach (var paramGroup in loadParamsInEveryPaths) {
                     var loadModifyingInstance = paramGroup[0];
 
-                    // If loadModifyingInstance.RealPushValueInstruction is not coming from the modifications of caller method, skip
-                    if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
+                    // If loadModifyingInstance.RealPushValueInstruction is not coming from the Mutations of caller method, skip
+                    if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterUsageTrack.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
                         continue;
                     }
                     //var collectionType = ((MethodReference)modifyingInstruction.Operand).DeclaringType;
                     //var elementType = collectionType is GenericInstanceType generic ? generic.GenericArguments.Last() : collectionType.Module.TypeSystem.Object;
-                    //if (!tracedStackData.TryExtendTrackingWithCollectionAccess(collectionType, elementType, out var modified)) {
+                    //if (!tracedStackData.TryExtendTracingWithCollectionAccess(collectionType, elementType, out var modified)) {
                     //    continue;
                     //}
                     foreach (var modifiedParameter in tracedStackData.ReferencedParameters.Values) {
                         // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
-                        if (modifiedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
+                        if (modifiedParameter.TracedParameter.IsParameterThis(method) && method.IsConstructor) {
                             continue;
                         }
                         if (CheckAndAddModifications(modifiedParametersAllMethods, processingMethodId, method, modifiedParameter)) {
@@ -331,7 +331,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
                 var implementations = this.GetMethodImplementations(method, instruction, jumpSites, out _);
 
-                // Analyze modifications sources
+                // Analyze Mutations sources
                 var paramPaths = MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites);
                 MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths = new MonoModCommon.Stack.StackTopTypePath[paramPaths.Length][];
 
@@ -358,7 +358,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 }
 
                 //// We assume that if "this" is modified in invocation,
-                //// it's equivalent to modifications "this" has modified when the delegate is created
+                //// it's equivalent to Mutations "this" has modified when the delegate is created
 
                 //if (resolvedCallee.DeclaringType.IsDelegate() && resolvedCallee.IsConstructor) {
                 //    var delegateLoadKey = DelegateInvocationData.GenerateStackKey(method, instruction);
@@ -383,7 +383,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
                 //    foreach (var referencedParameter in tracedStackData.ReferencedParameters.Values) {
                 //        // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
-                //        if (referencedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
+                //        if (referencedParameter.TracedParameter.IsParameterThis(method) && method.IsConstructor) {
                 //            continue;
                 //        }
 
@@ -391,7 +391,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 //            modifiedParametersAllMethods.Add(processingMethodId, modifiedParametersCurrentMethod = []);
                 //        }
 
-                //        if (modifiedParametersCurrentMethod.TryAddModifications(referencedParameter.TrackedParameter.IndexWithThis(method), referencedParameter.TrackedParameter)) {
+                //        if (modifiedParametersCurrentMethod.TryAddModifications(referencedParameter.TracedParameter.IndexWithThis(method), referencedParameter.TracedParameter)) {
                 //            hasExternalChange = true;
                 //        }
                 //    }
@@ -436,20 +436,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                             }
 
                             var loadValue = paramGroup[paramIndex];
-                            // If loadModifyingInstance.RealPushValueInstruction is not coming from the modifications of caller method, skip
-                            if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterReferenceData.GenerateStackKey(method, loadValue.RealPushValueInstruction), out var tracedStackData)) {
+                            // If loadModifyingInstance.RealPushValueInstruction is not coming from the Mutations of caller method, skip
+                            if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterUsageTrack.GenerateStackKey(method, loadValue.RealPushValueInstruction), out var tracedStackData)) {
                                 continue;
                             }
 
                             foreach (var referencedParameter in tracedStackData.ReferencedParameters.Values) {
 
                                 // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
-                                if (referencedParameter.TrackedParameter.IsParameterThis(method) && method.IsConstructor) {
+                                if (referencedParameter.TracedParameter.IsParameterThis(method) && method.IsConstructor) {
                                     continue;
                                 }
                                 List<MemberAccessStep[]> chains = [];
-                                foreach (var modification in willBeModified.modifications) {
-                                    foreach (var part in referencedParameter.PartTrackingPaths) {
+                                foreach (var modification in willBeModified.Mutations) {
+                                    foreach (var part in referencedParameter.PartTracingPaths) {
                                         if (modification.ModificationAccessPath.Length >= part.ComponentAccessPath.Length) {
                                             bool startsWith = true;
                                             for (int i = 0; i < part.ComponentAccessPath.Length; i++) {
@@ -484,7 +484,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                                     }
                                 }
 
-                                if (TryAddModifications(modifiedParametersAllMethods, processingMethodId, method, referencedParameter.TrackedParameter, chains)) {
+                                if (TryAddModifications(modifiedParametersAllMethods, processingMethodId, method, referencedParameter.TracedParameter, chains)) {
                                     hasExternalChange = true;
                                 }
                             }

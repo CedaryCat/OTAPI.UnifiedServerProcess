@@ -9,58 +9,58 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 {
-    public sealed class ParameterTrackingChain : IEquatable<ParameterTrackingChain>
+    public sealed class ParameterTracingChain : IEquatable<ParameterTracingChain>
     {
         /// <summary>
-        /// The original TrackingParameter definition being tracked
+        /// The original Parameter definition being traced
         /// </summary>
 
-        public readonly ParameterDefinition TrackingParameter;
+        public readonly ParameterDefinition TracingParameter;
         /// <summary>
-        /// When a TrackingParameter is encapsulated within an instance, the storeIn containing the TrackingParameter
+        /// When a Parameter is encapsulated within an instance, the storeIn containing the Parameter
         /// is prepended to this hierarchy in the tail replica created by <see cref="CreateEncapsulatedInstance"/>.
         /// Subsequent encapsulations will continue prepending members. This hierarchy represents the path
-        /// from outermost container to inner values needed to access the tracked TrackingParameter.
+        /// from outermost container to inner values needed to access the traced Parameter.
         /// 
-        /// <para>When accessing members from tracked objects via methods like <see cref="TryExtendTrackingWithMemberAccess"/>:</para>
+        /// <para>When accessing members from traced objects via methods like <see cref="TryExtendTracingWithMemberAccess"/>:</para>
         /// <para>1. If accessed storeIn matches the first element in the hierarchy, it indicates unwrapping - returns true</para>
         /// <para>2. If storeIn doesn't match hierarchy head - indicates unrelated access - returns false</para>
-        /// <para>3. Empty hierarchy means tracking base TrackingParameter. Member accesses are considered part of
-        /// the TrackingParameter itself and extend <see cref="ComponentAccessPath"/> instead - returns true</para>
+        /// <para>3. Empty hierarchy means tracing base Parameter. Member accesses are considered part of
+        /// the Parameter itself and extend <see cref="ComponentAccessPath"/> instead - returns true</para>
         /// </summary>
         public readonly ImmutableArray<MemberAccessStep> EncapsulationHierarchy = [];
         /// <summary>
-        /// When directly accessing members of the base TrackingParameter (when <see cref="EncapsulationHierarchy"/> is empty),
+        /// When directly accessing members of the base Parameter (when <see cref="EncapsulationHierarchy"/> is empty),
         /// these accesses are recorded here. Unlike the encapsulation hierarchy, this tail represents the internal
-        /// structure of the TrackingParameter itself and doesn't support unwrapping semantics.
+        /// structure of the Parameter itself and doesn't support unwrapping semantics.
         /// </summary>
         public readonly ImmutableArray<MemberAccessStep> ComponentAccessPath = [];
         readonly string Key;
 
-        public ParameterTrackingChain(ParameterDefinition sourceParameter, IEnumerable<MemberAccessStep> encapsulationHierarchy, IEnumerable<MemberAccessStep> componentAccessPath) {
-            TrackingParameter = sourceParameter ?? throw new ArgumentNullException(nameof(sourceParameter));
+        public ParameterTracingChain(ParameterDefinition sourceParameter, IEnumerable<MemberAccessStep> encapsulationHierarchy, IEnumerable<MemberAccessStep> componentAccessPath) {
+            TracingParameter = sourceParameter ?? throw new ArgumentNullException(nameof(sourceParameter));
             EncapsulationHierarchy = encapsulationHierarchy?.ToImmutableArray() ?? [];
             ComponentAccessPath = componentAccessPath?.ToImmutableArray() ?? [];
             Key = ToString();
         }
-        private ParameterTrackingChain(ParameterTrackingChain baseChain, MemberAccessStep encapsulationLayer) {
-            TrackingParameter = baseChain.TrackingParameter;
+        private ParameterTracingChain(ParameterTracingChain baseChain, MemberAccessStep encapsulationLayer) {
+            TracingParameter = baseChain.TracingParameter;
             EncapsulationHierarchy = baseChain.EncapsulationHierarchy.Insert(0, encapsulationLayer);
             Key = ToString();
         }
-        public ParameterTrackingChain CreateEncapsulatedArrayInstance(ArrayType arrayType)
+        public ParameterTracingChain CreateEncapsulatedArrayInstance(ArrayType arrayType)
             => new(this, new ArrayElementLayer(arrayType));
-        public ParameterTrackingChain CreateEncapsulatedInstance(MemberReference storeIn)
+        public ParameterTracingChain CreateEncapsulatedInstance(MemberReference storeIn)
             => new(this, storeIn);
-        public ParameterTrackingChain CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType)
+        public ParameterTracingChain CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType)
             => new(this, new CollectionElementLayer(collectionType, elementType));
-        public ParameterTrackingChain? CreateEncapsulatedEnumeratorInstance() {
+        public ParameterTracingChain? CreateEncapsulatedEnumeratorInstance() {
             if (EncapsulationHierarchy.IsEmpty) {
                 return null;
             }
             if (EncapsulationHierarchy[0] is ArrayElementLayer or CollectionElementLayer) {
                 var collectionEle = EncapsulationHierarchy[0];
-                return new ParameterTrackingChain(this, new EnumeratorLayer(collectionEle.DeclaringType));
+                return new ParameterTracingChain(this, new EnumeratorLayer(collectionEle.DeclaringType));
             }
             // if there has already enumerator, we don't need to create a nested one
             if (EncapsulationHierarchy[0] is EnumeratorLayer) {
@@ -69,7 +69,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             return null;
         }
         public override string ToString() {
-            var paramName = TrackingParameter.GetDebugName();
+            var paramName = TracingParameter.GetDebugName();
             if (!EncapsulationHierarchy.IsEmpty && !ComponentAccessPath.IsEmpty) {
                 return $"{{ {string.Join(".", EncapsulationHierarchy.Select(m => m.Name))}: ${paramName}.{string.Join(".", ComponentAccessPath.Select(m => m.Name))} }}";
             }
@@ -84,17 +84,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
         }
 
-        public bool TryExtendTrackingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out ParameterTrackingChain? result)
-            => TryExtendTrackingWithMemberAccess((MemberAccessStep)member, out result);
-        public bool TryExtendTrackingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out ParameterTrackingChain? result) {
+        public bool TryExtendTracingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out ParameterTracingChain? result)
+            => TryExtendTracingWithMemberAccess((MemberAccessStep)member, out result);
+        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out ParameterTracingChain? result) {
             var indexer = new ArrayElementLayer(arrayType);
-            return TryExtendTrackingWithMemberAccess(indexer, out result);
+            return TryExtendTracingWithMemberAccess(indexer, out result);
         }
-        public bool TryExtendTrackingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out ParameterTrackingChain? result) {
+        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out ParameterTracingChain? result) {
             var collection = new CollectionElementLayer(collectionType, elementType);
-            return TryExtendTrackingWithMemberAccess(collection, out result);
+            return TryExtendTracingWithMemberAccess(collection, out result);
         }
-        private bool TryExtendTrackingWithMemberAccess(MemberAccessStep member, [NotNullWhen(true)] out ParameterTrackingChain? result) {
+        private bool TryExtendTracingWithMemberAccess(MemberAccessStep member, [NotNullWhen(true)] out ParameterTracingChain? result) {
             result = null;
 
             if (EncapsulationHierarchy.IsEmpty) {
@@ -126,15 +126,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     // so we treat it as the argument itself
                     // and the encapsulation hierarchy is empty
 
-                    result = new ParameterTrackingChain(TrackingParameter, [], [.. ComponentAccessPath, member]);
+                    result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
                     return true;
                 }
                 return false;
             }
 
             if (member.IsSameLayer(EncapsulationHierarchy[0])) {
-                result = new ParameterTrackingChain(
-                    TrackingParameter,
+                result = new ParameterTracingChain(
+                    TracingParameter,
                     EncapsulationHierarchy.RemoveAt(0),
                     ComponentAccessPath
                 );
@@ -143,7 +143,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
             return false;
         }
-        public bool TryTrackEnumeratorCurrent([NotNullWhen(true)] out ParameterTrackingChain? result) {
+        public bool TryTraceEnumeratorCurrent([NotNullWhen(true)] out ParameterTracingChain? result) {
             if (EncapsulationHierarchy.Length < 2) {
                 result = null;
                 return false;
@@ -155,14 +155,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             if (EncapsulationHierarchy[1] is not CollectionElementLayer) {
                 throw new NotSupportedException("Enumerator layer must be followed by ArrayElementLayer or CollectionElementLayer.");
             }
-            result = new ParameterTrackingChain(
-                TrackingParameter,
+            result = new ParameterTracingChain(
+                TracingParameter,
                 EncapsulationHierarchy.RemoveAt(0).RemoveAt(0),
                 ComponentAccessPath
             );
             return true;
         }
-        public static ParameterTrackingChain? CombineParameterTraces(ParameterTrackingChain outerPart, ParameterTrackingChain innerPart) {
+        public static ParameterTracingChain? CombineParameterTraces(ParameterTracingChain outerPart, ParameterTracingChain innerPart) {
             static bool AreEqualLengthSegmentsEqual(ImmutableArray<MemberAccessStep> a, ImmutableArray<MemberAccessStep> b) {
                 var length = Math.Min(a.Length, b.Length);
                 for (int i = 0; i < length; i++) {
@@ -177,45 +177,45 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     return null;
                 }
                 if (innerPart.ComponentAccessPath.Length < outerPart.EncapsulationHierarchy.Length) {
-                    return new ParameterTrackingChain(outerPart.TrackingParameter,
+                    return new ParameterTracingChain(outerPart.TracingParameter,
                         [.. innerPart.EncapsulationHierarchy, .. outerPart.EncapsulationHierarchy.Skip(innerPart.ComponentAccessPath.Length)],
                         []
                     );
                 }
                 else if (innerPart.ComponentAccessPath.Length > outerPart.EncapsulationHierarchy.Length) {
-                    return new ParameterTrackingChain(outerPart.TrackingParameter,
+                    return new ParameterTracingChain(outerPart.TracingParameter,
                         innerPart.EncapsulationHierarchy,
                         innerPart.ComponentAccessPath.Skip(outerPart.EncapsulationHierarchy.Length)
                     );
                 }
                 else {
-                    return new ParameterTrackingChain(outerPart.TrackingParameter,
+                    return new ParameterTracingChain(outerPart.TracingParameter,
                         innerPart.EncapsulationHierarchy,
                         []
                     );
                 }
             }
             else if (innerPart.ComponentAccessPath.Length == 0 && outerPart.EncapsulationHierarchy.Length != 0) {
-                return new ParameterTrackingChain(outerPart.TrackingParameter,
+                return new ParameterTracingChain(outerPart.TracingParameter,
                     [.. innerPart.EncapsulationHierarchy, .. outerPart.EncapsulationHierarchy],
                     outerPart.ComponentAccessPath
                 );
             }
             else if (innerPart.ComponentAccessPath.Length != 0 && outerPart.EncapsulationHierarchy.Length == 0) {
-                return new ParameterTrackingChain(outerPart.TrackingParameter,
+                return new ParameterTracingChain(outerPart.TracingParameter,
                     [],
                     [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
                 );
             }
             else {
-                return new ParameterTrackingChain(outerPart.TrackingParameter,
+                return new ParameterTracingChain(outerPart.TracingParameter,
                     [],
                     []
                 );
             }
         }
-        public override bool Equals(object? obj) => Equals(obj as ParameterTrackingChain);
-        public bool Equals(ParameterTrackingChain? other) =>
+        public override bool Equals(object? obj) => Equals(obj as ParameterTracingChain);
+        public bool Equals(ParameterTracingChain? other) =>
             other != null &&
             other.Key == Key;
 

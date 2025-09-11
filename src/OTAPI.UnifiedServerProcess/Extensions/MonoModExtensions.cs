@@ -62,7 +62,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                     //If there are parameters, add each of them to the stack for the callback
                     if (wrapped.HasParameters) {
                         for (var i = 0; i < wrapped.Parameters.Count; i++) {
-                            //Here we are looking at the callback to see if it wants a reference TrackingParameter.
+                            //Here we are looking at the callback to see if it wants a reference Parameter.
                             //If it does, and it also expects an instance to be passed, we must move the offset
                             //by one to skip the previous ldarg_0 we added before.
                             //var offset = instanceMethod ? 1 : 0;
@@ -252,7 +252,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
 
             var typeName = withTypeName ? typeToString?.FullName + "." : "";
 
-            // Handle anonymous type constructors, they may have a same overload but different TrackingParameter names
+            // Handle anonymous type constructors, they may have a same overload but different Parameter names
             IEnumerable<string> paramStrs;
             if (originalType is not null
                 && originalType.Name.OrdinalStartsWith("<>f__AnonymousType")
@@ -300,7 +300,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             HashSet<string> ignoreNames = [.. ignoreParams.Select(p => p.FullName)];
             List<string> paramStrs = [];
 
-            // Handle anonymous type constructors, they may have a same overload but different TrackingParameter names
+            // Handle anonymous type constructors, they may have a same overload but different Parameter names
             if (originalType is not null
                 && originalType.Name.OrdinalStartsWith("<>f__AnonymousType")
                 && method.Name == ".ctor"
@@ -358,7 +358,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
 
             List<string> paramStrs = [];
 
-            // Handle anonymous type constructors, they may have a same overload but different TrackingParameter names
+            // Handle anonymous type constructors, they may have a same overload but different Parameter names
             if (originalType is not null
                 && originalType.Name.OrdinalStartsWith("<>f__AnonymousType")
                 && method.Name == ".ctor"
@@ -526,7 +526,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         /// <param name="instructions">The instructions to insert. Must contain at least one instruction.</param>
         /// <remarks>
         /// WARNING: The original <paramref name="target"/> reference becomes invalid after this operation. 
-        /// Use the updated reference via the 'ref' TrackingParameter for subsequent operations.
+        /// Use the updated reference via the 'ref' Parameter for subsequent operations.
         /// </remarks>
         public static void InsertBeforeSeamlessly(this ILProcessor iLProcessor, ref Instruction target, params IEnumerable<Instruction> instructions) {
             InsertBeforeSeamlessly(iLProcessor, ref target, out _, instructions);
@@ -535,7 +535,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         /// Seamlessly inserts a sequence of instructions before the target instruction and returns the first inserted instruction.
         /// <para>
         /// - Identical behavior to <see cref="InsertBeforeSeamlessly(ILProcessor, ref Instruction, IEnumerable{Instruction})"/>.<br/>
-        /// - Additionally provides the first instruction of the inserted sequence via <paramref name="first"/> TrackingParameter.
+        /// - Additionally provides the first instruction of the inserted sequence via <paramref name="first"/> Parameter.
         /// </para>
         /// </summary>
         /// <param name="ilProcessor">The ILProcessor context for IL manipulation.</param>
@@ -553,7 +553,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             var firstInserted = first;
             target.OpCode = firstInserted.OpCode;
             target.Operand = firstInserted.Operand;
-            first = target;  // Out TrackingParameter points to modified target
+            first = target;  // Out Parameter points to modified target
 
             // --- Step 3: Insert Remaining Instructions After Modified Target ---
             Instruction current = target;
@@ -576,7 +576,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         /// Converts the instruction to Nop if it's referenced elsewhere, otherwise removes it completely.
         /// </summary>
         /// <param name="body">The method body containing the instruction</param>
-        /// <param name="jumpSites">Dictionary tracking branch targets (key) and their jump sources (value)</param>
+        /// <param name="jumpSites">Dictionary tracing branch targets (key) and their jump sources (value)</param>
         /// <param name="instruction">The target instruction to remove</param>
         /// <param name="removeFrom">Optional collection to remove from (defaults to body.Instructions)</param>
         public static void RemoveInstructionSeamlessly(this MethodBody body,

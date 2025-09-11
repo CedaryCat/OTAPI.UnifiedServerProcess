@@ -41,7 +41,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 }
 
                 HashSet<string> checkedFields = [];
-                CompositeStaticFieldTracking? trace = null;
+                AggregatedStaticFieldProvenance? trace = null;
 
                 foreach (var inst in cctor.Body.Instructions) {
 
@@ -71,7 +71,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 foreach (var inst in cctor.Body.Instructions) {
 
                     if (!analyzers.StaticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(cctor.GetIdentifier(), out var data)
-                        || !data.StackValueTraces.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(cctor, inst), out trace)) {
+                        || !data.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(cctor, inst), out trace)) {
                         continue;
                     }
 
@@ -102,8 +102,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                                 }
                                 foreach (var calleeInst in calleeDef.Body.Instructions) {
                                     if (this.IsAboutStaticFieldModification(calleeDef, calleeInst, out var otherFields, out var calleeModificationOperations)) {
-                                        foreach (var fieldTraceData in trace.TrackedStaticFields.Values) {
-                                            if (!source.OriginalToInstanceConvdField.ContainsKey(fieldTraceData.TrackingStaticField.GetIdentifier())) {
+                                        foreach (var fieldTraceData in trace.TracedStaticFields.Values) {
+                                            if (!source.OriginalToInstanceConvdField.ContainsKey(fieldTraceData.TracingStaticField.GetIdentifier())) {
                                                 continue;
                                             }
 

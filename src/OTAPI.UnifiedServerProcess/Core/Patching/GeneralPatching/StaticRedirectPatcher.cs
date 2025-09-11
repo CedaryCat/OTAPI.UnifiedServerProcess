@@ -299,7 +299,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             /// </summary>
             InstanceConverted = 1 << 0,
             /// <summary>
-            /// Context-bound by adding a root context TrackingParameter (explicit-context-bound)
+            /// Context-bound by adding a root context Parameter (explicit-context-bound)
             /// </summary>
             AddedParam = 1 << 1,
         }

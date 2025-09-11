@@ -130,7 +130,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         insertBeforeTargets.Add(path.ParametersSources[contextParamInsertIndex].Instructions.First());
                     }
                     else {
-                        throw new IndexOutOfRangeException($"Invalid context TrackingParameter insert index {nameof(contextParamInsertIndex)} value");
+                        throw new IndexOutOfRangeException($"Invalid context TracingParameter insert index {nameof(contextParamInsertIndex)} value");
                     }
                 }
             }
@@ -260,7 +260,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
         /// <summary>
         /// <para>The field initialization can occur before calling the base class constructor or its own constructor, </para>
         /// <para>while the code that uses parameters must be executed after calling the base class constructor or its own constructor. </para>
-        /// <para>This method is designed to move the call to the base class constructor or its own constructor to before the first loaded context TrackingParameter after dependency injection.</para>
+        /// <para>This method is designed to move the call to the base class constructor or its own constructor to before the first loaded context Parameter after dependency injection.</para>
         /// </summary>
         /// <param name="point"></param>
         /// <param name="rootContextDef"></param>
@@ -305,7 +305,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                     }
                     if (isNotInit) {
                         HashSet<Instruction> checkInsts = [];
-                        TrackUsage(point, ctor, checkInsts, [], check);
+                        TraceUsage(point, ctor, checkInsts, [], check);
                         foreach (var inst in ctor.Body.Instructions) {
                             if (checkInsts.Contains(inst)) {
                                 firstLoadRoot_shouldMoveCtorCallWhenNotNull = inst;
@@ -370,7 +370,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             var ilProcessor = ctor.Body.GetILProcessor();
             ilProcessor.InsertBeforeSeamlessly(ref firstLoadRoot_shouldMoveCtorCallWhenNotNull, movedInstructions.Select(i => i.Clone()));
         }
-        static void TrackUsage(IContextInjectFeature feature, MethodDefinition method, HashSet<Instruction> checkInsts, HashSet<VariableDefinition> checkLocals, Instruction instruction) {
+        static void TraceUsage(IContextInjectFeature feature, MethodDefinition method, HashSet<Instruction> checkInsts, HashSet<VariableDefinition> checkLocals, Instruction instruction) {
 
             Stack<Instruction> works = [];
             if (!checkInsts.Contains(instruction)) {

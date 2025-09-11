@@ -113,7 +113,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     case Code.Ldloca_S:
                     case Code.Ldloca:
                         transformInsts.Add(inst);
-                        TrackUsage(this, cctor, transformInsts, localMap, inst);
+                        TraceUsage(this, cctor, transformInsts, localMap, inst);
                         break;
                 }
             }
@@ -207,7 +207,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 ExtractSources(feature, cctor, transformInsts, localMap, extractSources);
             }
-            static void TrackUsage(IJumpSitesCacheFeature feature, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
+            static void TraceUsage(IJumpSitesCacheFeature feature, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
                 Stack<Instruction> works = [];
                 works.Push(inst);
 
@@ -242,7 +242,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     return;
                 }
                 transformInsts.Add(inst);
-                TrackUsage(feature, cctor, transformInsts, localMap, inst);
+                TraceUsage(feature, cctor, transformInsts, localMap, inst);
                 return;
             }
             static void HandleStoreLocal(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
@@ -276,7 +276,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (inst.OpCode != OpCodes.Newobj && callee.ReturnType.FullName == arguments.MainModule.TypeSystem.Void.FullName) {
                     return;
                 }
-                TrackUsage(feature, cctor, transformInsts, localMap, inst);
+                TraceUsage(feature, cctor, transformInsts, localMap, inst);
                 return;
 
 

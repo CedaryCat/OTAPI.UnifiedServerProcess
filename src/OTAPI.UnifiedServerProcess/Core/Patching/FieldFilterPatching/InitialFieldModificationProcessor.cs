@@ -142,7 +142,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
 
                 if (MonoModCommon.Stack.GetPushCount(method.Body, instruction) > 0) {
-                    TrackUsage(this, method, tmp, instruction);
+                    TraceUsage(this, method, tmp, instruction);
                 }
                 foreach (var inst in tmp) {
                     instructions.Add(inst);
@@ -165,20 +165,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 var loadModifyingInstance = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
                                     .First();
 
-                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var stackValueTrace)) {
+                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var stackValueTrace)) {
                                     continue;
                                 }
 
-                                foreach (var willBeModified in stackValueTrace.TrackedStaticFields.Values) {
-                                    foreach (var part in willBeModified.PartTrackingPaths) {
+                                foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                    foreach (var part in willBeModified.PartTracingPaths) {
                                         if (part.EncapsulationHierarchy.Length == 0) {
-                                            if (!source.InitialStaticFields.ContainsKey(willBeModified.TrackingStaticField.GetIdentifier())) {
+                                            if (!source.InitialStaticFields.ContainsKey(willBeModified.TracingStaticField.GetIdentifier())) {
                                                 continue;
                                             }
                                             AddFieldModification(
                                                 method,
                                                 fieldModificationInstructions,
-                                                willBeModified.TrackingStaticField,
+                                                willBeModified.TracingStaticField,
                                                 instruction);
                                         }
                                     }
@@ -231,18 +231,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 foreach (var paramGroup in loadParamsInEveryPaths) {
                                     var loadInstance = paramGroup[0];
 
-                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(method, loadInstance.RealPushValueInstruction), out var stackValueTrace)) {
+                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction), out var stackValueTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TrackedStaticFields.Values) {
-                                        if (!source.InitialStaticFields.ContainsKey(willBeModified.TrackingStaticField.GetIdentifier())) {
+                                    foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                        if (!source.InitialStaticFields.ContainsKey(willBeModified.TracingStaticField.GetIdentifier())) {
                                             continue;
                                         }
                                         AddFieldModification(
                                             method,
                                             fieldModificationInstructions,
-                                            willBeModified.TrackingStaticField,
+                                            willBeModified.TracingStaticField,
                                             instruction);
                                     }
                                 }
@@ -282,7 +282,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                                         var loadParam = paramGroup[paramIndex];
 
-                                        // If the callMethod do not modify any TrackingParameter, skip
+                                        // If the callMethod do not modify any Parameter, skip
                                         if (!paramModificationAnalyzer.ModifiedParameters.TryGetValue(implCallee.GetIdentifier(), out var modifiedParameters)) {
                                             continue;
                                         }
@@ -293,20 +293,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                                         // If the input argument is not coming from a static staticField, skip
                                         if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
-                                            StaticFieldReferenceData.GenerateStackKey(method, loadParam.RealPushValueInstruction),
+                                            StaticFieldUsageTrack.GenerateStackKey(method, loadParam.RealPushValueInstruction),
                                             out var stackValueTrace)) {
                                             continue;
                                         }
 
-                                        foreach (var referencedStaticField in stackValueTrace.TrackedStaticFields.Values) {
-                                            if (!source.InitialStaticFields.ContainsKey(referencedStaticField.TrackingStaticField.GetIdentifier())) {
+                                        foreach (var referencedStaticField in stackValueTrace.TracedStaticFields.Values) {
+                                            if (!source.InitialStaticFields.ContainsKey(referencedStaticField.TracingStaticField.GetIdentifier())) {
                                                 continue;
                                             }
 
                                             List<MemberAccessStep[]> chains = [];
-                                            foreach (var part in referencedStaticField.PartTrackingPaths) {
+                                            foreach (var part in referencedStaticField.PartTracingPaths) {
                                                 foreach (var willBeModified in modifiedParameters.Values) {
-                                                    foreach (var modification in willBeModified.modifications) {
+                                                    foreach (var modification in willBeModified.Mutations) {
                                                         if (part.EncapsulationHierarchy.Length > 0) {
                                                             if (modification.ModificationAccessPath.Length <= part.EncapsulationHierarchy.Length) {
                                                                 continue;
@@ -334,7 +334,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                                 AddFieldModification(
                                                     method,
                                                     fieldModificationInstructions,
-                                                    referencedStaticField.TrackingStaticField,
+                                                    referencedStaticField.TracingStaticField,
                                                     instruction);
                                                 chains.Clear();
                                             }
@@ -344,7 +344,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             }
                             break;
                         }
-                    case Code.Ldsflda:
+                    case Code.Ldsflda: {
+                            if (MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
+                                break;
+                            }
+                            goto case Code.Stsfld;
+                        }
                     case Code.Stsfld: {
                             var field = ((FieldReference)instruction.Operand).TryResolve();
                             if (field is null) {
@@ -361,6 +366,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 instruction);
                             break;
                         }
+                    case Code.Ldelema: {
+                            if (MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
+                                break;
+                            }
+                            goto case Code.Stelem_Any;
+                        }
 
                     case Code.Stelem_Any:
                     case Code.Stelem_I:
@@ -370,8 +381,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     case Code.Stelem_I8:
                     case Code.Stelem_R4:
                     case Code.Stelem_R8:
-                    case Code.Stelem_Ref:
-                    case Code.Ldelema: {
+                    case Code.Stelem_Ref: {
 
                             if (staticFieldReferenceData is null) {
                                 continue;
@@ -381,21 +391,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, callPath.ParametersSources[0].Instructions.Last(), jumpSites)) {
 
                                     if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
-                                        StaticFieldReferenceData.GenerateStackKey(method, loadInstance.RealPushValueInstruction),
+                                        StaticFieldUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction),
                                         out var stackValueTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TrackedStaticFields.Values) {
-                                        if (!source.InitialStaticFields.ContainsKey(willBeModified.TrackingStaticField.GetIdentifier())) {
+                                    foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                        if (!source.InitialStaticFields.ContainsKey(willBeModified.TracingStaticField.GetIdentifier())) {
                                             continue;
                                         }
-                                        foreach (var part in willBeModified.PartTrackingPaths) {
+                                        foreach (var part in willBeModified.PartTracingPaths) {
                                             if (part.EncapsulationHierarchy.Length == 0) {
                                                 AddFieldModification(
                                                     method,
                                                     fieldModificationInstructions,
-                                                    willBeModified.TrackingStaticField,
+                                                    willBeModified.TracingStaticField,
                                                     instruction);
                                             }
                                         }
@@ -452,7 +462,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     switch (inst.OpCode.Code) {
                         case Code.Ldsfld:
                         case Code.Ldsflda:
-                            TrackUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
+                            TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                             break;
                         case Code.Stsfld:
                             ExtractSources(this, method, initFieldDef, extractDestinations, localMap, [inst], ignoreExtractLocalModifications);
@@ -515,7 +525,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 continue;
                             }
                             extractDestinations.Clear();
-                            TrackUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
+                            TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                             if (extractDestinations.Count > 0) {
                                 if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out var loopBodyInst)) {
                                     loopBodyInst = loopBlockData.FilteredLoopBody[fieldModification.Key] = [];
@@ -544,12 +554,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                     case Code.Ldloc_S:
                                     case Code.Ldloc:
                                         if (!local.VariableType.IsTruelyValueType()) {
-                                            TrackUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
+                                            TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                                         }
                                         break;
                                     case Code.Ldloca_S:
                                     case Code.Ldloca:
-                                        TrackUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
+                                        TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                                         break;
                                 }
                                 if (extractDestinations.Count > 0) {
@@ -576,7 +586,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             continue;
                         }
                         // However, for other more common variables, they can be regarded as having the scope of the entire method.
-                        // Therefore, we need to track the modifications that occur to them within the entire method.
+                        // Therefore, we need to trace the Mutations that occur to them within the entire method.
                         // Thus, our processing object becomes all the instructions that operate on this variable.
                         if (referencedLocals.Contains(local)) {
                             switch (inst.OpCode.Code) {
@@ -595,12 +605,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 case Code.Ldloc_S:
                                 case Code.Ldloc:
                                     if (!local.VariableType.IsTruelyValueType()) {
-                                        TrackUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
+                                        TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                                     }
                                     break;
                                 case Code.Ldloca_S:
                                 case Code.Ldloca:
-                                    TrackUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
+                                    TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                                     break;
                             }
                             foreach (var extracted in extractDestinations) {
@@ -651,10 +661,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             }
 
             HashSet<Instruction> extractedStaticInsts = [];
-
-            if (method.Name == "FillResearchItemOverrides") {
-
-            }
 
             bool UsedStaticField(MethodDefinition method) {
                 HashSet<string> visited = [];
@@ -1291,7 +1297,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             }
             return loopBlocks;
         }
-        static void TrackUsage(IJumpSitesCacheFeature feature,
+        static void TraceUsage(IJumpSitesCacheFeature feature,
             MethodDefinition caller,
             HashSet<Instruction> collected,
             Instruction inst) {
@@ -1348,7 +1354,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
             }
         }
-        static void TrackUsage(IJumpSitesCacheFeature feature,
+        static void TraceUsage(IJumpSitesCacheFeature feature,
             MethodDefinition caller,
             FieldDefinition referencedField,
             HashSet<Instruction> transformInsts,

@@ -42,6 +42,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .RegisterProcessor(new AddModifiedFieldsProcessor(rawModifiedStaticFields, initialStaticFields))
                 .RegisterProcessor(new AddEventsProcessor())
                 .RegisterProcessor(new AddHooksProcessor())
+                .RegisterProcessor(new ServerNetmodeProcessor())
                 .RegisterProcessor(new ForceStaticProcessor())
                 .RegisterProcessor(new ForceInstanceProcessor())
                 .RegisterProcessor(new StaticGenericProcessor())

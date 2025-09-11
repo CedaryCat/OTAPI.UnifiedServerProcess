@@ -315,7 +315,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                     for (var i = 0; i < length; i++) {
                                         var paramIndex = i;
 
-                                        // skip 'this' TrackingParameter load
+                                        // skip 'this' Parameter load
                                         if (!callingMethod.IsStatic && !isNewObj) {
                                             paramIndex -= 1;
                                         }

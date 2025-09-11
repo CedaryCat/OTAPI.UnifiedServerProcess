@@ -119,7 +119,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     throw new ArgumentException("It is not a generic type");
                 }
                 if (staticGenericType.GenericParameters.Count > 1) {
-                    throw new ArgumentException("Only support one generic TrackingParameter");
+                    throw new ArgumentException("Only support one generic TracingParameter");
                 }
                 origGenericParam = staticGenericType.GenericParameters[0];
 

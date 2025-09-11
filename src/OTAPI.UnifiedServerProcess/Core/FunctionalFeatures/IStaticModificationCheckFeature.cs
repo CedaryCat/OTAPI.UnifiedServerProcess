@@ -45,7 +45,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             }
             else if (point.IsReferencedStaticFieldModified(method, inst, out var modified, out modificationOperations)) {
                 foreach (var modifiedFieldTraces in modified.Values) {
-                    modifiedFields.Add(modifiedFieldTraces.TrackingStaticField);
+                    modifiedFields.Add(modifiedFieldTraces.TracingStaticField);
                 }
             }
             else {
@@ -65,14 +65,14 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
         public static bool IsReferencedStaticFieldModified(this IStaticModificationCheckFeature point,
             MethodDefinition method,
             Instruction pushedFieldReference,
-            [NotNullWhen(true)] out Dictionary<string, SingleStaticFieldTrace>? modified,
+            [NotNullWhen(true)] out Dictionary<string, StaticFieldProvenance>? modified,
             [NotNullWhen(true)] out HashSet<Instruction>? modificationOperations) {
 
             modified = null;
             modificationOperations = null;
 
             if (!point.StaticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(method.GetIdentifier(), out var data)
-                || !data.StackValueTraces.TryGetTrace(StaticFieldReferenceData.GenerateStackKey(method, pushedFieldReference), out var trace)) {
+                || !data.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(method, pushedFieldReference), out var trace)) {
                 return false;
             }
 
@@ -96,7 +96,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
                         modificationOperations.Add(usage);
 
-                        foreach (var referencedFieldTracing in trace.TrackedStaticFields.Values) {
+                        foreach (var referencedFieldTracing in trace.TracedStaticFields.Values) {
                             CollectModificationChains(willBeModified, referencedFieldTracing, out var chains, out var modifiedField);
                             MergeModificationChains(modified, chains, modifiedField);
                         }
@@ -113,26 +113,26 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             return true;
         }
 
-        private static void MergeModificationChains(Dictionary<string, SingleStaticFieldTrace> destination, List<MemberAccessStep[]> source, FieldDefinition modifiedField) {
+        private static void MergeModificationChains(Dictionary<string, StaticFieldProvenance> destination, List<MemberAccessStep[]> source, FieldDefinition modifiedField) {
             if (source.Count > 0) {
-                var collected = source.Select(x => new StaticFieldTrackingChain(modifiedField, [], x));
+                var collected = source.Select(x => new StaticFieldTracingChain(modifiedField, [], x));
 
                 if (!destination.TryGetValue(modifiedField.GetIdentifier(), out var staticFieldTrace)) {
                     destination.Add(modifiedField.GetIdentifier(), staticFieldTrace = new(modifiedField, collected));
                 }
                 else {
                     foreach (var part in collected) {
-                        staticFieldTrace.PartTrackingPaths.Add(part);
+                        staticFieldTrace.PartTracingPaths.Add(part);
                     }
                 }
             }
         }
 
-        private static void CollectModificationChains(ParamModifications willBeModified, SingleStaticFieldTrace referencedFieldTracing, out List<MemberAccessStep[]> chains, out FieldDefinition modifiedField) {
+        private static void CollectModificationChains(ParameterMutationInfo willBeModified, StaticFieldProvenance referencedFieldTracing, out List<MemberAccessStep[]> chains, out FieldDefinition modifiedField) {
             chains = [];
-            modifiedField = referencedFieldTracing.TrackingStaticField;
-            foreach (var part in referencedFieldTracing.PartTrackingPaths) {
-                foreach (var modification in willBeModified.modifications) {
+            modifiedField = referencedFieldTracing.TracingStaticField;
+            foreach (var part in referencedFieldTracing.PartTracingPaths) {
+                foreach (var modification in willBeModified.Mutations) {
                     if (part.EncapsulationHierarchy.Length > 0) {
                         if (modification.ModificationAccessPath.Length <= part.EncapsulationHierarchy.Length) {
                             continue;

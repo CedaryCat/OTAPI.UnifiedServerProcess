@@ -805,7 +805,7 @@ class TileSystemPatchLogic
 
                                     theseParametersWillBeEdit ??= [];
 
-                                    // When calling an instance method of a struct, the 'this' TrackingParameter needs to load the reference address, not the value itself
+                                    // When calling an instance method of a struct, the 'this' Parameter needs to load the reference address, not the value itself
                                     if (calleeDef.HasThis && instruction.OpCode != OpCodes.Newobj && IsTileType(calleeDef.DeclaringType)) {
 
                                         // Avoid repeating the previous logic
@@ -2015,7 +2015,7 @@ class TileSystemPatchLogic
                             paramIndexExculdeThis--;
                         }
 
-                        // Exclude the 'this' TrackingParameter to make index only indicate the parameters in method.Parameters
+                        // Exclude the 'this' Parameter to make index only indicate the parameters in method.Parameters
                         if (paramIndexExculdeThis == -1) {
                             continue;
                         }
@@ -2024,19 +2024,19 @@ class TileSystemPatchLogic
                         // 0. The 'this' object of the tail function, or null if the tail function is static
                         // 1. The original method logic delegate of the tail function, which is mfwh_XXX
                         // 2 and more... The parameters of the tail function
-                        // Therefore, the mapping relationship from mfwh_XXX input TrackingParameter index to InvokeXXX input TrackingParameter index is +2
+                        // Therefore, the mapping relationship from mfwh_XXX input Parameter index to InvokeXXX input Parameter index is +2
                         paramIndexExculdeThis += 2;
 
                         var loadParam = invokeCallPath.ParametersSources[paramIndexExculdeThis].Instructions.Single();
 
                         if (!MonoModCommon.IL.TryGetReferencedParameter(method, loadParam, out var parameter)) {
-                            throw new NotSupportedException($"Cannot get the {index + 1}th TrackingParameter of Invoke{method.Name}");
+                            throw new NotSupportedException($"Cannot get the {index + 1}th TracingParameter of Invoke{method.Name}");
                         }
 
                         var iLProcessor = method.Body.GetILProcessor();
 
                         // Since we expect to modify the parameters of the tail method to match the ref parameters of mfwh_XXX,
-                        // we need to extract the value of the ref TrackingParameter of the tail method when calling the InvokeXXX input parameters
+                        // we need to extract the value of the ref Parameter of the tail method when calling the InvokeXXX input parameters
                         iLProcessor.InsertAfter(loadParam, Instruction.Create(OpCodes.Ldobj, tileTypeDef));
 
                         // Next, we need to extract the mapping relationship between the parameters and event fields from the input parameters of mfwh_XXX,
@@ -2046,14 +2046,14 @@ class TileSystemPatchLogic
                         var loadField = mfwhCallPath.ParametersSources[paramIndexExculdeThis].Instructions.Last();
 
                         if (loadField.OpCode != OpCodes.Ldfld && loadField.OpCode != OpCodes.Ldflda) {
-                            throw new NotSupportedException($"The {index + 1}th TrackingParameter of mfwh_{method.Name} is not a field");
+                            throw new NotSupportedException($"The {index + 1}th TracingParameter of mfwh_{method.Name} is not a field");
                         }
 
                         var field = (FieldReference)loadField.Operand!;
 
                         loadParam = MonoModCommon.IL.BuildParameterLoad(method, method.Body, method.Parameters[paramIndexExculdeThis]);
 
-                        // Ensure that the ref TrackingParameter can get the updated value after the InvokeXXX call
+                        // Ensure that the ref Parameter can get the updated value after the InvokeXXX call
                         iLProcessor.InsertAfter(firstSetLocal!, [
                             loadParam,
                             Instruction.Create(OpCodes.Ldloc_0),
@@ -2298,7 +2298,7 @@ class TileSystemPatchLogic
                                 case Code.Ldarg_1:
                                 case Code.Ldarg_2:
                                 case Code.Ldarg_3:
-                                    // Since the 'this' TrackingParameter of a constructor does not need to be pushed onto the stack explicitly by the caller,
+                                    // Since the 'this' Parameter of a constructor does not need to be pushed onto the stack explicitly by the caller,
                                     // it will not modify the 'this' variable provided by the caller like other instance methods.
                                     // Therefore, we need to handle this case separately and skip it manually
                                     if (thisInstruction.OpCode == OpCodes.Ldarg_0 && method.IsConstructor) {

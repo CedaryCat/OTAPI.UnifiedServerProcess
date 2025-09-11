@@ -26,6 +26,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
                 AppDomain.CurrentDomain.AssemblyResolve += ResolveHelpers.ResolveAssembly;
                 Terraria.Program.SavePath = Platform.Get<IPathService>().GetStoragePath("Terraria");
                 Terraria.Main.SkipAssemblyLoad = true;
+                Terraria.Main.rand = new((int)DateTime.Now.Ticks);
                 GlobalInitializer.Initialize();
             });
 

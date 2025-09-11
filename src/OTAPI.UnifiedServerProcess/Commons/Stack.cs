@@ -173,7 +173,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         }
                     }
 
-                    // linear backtracking
+                    // linear backtracing
                     if (current.Previous != null) {
                         if (!IsTerminatorInstruction(current.Previous)) {
                             workStack.Push((current.Previous, newerBalance, visited));
@@ -240,7 +240,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         }
                     }
 
-                    // linear backtracking
+                    // linear backtracing
                     if (current.Previous != null) {
                         if (!IsTerminatorInstruction(current.Previous)) {
                             workStack.Push((new(path), current.Previous, newerBalance, visited));
@@ -724,11 +724,11 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 public override string ToString() => $"[{Index}] (inst: {Instructions.Length})";
             }
             /// <summary>
-            /// Analyzes TrackingParameter sources considering control flow and multiple execution paths
+            /// Analyzes Parameter sources considering control flow and multiple execution paths
             /// </summary>
             /// <param name="caller">Containing method</param>
             /// <param name="target">Method call/newobj instruction</param>
-            /// <returns>Array of possible TrackingParameter flow paths</returns>
+            /// <returns>Array of possible Parameter flow paths</returns>
             public static FlowPath<ParameterSource>[] AnalyzeParametersSources(MethodDefinition caller, Instruction target, Dictionary<Instruction, List<Instruction>>? cachedJumpSitess = null) {
 
                 cachedJumpSitess ??= BuildJumpSitesMap(caller);
@@ -753,7 +753,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 ));
 
                 List<FlowPath<ParameterSource>> paths = new();
-                // var visited = new HashSet<(Instruction, int)>(); // Track visited (offset, stackBalance)
+                // var visited = new HashSet<(Instruction, int)>(); // Trace visited (offset, stackBalance)
 
                 while (workStack.Count > 0) {
                     var ctx = workStack.Pop();
@@ -802,7 +802,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         }
                     }
 
-                    // Linear backtracking
+                    // Linear backtracing
                     if (ctx.Previous != null) {
                         if (!IsTerminatorInstruction(ctx.Previous)) {
                             workStack.Push(new ReverseAnalysisContext(
@@ -923,7 +923,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         }
                     }
 
-                    // Linear backtracking
+                    // Linear backtracing
                     if (ctx.Previous != null) {
                         if (!IsTerminatorInstruction(ctx.Previous)) {
                             workStack.Push(new ReverseAnalysisContext(

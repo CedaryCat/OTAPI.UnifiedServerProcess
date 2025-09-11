@@ -122,7 +122,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                         instruction.OpCode = OpCodes.Ldarg_S;
 
                         int index;
-                        // The TrackingParameter pointed to by Ldarg_3 is marked by <>
+                        // The Parameter pointed to by Ldarg_3 is marked by <>
                         // based on the following three case, we can infer the value of index.
 
                         if (mode is InsertParamMode.MakeInstance) {
@@ -232,14 +232,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             }
             else {
                 if (body.Method.Parameters.Count == 0) {
-                    throw new ArgumentException($"The {nameof(body)} must have at least one TrackingParameter when {nameof(mode)} is {RemoveParamMode.Remove}");
+                    throw new ArgumentException($"The {nameof(body)} must have at least one TracingParameter when {nameof(mode)} is {RemoveParamMode.Remove}");
                 }
             }
 
             foreach (Instruction instruction in body.Instructions) {
                 switch (instruction.OpCode.Code) {
 
-                    // The TrackingParameter will be removed is marked by <>
+                    // The Parameter will be removed is marked by <>
                     // based on the following three case, we can infer the value of index.
 
                     // static -> instance:
@@ -352,7 +352,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
         /// <param name="arguments">patching data</param>
         /// <param name="callerBody">the body of the method that loads the context</param>
         /// <param name="instanceConvdType">null if loading root context</param>
-        /// <param name="addedParam">if a context TrackingParameter is added to the method</param>
+        /// <param name="addedParam">if a context Parameter is added to the method</param>
         /// <returns></returns>
         public static Instruction[] BuildInstanceLoadInstrs(
             PatcherArguments arguments,
@@ -402,7 +402,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 }
                 result.Add(MonoModCommon.IL.BuildVariableLoad(callerBody.Method, callerBody, variable));
             }
-            // If we do not create a variable of root context, the first TrackingParameter in parameters must be the root context
+            // If we do not create a variable of root context, the first Parameter in parameters must be the root context
             else {
                 if (callerBody.Method.Parameters.Count == 0 || callerBody.Method.Parameters[0].ParameterType.FullName != arguments.RootContextDef.FullName) {
                     InsertParamAt0AndRemapIndices(callerBody, InsertParamMode.Insert, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
@@ -473,7 +473,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             // Clone parameters excluding context parameters
             foreach (var param in method.Parameters) {
                 if (param.ParameterType.FullName == rootContextType.FullName) {
-                    continue; // Skip context TrackingParameter for stack integrity
+                    continue; // Skip context Parameter for stack integrity
                 }
                 vanilla.Parameters.Add(param.Clone());
             }

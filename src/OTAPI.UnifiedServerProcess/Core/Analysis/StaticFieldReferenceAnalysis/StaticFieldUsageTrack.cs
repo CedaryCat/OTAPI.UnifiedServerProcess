@@ -6,15 +6,15 @@ using System;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 {
-    public class StaticFieldReferenceData(
+    public class StaticFieldUsageTrack(
         MethodDefinition methodDefinition,
-        CompositeStaticFieldTracking? returnValueTrace,
+        AggregatedStaticFieldProvenance? returnValueTrace,
         StaticFieldTraceCollection<string> parameterTraces,
         StaticFieldTraceCollection<VariableDefinition> localVariableTraces,
         StaticFieldTraceCollection<string> stackValueTraces)
     {
         public MethodDefinition MethodDefinition { get; } = methodDefinition ?? throw new ArgumentNullException(nameof(methodDefinition));
-        public CompositeStaticFieldTracking? ReturnValueTrace { get; } = returnValueTrace;
+        public AggregatedStaticFieldProvenance? ReturnValueTrace { get; } = returnValueTrace;
         public StaticFieldTraceCollection<string> StaticFieldTraces { get; } = parameterTraces ?? new StaticFieldTraceCollection<string>();
         public StaticFieldTraceCollection<VariableDefinition> LocalVariableTraces { get; } = localVariableTraces ?? new StaticFieldTraceCollection<VariableDefinition>();
         public StaticFieldTraceCollection<string> StackValueTraces { get; } = stackValueTraces ?? new StaticFieldTraceCollection<string>();

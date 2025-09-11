@@ -17,7 +17,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
     /// <summary>
     /// Two scenarios exist for contextualizing functions, requiring HookEvents to implement two corresponding adaptations:
     /// <para>1. Specific static functions will be transformed into instance methods of contextualized entity classes, requiring the sender to be updated from null to the contextual instance.</para>
-    /// <para>2. Most instance functions will have their TrackingParameter lists prepended with a RootContext TrackingParameter, necessitating the addition of a RootContext field in EventArgs.</para>
+    /// <para>2. Most instance functions will have their Parameter lists prepended with a RootContext Parameter, necessitating the addition of a RootContext field in EventArgs.</para>
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
@@ -199,7 +199,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     // instance method cast to delegate should load 'this'
                     ldInstanceForInvoke.OpCode = loadInstanceForDeleCtor.OpCode = OpCodes.Ldarg_0;
                     ldInstanceForInvoke.Operand = loadInstanceForDeleCtor.Operand = null;
-                    // modify invoke method's first TrackingParameter from object to converted type
+                    // modify invoke method's first Parameter from object to converted type
                     invokeMethod.Parameters[0].ParameterType = invokeMethodRef.Parameters[0].ParameterType = convertedType.ContextTypeDef;
                 }
                 // context-bound by add root context

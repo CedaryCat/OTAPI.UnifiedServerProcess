@@ -34,7 +34,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return param.DeclaringType.Resolve().FullName + ":" + param.Position;
                 }
                 else {
-                    throw new InvalidOperationException("Unknown generic TrackingParameter");
+                    throw new InvalidOperationException("Unknown generic TracingParameter");
                 }
             }
             public readonly struct MapOption
@@ -127,7 +127,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     copiedGenericParam = elementTypeRef.GenericParameters[param.Position];
                 }
                 else {
-                    throw new InvalidOperationException("Unknown generic TrackingParameter");
+                    throw new InvalidOperationException("Unknown generic TracingParameter");
                 }
                 return copiedGenericParam;
             }

@@ -7,8 +7,8 @@
 
         static SynchronizedGuard() {
             On.Terraria.Localization.LanguageManager.LoadFilesForCulture
-                += (orig, self, root, culture)
-                => { lock (cultureFileLock) { orig(self, root, culture); } };
+                += (orig, self, culture)
+                => { lock (cultureFileLock) { orig(self, culture); } };
             On.Terraria.GameContent.Creative.CreativeItemSacrificesCatalog.Initialize
                 += (orig, self) => { lock (creativeSacrificesLock) { orig(self); } };
         }

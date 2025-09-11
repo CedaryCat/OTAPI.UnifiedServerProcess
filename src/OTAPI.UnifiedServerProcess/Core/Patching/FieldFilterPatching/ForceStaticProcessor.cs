@@ -1,4 +1,5 @@
 ﻿using OTAPI.UnifiedServerProcess.Loggers;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -31,6 +32,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var modified in source.ModifiedStaticFields.ToArray()) {
+                // thread static field will not be shared across threads
+                if (modified.Value.CustomAttributes.Any(x => x.AttributeType.FullName == "System.ThreadStaticAttribute")) {
+                    source.ModifiedStaticFields.Remove(modified.Key);
+                }
                 if (forceStaticTypeFullNames.Contains(modified.Value.DeclaringType.FullName)) {
                     source.ModifiedStaticFields.Remove(modified.Key);
                 }

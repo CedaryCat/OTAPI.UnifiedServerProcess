@@ -17,12 +17,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 
         public override void Patch() {
             ClearMethodBody(module.GetType("Terraria.Graphics.FinalFractalHelper/FinalFractalProfile").Method("StripDust"));
+
             foreach (var method in module.GetType("Terraria.DelegateMethods/Minecart").Methods) {
                 if (method.IsConstructor || method.ReturnType.FullName != module.TypeSystem.Void.FullName) {
                     continue;
                 }
                 ClearMethodBody(method);
             }
+
+            var mountTypeDef = module.GetType("Terraria.Mount");
+            ClearMethodBody(mountTypeDef.Method("MeowcartLandingSound"));
+            ClearMethodBody(mountTypeDef.Method("MeowcartBumperSound"));
         }
 
         private static void ClearMethodBody(MethodDefinition method) {

@@ -396,7 +396,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         closureObjData = ClosureData.CreateClosureByCaptureParam(arguments, declaringType, userMethod, closureTypeName, userMethod.Parameters[0]));
                 }
                 else {
-                    throw new Exception("Unexpected: The first TrackingParameter of the method is not the root context");
+                    throw new Exception("Unexpected: The first TracingParameter of the method is not the root context");
                 }
             }
 
@@ -440,12 +440,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
             var fieldRef = new FieldReference(closureField.Name, fieldType, declaringTypeRef);
 
-            // both use root context as first TrackingParameter
+            // both use root context as first Parameter
             if (rootFieldChain is null && !invocationContextBoundImplicit) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
             }
-            // user method first TrackingParameter is root context, invocation method is instance method and declared in a context type
+            // user method first Parameter is root context, invocation method is instance method and declared in a context type
             else if (rootFieldChain is null && invocationContextBoundImplicit) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
@@ -453,7 +453,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, field));
                 }
             }
-            // user method is instance method and declared in a context type, invocation method first TrackingParameter is root context
+            // user method is instance method and declared in a context type, invocation method first Parameter is root context
             else if (rootFieldChain is not null && !invocationContextBoundImplicit) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
@@ -695,7 +695,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             captures));
                 }
                 else {
-                    throw new Exception("Unexpected: The first TrackingParameter of the method is not the root context");
+                    throw new Exception("Unexpected: The first TracingParameter of the method is not the root context");
                 }
                 closureObjData.Apply(userMethodDeclaringType, userMethod, jumpSites);
 
@@ -789,7 +789,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var thisFieldTypeRef = MonoModCommon.Structure.DeepMapTypeReference(thisField.FieldType, mapOption);
             var thisFieldRef = new FieldReference(thisField.Name, thisFieldTypeRef, declaringTypeRef);
 
-            // method use root context as first TrackingParameter
+            // method use root context as first Parameter
             if (rootFieldChain is null) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 if (thisFieldTypeRef.IsValueType) {
@@ -1019,7 +1019,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     closureObjData = ClosureData.CreateClosureByCaptureParam(arguments, declaringType, userMethod, closureTypeName, userMethod.Parameters[0]);
                 }
                 else {
-                    throw new Exception("Unexpected: The first TrackingParameter of the method is not the root context");
+                    throw new Exception("Unexpected: The first TracingParameter of the method is not the root context");
                 }
             }
             var generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(

@@ -8,17 +8,17 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 {
-    public class ParamModifications(ParameterDefinition parameter)
+    public class ParameterMutationInfo(ParameterDefinition parameter)
     {
-        public readonly ParameterDefinition TrackingParameter = parameter;
-        public HashSet<ModifiedComponent> modifications = [];
+        public readonly ParameterDefinition Parameter = parameter;
+        public HashSet<ModifiedComponent> Mutations = [];
     }
     public class ModifiedComponent(ParameterDefinition parameter, IEnumerable<MemberAccessStep> accessChain) : IEquatable<ModifiedComponent>
     {
-        public readonly ParameterDefinition TrackingParameter = parameter;
+        public readonly ParameterDefinition TracingParameter = parameter;
         public readonly ImmutableArray<MemberAccessStep> ModificationAccessPath = [.. accessChain];
         public override string ToString() {
-            var paramName = TrackingParameter.GetDebugName();
+            var paramName = TracingParameter.GetDebugName();
             if (!ModificationAccessPath.IsEmpty) {
                 return $"{{ ${paramName}.{string.Join(".", ModificationAccessPath.Select(m => m.Name))} }}";
             }

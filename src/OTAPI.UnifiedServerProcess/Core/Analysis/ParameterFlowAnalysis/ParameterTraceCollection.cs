@@ -5,13 +5,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 {
     public sealed class ParameterTraceCollection<TKey> where TKey : notnull
     {
-        private readonly Dictionary<TKey, CompositeParameterTracking> _traces = [];
+        private readonly Dictionary<TKey, AggregatedParameterProvenance> _traces = [];
 
-        public bool TryGetTrace(TKey key, [NotNullWhen(true)] out CompositeParameterTracking? trace) =>
+        public bool TryGetTrace(TKey key, [NotNullWhen(true)] out AggregatedParameterProvenance? trace) =>
             _traces.TryGetValue(key, out trace);
 
-        public bool TryAddTrace(TKey key, CompositeParameterTracking newTrace) {
-            if (!_traces.TryGetValue(key, out CompositeParameterTracking? existingTrace)) {
+        public bool TryAddTrace(TKey key, AggregatedParameterProvenance newTrace) {
+            if (!_traces.TryGetValue(key, out AggregatedParameterProvenance? existingTrace)) {
                 _traces[key] = newTrace;
                 return true;
             }
@@ -19,13 +19,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             bool modified = false;
             foreach (var originGroup in newTrace.ReferencedParameters) {
                 if (!existingTrace.ReferencedParameters.TryGetValue(originGroup.Key, out var existingChains)) {
-                    existingTrace.ReferencedParameters[originGroup.Key] = new ParameterTrackingManifest(originGroup.Value.TrackedParameter, originGroup.Value.PartTrackingPaths);
+                    existingTrace.ReferencedParameters[originGroup.Key] = new ParameterProvenance(originGroup.Value.TracedParameter, originGroup.Value.PartTracingPaths);
                     modified = true;
                     continue;
                 }
 
-                foreach (var chain in originGroup.Value.PartTrackingPaths) {
-                    if (existingChains.PartTrackingPaths.Add(chain)) {
+                foreach (var chain in originGroup.Value.PartTracingPaths) {
+                    if (existingChains.PartTracingPaths.Add(chain)) {
                         modified = true;
                     }
                 }
@@ -33,21 +33,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             return modified;
         }
 
-        public bool TryAddOriginChain(TKey key, ParameterTrackingChain chain) {
-            if (!_traces.TryGetValue(key, out CompositeParameterTracking? trace)) {
-                trace = new CompositeParameterTracking();
+        public bool TryAddOriginChain(TKey key, ParameterTracingChain chain) {
+            if (!_traces.TryGetValue(key, out AggregatedParameterProvenance? trace)) {
+                trace = new AggregatedParameterProvenance();
                 _traces[key] = trace;
             }
 
-            if (!trace.ReferencedParameters.TryGetValue(chain.TrackingParameter.Name, out var singleParameter)) {
-                singleParameter = new(chain.TrackingParameter, []);
-                trace.ReferencedParameters[chain.TrackingParameter.Name] = singleParameter;
+            if (!trace.ReferencedParameters.TryGetValue(chain.TracingParameter.Name, out var singleParameter)) {
+                singleParameter = new(chain.TracingParameter, []);
+                trace.ReferencedParameters[chain.TracingParameter.Name] = singleParameter;
             }
 
-            return singleParameter.PartTrackingPaths.Add(chain);
+            return singleParameter.PartTracingPaths.Add(chain);
         }
 
-        public IEnumerator<CompositeParameterTracking> GetEnumerator() => _traces.Values.GetEnumerator();
+        public IEnumerator<AggregatedParameterProvenance> GetEnumerator() => _traces.Values.GetEnumerator();
         public int Count => _traces.Count;
     }
 }

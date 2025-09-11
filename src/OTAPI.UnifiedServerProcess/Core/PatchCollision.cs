@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Core
     {
         public static void PatchCollision(ModuleDefinition module) {
 
-            // Dictionary to store lookUp modifications
+            // Dictionary to store lookUp Mutations
             Dictionary<string, MethodWithPreparedVariables> methodsWithVariables = new();
 
             // Get the type definition for Terraria.Collision

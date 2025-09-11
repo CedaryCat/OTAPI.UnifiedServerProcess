@@ -45,7 +45,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
             var datasFromOther = combinedFromMap[other.invocations];
 
             // Make sure the invocations are pointing to the same dictionary instance
-            // so that modifications to one will naturally affect the other
+            // so that Mutations to one will naturally affect the other
             foreach (var oldData in datasFromMe) {
 
                 if (datasFromOther.Add(oldData)) {

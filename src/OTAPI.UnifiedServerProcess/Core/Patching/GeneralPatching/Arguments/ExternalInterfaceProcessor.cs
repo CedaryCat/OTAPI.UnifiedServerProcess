@@ -17,7 +17,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 {
     /// <summary>
     /// If the implementation of a function that implements a certain interface uses context-related content,
-    /// <para>we need to evaluate whether to modify the interface definition to add a RootContext TrackingParameter to achieve context attachment</para>
+    /// <para>we need to evaluate whether to modify the interface definition to add a RootContext Parameter to achieve context attachment</para>
     /// <para>or to introduce a RootContext field within the instance to achieve context attachment</para>
     /// <para>based on: </para>
     /// <para>1. Whether the interface is defined in an external assembly;</para>

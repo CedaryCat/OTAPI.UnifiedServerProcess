@@ -6,15 +6,15 @@ using System;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 {
-    public sealed class ParameterReferenceData(
+    public sealed class ParameterUsageTrack(
         MethodDefinition methodDefinition,
-        CompositeParameterTracking? returnValueTrace,
+        AggregatedParameterProvenance? returnValueTrace,
         ParameterTraceCollection<string> parameterTraces,
         ParameterTraceCollection<VariableDefinition> localVariableTraces,
         ParameterTraceCollection<string> stackValueTraces)
     {
         public MethodDefinition MethodDefinition { get; } = methodDefinition ?? throw new ArgumentNullException(nameof(methodDefinition));
-        public CompositeParameterTracking? ReturnValueTrace { get; } = returnValueTrace;
+        public AggregatedParameterProvenance? ReturnValueTrace { get; } = returnValueTrace;
         public ParameterTraceCollection<string> ParameterTraces { get; } = parameterTraces ?? new ParameterTraceCollection<string>();
         public ParameterTraceCollection<VariableDefinition> LocalVariableTraces { get; } = localVariableTraces ?? new ParameterTraceCollection<VariableDefinition>();
         public ParameterTraceCollection<string> StackValueTraces { get; } = stackValueTraces ?? new ParameterTraceCollection<string>();

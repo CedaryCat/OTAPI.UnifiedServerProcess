@@ -11,7 +11,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
         public static class IL
         {
             /// <summary>
-            /// The name of the "this" TrackingParameter is an empty string rather than "this".
+            /// The name of the "this" Parameter is an empty string rather than "this".
             /// </summary>
             public const string ThisParameterName = "";
             public static Instruction BuildParameterLoad(MethodDefinition method, MethodBody body, ParameterDefinition parameter) {
@@ -32,7 +32,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             }
             public static Instruction BuildParameterSet(MethodDefinition method, MethodBody body, ParameterDefinition parameter) {
                 if (method.HasThis && ((body is not null && body.ThisParameter == parameter) || parameter.Name == "")) {
-                    throw new ArgumentException("Cannot set \"this\" TrackingParameter", nameof(parameter));
+                    throw new ArgumentException("Cannot set \"this\" TracingParameter", nameof(parameter));
                 }
                 else {
                     var index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
@@ -107,7 +107,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 }
                 var param = method.Parameters[paramIndex];
                 if (tmpCheck is not null && tmpCheck.Name != param.Name) {
-                    throw new InvalidOperationException("Operand TrackingParameter is invalid");
+                    throw new InvalidOperationException("Operand TracingParameter is invalid");
                 }
                 return param;
             }
@@ -143,7 +143,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     var paramIndex = paramInnerIndex - (method.HasThis ? 1 : 0);
                     parameter = method.Parameters[paramIndex];
                     if (tmpCheck is not null && tmpCheck.Name != parameter.Name) {
-                        throw new InvalidOperationException("Operand TrackingParameter is invalid");
+                        throw new InvalidOperationException("Operand TracingParameter is invalid");
                     }
                 }
                 return true;
