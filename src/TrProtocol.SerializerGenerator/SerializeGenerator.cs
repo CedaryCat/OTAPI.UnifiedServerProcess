@@ -1555,7 +1555,7 @@ namespace TrProtocol.SerializerGenerator
                                     }
 
                                     chain.Reverse();
-                                    return [];
+                                    return [.. chain];
                                 }
 
                                 return [];
@@ -1630,7 +1630,7 @@ namespace TrProtocol.SerializerGenerator
                             }
                             return false;
                         })) {
-                            classNode.Write($"public unsafe {((model.IsConcreteImpl && !model.IsValueType) ? "override " : "")}void WriteContent(ref void* ptr) ");
+                            classNode.Write($"public unsafe {((model.IsConcreteImpl && !model.IsValueType) ? "override " : "readonly ")}void WriteContent(ref void* ptr) ");
                             classNode.Sources.Add(writeNode);
                         }
                         #endregion
