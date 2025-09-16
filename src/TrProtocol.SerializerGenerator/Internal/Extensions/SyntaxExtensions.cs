@@ -16,7 +16,7 @@ namespace TrProtocol.SerializerGenerator.Internal.Extensions
                 names.Insert(0, classParent.Identifier.Text);
                 parent = classParent.Parent;
             }
-            typeParentsNames = names.ToArray();
+            typeParentsNames = [.. names];
             fullNameSpce = null;
             while (parent is NamespaceDeclarationSyntax @namespace) {
                 if (fullNameSpce is null) {
@@ -75,13 +75,13 @@ namespace TrProtocol.SerializerGenerator.Internal.Extensions
         }
         public static ExpressionSyntax[] ExtractAttributeParams(this AttributeSyntax attribute) {
             if (attribute.ArgumentList == null) {
-                return Array.Empty<ExpressionSyntax>();
+                return [];
             }
             if (attribute.ArgumentList.Arguments.Count == 1 && attribute.ArgumentList.Arguments.First().Expression is InitializerExpressionSyntax init) {
-                return init.Expressions.ToArray();
+                return [.. init.Expressions];
             }
             else {
-                return attribute.ArgumentList.Arguments.Select(a => a.Expression).ToArray();
+                return [.. attribute.ArgumentList.Arguments.Select(a => a.Expression)];
             }
         }
         public static string GetTypeSymbolName(this TypeSyntax type) {

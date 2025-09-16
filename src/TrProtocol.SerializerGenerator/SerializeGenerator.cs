@@ -85,7 +85,9 @@ namespace TrProtocol.SerializerGenerator
 
         // TODO: Split the serialization code generation process into more smaller SyntaxTemplates
         private static void Execute(SourceProductionContext context, (Compilation compilation, ImmutableArray<ProtocolTypeInfo> infos) data) {
+#if DEBUG
             // if (!Debugger.IsAttached) Debugger.Launch();
+#endif
 
             #region Init global info
             Compilation.LoadCompilation(data.compilation);
@@ -189,7 +191,7 @@ namespace TrProtocol.SerializerGenerator
 
                         #region Add type constructors and special behavior
 
-                        List<(string memberName, string memberType)> externalMembers = model.DefSyntax.Members
+                        List<(string memberName, string memberType)> externalMembers = [.. model.DefSyntax.Members
                             .Where(m => m.AttributeLists
                             .SelectMany(a => a.Attributes)
                             .Any(a => a.AttributeMatch<ExternalMemberAttribute>()))
@@ -205,7 +207,7 @@ namespace TrProtocol.SerializerGenerator
                                     }
                                     return list;
                                 }
-                            }).SelectMany(m => m).ToList();
+                            }).SelectMany(m => m)];
 
                         string externalMemberParams;
                         if (externalMembers.Count == 0) {
@@ -233,7 +235,7 @@ namespace TrProtocol.SerializerGenerator
 
                         if (model.IsLengthAware) {
                             if (model.HasExtraData) {
-                                classNode.WriteLine($"public byte[] {nameof(IExtraData.ExtraData)} {{ get; set; }} = Array.Empty<byte>();");
+                                classNode.WriteLine($"public byte[] {nameof(IExtraData.ExtraData)} {{ get; set; }} = [];");
                             }
                             classNode.Write($"public {model.TypeName}(ref void* ptr, void* ptr_end{(model.IsSideSpecific ? ", bool isServerSide" : "")}{externalMemberParams})");
                             classNode.BlockWrite((source) => {
@@ -1503,10 +1505,12 @@ namespace TrProtocol.SerializerGenerator
 
                         writeNode.WriteLine("var ptr_current = ptr;");
                         writeNode.WriteLine();
+
                         if (model.IsConcreteImpl) {
                             INamedTypeSymbol[] ExtractAbstractModelInheritance(INamedTypeSymbol type) {
                                 var abstractModelAncestors = type.GetFullInheritanceTree()
                                     .Where(t => t.HasAbstractModelAttribute())
+                                    .OfType<INamedTypeSymbol>()
                                     .ToList();
 
                                 var graph = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
@@ -1522,30 +1526,39 @@ namespace TrProtocol.SerializerGenerator
                                 var roots = graph.Where(kvp => !kvp.Value.Any()).Select(kvp => kvp.Key).ToList();
                                 if (roots.Count > 1) {
                                     throw new InvalidOperationException(
-                                        $"类型 {type.Name} 从多个独立的AbstractModelAttribute标记类型继承: " +
+                                        $"Type {type.Name} inherits from multiple independent AbstractModelAttribute marked types: " +
                                         string.Join(", ", roots.Select(r => r.Name)));
                                 }
+
                                 foreach (var kvp in graph) {
                                     if (kvp.Value.Count > 1) {
                                         throw new InvalidOperationException(
-                                            $"类型 {type.Name} 的祖先 {kvp.Key.Name} 同时从多个AbstractModelAttribute标记类型继承: " +
+                                            $"Type {type.Name} ancestor {kvp.Key.Name} inherits from multiple AbstractModelAttribute marked types: " +
                                             string.Join(", ", kvp.Value.Select(p => p.Name)));
                                     }
                                 }
-                                if (roots.Count == 1) {
-                                    var chain = new List<INamedTypeSymbol>();
-                                    var current = roots[0];
 
+                                if (roots.Count == 1) {
+                                    // find the closest abstract ancestor (leaf) that does not appear in any other node's parents
+                                    var leaf = graph.Keys
+                                        .FirstOrDefault(k => !graph.Values.SelectMany(v => v).Contains(k, SymbolEqualityComparer.Default));
+
+                                    var chain = new List<INamedTypeSymbol>();
+                                    var current = leaf;
+
+                                    // follow the parent pointer up (child -> parent), and then reverse the chain to get from root to leaf
                                     while (current != null) {
                                         chain.Add(current);
-                                        var next = graph[current].FirstOrDefault();
-                                        current = next;
+
+                                        var parent = graph[current].FirstOrDefault(); // safe: graph has entry for current
+                                        current = parent;
                                     }
 
-                                    return chain.ToArray();
+                                    chain.Reverse();
+                                    return [];
                                 }
 
-                                return Array.Empty<INamedTypeSymbol>();
+                                return [];
                             }
 
                             foreach (var inherit in ExtractAbstractModelInheritance(modelSym)) {
@@ -1689,7 +1702,7 @@ namespace TrProtocol.SerializerGenerator
 
                 if (polymorphicBase is not null) {
                     polymorphicBase.DefSyntax.GetNamespace(out var classes, out var fullNamespace, out var unit);
-                    var usings = unit?.Usings.Select(u => u.Name?.ToString() ?? "").Where(u => u is not "").ToArray() ?? Array.Empty<string>();
+                    var usings = unit?.Usings.Select(u => u.Name?.ToString() ?? "").Where(u => u is not "").ToArray() ?? [];
 
                     var source = new SourceCodeWriter(1024 * 4);
                     source.WriteLine();
