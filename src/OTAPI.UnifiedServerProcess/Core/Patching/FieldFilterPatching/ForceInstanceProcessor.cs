@@ -19,9 +19,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.NPC.defaultMaxSpawns",
             "Terraria.NPC.defaultSpawnRate",
         };
-        static readonly string[] types = new string[] {
-            "Terraria.ObjectData.TileObjectData",
-        };
+        static readonly string[] types = [
+            // "Terraria.ObjectData.TileObjectData",
+        ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var fieldId in fields) {
                 if (source.UnmodifiedStaticFields.TryGetValue(fieldId, out var field) || source.InitialStaticFields.TryGetValue(fieldId, out field)) {
