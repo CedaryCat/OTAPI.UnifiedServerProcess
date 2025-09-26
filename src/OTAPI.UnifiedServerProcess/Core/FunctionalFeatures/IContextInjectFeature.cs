@@ -1,5 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
+using MonoMod.Utils;
+using NuGet.Packaging;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
@@ -8,7 +10,6 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Data;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
@@ -21,7 +22,6 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             PatcherArguments arguments,
             ContextBoundMethodMap contextMethodMap,
             ref MethodReference methodRefToAdjust,
-            [NotNullWhen(true)]
             out MethodDefinition? contextBoundMethod,
             out MethodReference originalMethodRef,
             out ContextTypeData? contextProvider) {
@@ -30,12 +30,68 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             contextProvider = null;
             var calleeId = methodRefToAdjust.GetIdentifier();
 
+            // Handle delegate-injected context parameters for Action.Invoke / Action.BeginInvoke
+            if ((methodRefToAdjust.Name == nameof(Action.Invoke) || methodRefToAdjust.Name == nameof(Action.BeginInvoke))
+                && PatchingCommon.IsDelegateInjectedCtxParam(methodRefToAdjust.DeclaringType)) {
+
+                // Resolve the delegate method definition
+                var delegateInvokeDef = methodRefToAdjust.DeclaringType.Resolve().GetMethod(methodRefToAdjust.Name);
+
+                // Skip adjustment if parameter count matches (already context-aware)
+                if (delegateInvokeDef.Parameters.Count == methodRefToAdjust.Parameters.Count) {
+                    contextBoundMethod = null;
+                    return false;
+                }
+
+                // Preserve original method reference for flow analysis
+                originalMethodRef = PatchingCommon.GetVanillaMethodRef(
+                    arguments.RootContextDef,
+                    arguments.ContextTypes,
+                    methodRefToAdjust);
+
+                // Insert context parameter based on delegate definition
+                if (delegateInvokeDef.Parameters[0].ParameterType is GenericParameter genericParameter) {
+                    // Map generic parameter from the delegate type
+                    var genericOwner = ((GenericInstanceType)methodRefToAdjust.DeclaringType).ElementType;
+
+                    var duplicate = new MethodReference(methodRefToAdjust.Name, methodRefToAdjust.ReturnType, methodRefToAdjust.DeclaringType) { 
+                        HasThis = methodRefToAdjust.HasThis,
+                    };
+                    duplicate.Parameters.Add(new ParameterDefinition(genericOwner.GenericParameters[genericParameter.Position]));
+                    duplicate.Parameters.AddRange(methodRefToAdjust.Parameters.Select(p => p.Clone()));
+
+                    methodRefToAdjust = duplicate;
+                    contextBoundMethod = null;
+                    return true;
+                }
+                else if (delegateInvokeDef.Parameters[0].ParameterType.FullName is Constants.RootContextFullName) {
+                    // Insert root context type
+
+                    var duplicate = new MethodReference(methodRefToAdjust.Name, methodRefToAdjust.ReturnType, methodRefToAdjust.DeclaringType) {
+                        HasThis = methodRefToAdjust.HasThis,
+                    };
+                    duplicate.Parameters.Add(new ParameterDefinition(arguments.RootContextDef));
+                    duplicate.Parameters.AddRange(methodRefToAdjust.Parameters.Select(p => p.Clone()));
+
+                    methodRefToAdjust = duplicate;
+                    contextBoundMethod = null;
+                    return true;
+                }
+                else {
+                    // Unexpected parameter type
+                    throw new Exception();
+                }
+            }
+
+
             // Validate if the method reference points to an unmodified vanilla method through:
             // 1. Existence in original-context-bound mapping, OR
             // 2. Preservation of original state (unresolvable method indicates no patches)
             // Only valid candidates will be replaced with context-aware versions
             if (!contextMethodMap.originalToContextBound.TryGetValue(calleeId, out contextBoundMethod)) {
-                // Check if method exists in tail assembly (indicates modified)
+
+                // If TryResolve() returns non-null, it means this MethodReference already points
+                // to a modified context-bound method (caller IL already updated), so no further action is needed.
                 if (methodRefToAdjust.TryResolve() is not null) {
                     return false;
                 }
@@ -85,7 +141,6 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             ref Instruction methodCallInstruction,
             out Instruction insertedFirstInstr,
             MethodDefinition modifyMethod,
-            MethodDefinition contextBound,
             MethodReference calleeRef,
             MethodReference vanillaCalleeRef,
             ContextTypeData? contextTypeData,
@@ -288,7 +343,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 if (baseCtorCall is null && firstLoadRoot_shouldMoveCtorCallWhenNotNull is null) {
                     bool isNotInit = false;
                     if (check.OpCode == OpCodes.Ldarg_1) {
-                        foreach (var usage in MonoModCommon.Stack.AnalyzeStackTopValueUsage(ctor, check)) {
+                        foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(ctor, check)) {
                             if (usage is not { OpCode.Code: Code.Call, Operand: MethodReference { Name: ".ctor" } }) {
                                 isNotInit = true;
                                 break;
@@ -296,7 +351,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         }
                     }
                     else if (check.OpCode == OpCodes.Ldarg_0) {
-                        foreach (var usage in MonoModCommon.Stack.AnalyzeStackTopValueUsage(ctor, check)) {
+                        foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(ctor, check)) {
                             if (usage.OpCode != OpCodes.Stfld && usage is not { OpCode.Code: Code.Call, Operand: MethodReference { Name: ".ctor" } }) {
                                 isNotInit = true;
                                 break;
@@ -379,7 +434,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
             while (works.Count > 0) {
                 var current = works.Pop();
-                var usages = MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, current);
+                var usages = MonoModCommon.Stack.TraceStackValueConsumers(method, current);
                 ExtractSources(feature, method, checkInsts, checkLocals, usages);
                 foreach (var usage in usages) {
                     if (MonoModCommon.Stack.GetPushCount(method.Body, usage) > 0) {
@@ -404,7 +459,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                     case Code.Ldloca_S:
                     case Code.Ldloca:
                         if (!checkInsts.Contains(inst)) {
-                            var usages = MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, inst);
+                            var usages = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
                             ExtractSources(feature, method, checkInsts, checkLocals, usages);
                             checkInsts.Add(inst);
                         }

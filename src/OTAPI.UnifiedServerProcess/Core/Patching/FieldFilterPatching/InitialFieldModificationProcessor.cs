@@ -345,7 +345,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             break;
                         }
                     case Code.Ldsflda: {
-                            if (MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
+                            if (MonoModCommon.Stack.TraceStackValueConsumers(method, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
                                 break;
                             }
                             goto case Code.Stsfld;
@@ -367,7 +367,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             break;
                         }
                     case Code.Ldelema: {
-                            if (MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
+                            if (MonoModCommon.Stack.TraceStackValueConsumers(method, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
                                 break;
                             }
                             goto case Code.Stelem_Any;
@@ -1218,7 +1218,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     || checkLoopVariable != loopVariable) {
                     continue;
                 }
-                var loopConditionEnd = MonoModCommon.Stack.AnalyzeStackTopValueFinalUsage(method, loopConditionBegin);
+                var loopConditionEnd = MonoModCommon.Stack.TraceStackValueFinalConsumers(method, loopConditionBegin);
                 if (loopConditionEnd.Length != 1
                     || loopConditionEnd[0].Operand is not Instruction loopBodyBegin) {
                     continue;
@@ -1307,7 +1307,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             while (works.Count > 0) {
                 var current = works.Pop();
-                var usages = MonoModCommon.Stack.AnalyzeStackTopValueUsage(caller, current);
+                var usages = MonoModCommon.Stack.TraceStackValueConsumers(caller, current);
                 ExtractSources(feature, caller, collected, usages);
                 foreach (var usage in usages) {
                     if (MonoModCommon.Stack.GetPushCount(caller.Body, usage) > 0) {
@@ -1367,7 +1367,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             while (works.Count > 0) {
                 var current = works.Pop();
-                var usages = MonoModCommon.Stack.AnalyzeStackTopValueUsage(caller, current);
+                var usages = MonoModCommon.Stack.TraceStackValueConsumers(caller, current);
                 ExtractSources(feature, caller, referencedField, transformInsts, localMap, usages, ignoreExtractLocalModifications);
                 foreach (var usage in usages) {
                     if (MonoModCommon.Stack.GetPushCount(caller.Body, usage) > 0) {
@@ -1447,7 +1447,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             case Code.Ldloc_S:
                             case Code.Ldloc:
                                 if (!local.VariableType.IsTruelyValueType()) {
-                                    foreach (var usage in MonoModCommon.Stack.AnalyzeStackTopValueUsage(caller, inst)) {
+                                    foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
                                         stack.Push(usage);
                                     }
                                 }
@@ -1455,7 +1455,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 break;
                             case Code.Ldloca_S:
                             case Code.Ldloca:
-                                foreach (var usage in MonoModCommon.Stack.AnalyzeStackTopValueUsage(caller, inst)) {
+                                foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
                                     stack.Push(usage);
                                 }
                                 transformInsts.Add(inst);

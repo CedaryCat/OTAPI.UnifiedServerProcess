@@ -75,7 +75,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         continue;
                     }
 
-                    foreach (var fieldReferenceUsage in MonoModCommon.Stack.AnalyzeStackTopValueUsage(cctor, inst)) {
+                    foreach (var fieldReferenceUsage in MonoModCommon.Stack.TraceStackValueConsumers(cctor, inst)) {
                         if (fieldReferenceUsage.OpCode != OpCodes.Call && fieldReferenceUsage.OpCode != OpCodes.Callvirt) {
                             continue;
                         }

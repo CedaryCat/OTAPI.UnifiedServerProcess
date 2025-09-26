@@ -220,7 +220,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             // Generate context loading instructions
             var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextProvider);
-            this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, enumeratorMethod, contextBoundMethodDef, calleeRef, vanillaCallee, contextProvider, loadInstanceInsts);
+            this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, enumeratorMethod, calleeRef, vanillaCallee, contextProvider, loadInstanceInsts);
         }
 
         void HandleStoreStaticField(Instruction instruction, MethodDefinition generatedMethod, PatcherArguments arguments, FieldDefinition captureContextField, FieldReference captureContextFieldRef) {

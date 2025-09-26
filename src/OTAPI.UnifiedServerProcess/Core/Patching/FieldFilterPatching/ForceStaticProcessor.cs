@@ -28,7 +28,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             // ignore hit tile, it should not run on server
             "Terraria.HitTile",
             // global share buffer pool
-            "Terraria.Net.LegacyNetBufferPool"
+            "Terraria.Net.LegacyNetBufferPool",
+            // ignore UIElement._idCounter and UniqueId, it is unused
+            "Terraria.UI.UIElement",
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var modified in source.ModifiedStaticFields.ToArray()) {

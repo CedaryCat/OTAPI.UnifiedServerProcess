@@ -148,6 +148,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var closureMethodLdftn = paths[0].ParametersSources[1].Instructions.Single();
             var closureMethodRef = (MethodReference)closureMethodLdftn.Operand;
 
+            if (PatchingCommon.IsDelegateInjectedCtxParam(delegateCtor.DeclaringType)) {
+                return null;
+            }
+
             var containingType = userMethod.DeclaringType;
 
             var closureKey = closureTypeOrigRef.FullName;
@@ -336,6 +340,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
+            if (PatchingCommon.IsDelegateInjectedCtxParam(delegateCtor.DeclaringType)) {
+                return null;
+            }
+
             if (!mappedMethods.originalToContextBound.TryGetValue(invocationRef.GetIdentifier(), out var contextBoundInvocation)) {
                 if (!mappedMethods.contextBoundMethods.TryGetValue(invocationRef.GetIdentifier(), out contextBoundInvocation)) {
                     return null;
@@ -505,6 +513,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
             if (delegateCtorDef.Name != ".ctor" || delegateCtorDef.DeclaringType.BaseType?.Name != "MulticastDelegate") {
+                return null;
+            }
+
+            if (PatchingCommon.IsDelegateInjectedCtxParam(delegateCtor.DeclaringType)) {
                 return null;
             }
 
@@ -833,11 +845,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             [NotNullWhen(true)] out MethodDefinition? compilerGeneratedMethodOrig,
             [NotNullWhen(true)] out MethodReference? delegateCtor) {
 
-            origBlockInstructions = null;
-            nextInstruction = null;
-            compilerGeneratedMethodOrig = null;
-            delegateCtor = null;
-
             if (IsNormal(checkBegin, out origBlockInstructions, out nextInstruction, out compilerGeneratedMethodOrig, out delegateCtor)) {
                 return true;
             }
@@ -845,6 +852,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return true;
             }
             return false;
+
             static bool IsSimpfied(Instruction checkBegin,
                 out Queue<Instruction> origBlockInstructions,
                 [NotNullWhen(true)] out Instruction? nextInstruction,
@@ -975,6 +983,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
+            if (PatchingCommon.IsDelegateInjectedCtxParam(delegateCtor.DeclaringType)) {
+                return null;
+            }
 
             bool userMethodContextBoundImplicit = false;
             var declaringType = userMethod.DeclaringType.Resolve();
@@ -989,8 +1000,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 userMethodContextBoundImplicit = true;
             }
 
-            //// prepare context parameters for the method, and if it hasn't been used (anyModified is false), we will remove in the end
-            //PatchingCommon.BuildInstanceLoadInstrs(arguments, userMethod.Body, null, out addedparam);
+            // prepare context parameters for the method, and if it hasn't been used (anyModified is false), we will remove in the end
+            // PatchingCommon.BuildInstanceLoadInstrs(arguments, userMethod.Body, null, out addedparam);
 
             // Create 'this' captured closure object from the default closure method without capturing external variables
             // from:
@@ -1104,7 +1115,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             anyModified = true;
             // Generate context loading instructions
             var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextProvider);
-            this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, contextBound, calleeRef, vanillaCallee, contextProvider, loadInstanceInsts);
+            this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRef, vanillaCallee, contextProvider, loadInstanceInsts);
         }
         /// <summary>
         /// 

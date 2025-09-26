@@ -225,7 +225,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                         if (inst.OpCode != OpCodes.Newobj || inst.Operand is not MethodReference ctorRef || ctorRef.DeclaringType.FullName != originalType.FullName) {
                             continue;
                         }
-                        var stackValueUsages = MonoModCommon.Stack.AnalyzeStackTopValueUsage(usedByMethod, inst);
+                        var stackValueUsages = MonoModCommon.Stack.TraceStackValueConsumers(usedByMethod, inst);
                         if (stackValueUsages.Length > 1) {
                             return false;
                         }

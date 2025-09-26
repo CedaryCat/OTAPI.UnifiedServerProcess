@@ -68,12 +68,48 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
 
-            var workQueue = module.GetAllTypes()
-                // skip delegate closures and auto enumerators, they will be handled by the later patcher
-                .Where(t => !t.Name.OrdinalStartsWith('<'))
-                .SelectMany(t => t.Methods)
-                .Where(m => m.HasBody && m.Name != ".cctor")
-                .ToDictionary(m => m.GetIdentifier());
+            // HashSet<string> delegateTargetWithCtxParam = [];
+            Dictionary<string, MethodDefinition> workQueue = [];
+
+            foreach (var type in arguments.MainModule.GetAllTypes()) {
+                if (!type.Name.OrdinalStartsWith("<")) {
+                    foreach (var method in type.Methods) {
+                        if (!method.HasBody || method.Name == ".cctor" || method.Name.OrdinalStartsWith("<")) {
+                            continue;
+                        }
+                        workQueue.Add(method.GetIdentifier(), method);
+                    }
+                }
+                foreach (var method in type.Methods) {
+                    if (!method.HasBody) {
+                        continue;
+                    }
+                    foreach (var inst in method.Body.Instructions) {
+                        if (inst.OpCode.Code is not Code.Ldftn and not Code.Ldvirtftn) {
+                            continue;
+                        }
+                        var targetRef = (MethodReference)inst.Operand;
+                        var usages = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
+                        if (usages.Length != 1 || usages[0].OpCode.Code is not Code.Newobj) {
+                            continue;
+                        }
+                        var ctorRef = (MethodReference)usages[0].Operand;
+                        if (!ctorRef.DeclaringType.IsDelegate()) {
+                            continue;
+                        }
+                        if (!PatchingCommon.IsDelegateInjectedCtxParam(ctorRef.DeclaringType)) {
+                            continue;
+                        }
+                        var targetDef = targetRef.TryResolve();
+                        if (targetDef is null) {
+                            continue;
+                        }
+                        var mid = targetDef.GetIdentifier();
+                        workQueue.TryAdd(mid, targetDef);
+                        this.ForceOverrideContextBoundCheck(mid, true);
+                    }
+                }
+            }
 
             int iteration = 0;
             while (workQueue.Count > 0) {
@@ -94,6 +130,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         originalToContextMethod: convertedMethodOrigMap,
                         contextBoundMethods: contextBoundMethods,
                         modifiedMethod,
+                        //delegateTargetWithCtxParam.Contains(removeKey),
                         out var modifyMode
                     );
                     workQueue.Remove(removeKey);
@@ -181,12 +218,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var redirectedCaller = caller;
                     var callerId = caller.GetIdentifier();
 
-                    // If the caller has a context-bound version, redirect to the context-bound method
+                    // If the method has a context-bound version, redirect to the context-bound method
                     if (mappedMethods.originalToContextBound.TryGetValue(callerId, out var instanceConvdMethod)) {
                         redirectedCaller = instanceConvdMethod;
                         callerId = redirectedCaller.GetIdentifier();
                     }
-                    // The modified method is used by the caller, so caller should be check again
+                    // The modified method is used by the method, so method should be check again
                     if (workQueue.TryAdd(callerId, redirectedCaller)) {
                         Progress(iteration, progress, total, "Add: {0}", indent: 1, caller.GetDebugName());
                     }
@@ -320,6 +357,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             Dictionary<string, MethodDefinition> originalToContextMethod,
             Dictionary<string, MethodDefinition> contextBoundMethods,
             MethodDefinition method,
+            //bool forceAddParam,
             out MethodModifyMode mode) {
 
             mode = MethodModifyMode.None;
@@ -340,6 +378,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     throw new Exception($"The method {method.GetDebugName()} has already been bound with context to {convertedMethod.GetDebugName()}, shouldn't be add to work queue");
                 }
 
+                // if (!forceAddParam) {
                 if (method.IsStatic) {
                     if (this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, method)) {
                         method = PatchingCommon.CreateInstanceConvdMethod(method, contextType, arguments.InstanceConvdFieldOrgiMap);
@@ -369,6 +408,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     // add context-bound method for self
                     contextBoundMethods.Add(methodId, method);
                 }
+                // }
                 else if (this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, method)) {
                     PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, null, out addedParam);
                     if (addedParam) {
@@ -423,20 +463,25 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             void HandleLoadMethodPtr(Instruction instruction, MethodDefinition caller, out bool addedParam) {
                 addedParam = false;
-                if (contextType is not null) {
-                    return;
-                }
-                var methodRef = (MethodReference)instruction.Operand;
-                var methodDef = methodRef.TryResolve();
-                if (methodDef is null) {
-                    return;
-                }
-                if (!this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, methodDef)) {
-                    return;
-                }
-                Info("HandleLoadMethodPtr: {0} when processing {1}", methodRef.GetDebugName(), caller.GetDebugName());
-                PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, null, out addedParam);
+
+                // CheckUsedContextBoundField will do these checks, so no need to check here
+
+                //addedParam = false;
+                //if (contextType is not null) {
+                //    return;
+                //}
+                //var methodRef = (MethodReference)instruction.Operand;
+                //var methodDef = methodRef.TryResolve();
+                //if (methodDef is null) {
+                //    return;
+                //}
+                //if (!this.CheckUsedContextBoundField(arguments.InstanceConvdFieldOrgiMap, methodDef)) {
+                //    return;
+                //}
+                //Info("HandleLoadMethodPtr: {0} when processing {1}", methodRef.GetDebugName(), caller.GetDebugName());
+                //PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, null, out addedParam);
             }
+
             void HandleLoadStaticField(Instruction instruction, MethodDefinition method, bool isAddress, out bool addedParam) {
 
                 addedParam = false;
@@ -527,12 +572,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 var calleeRefToAdjust = (MethodReference)methodCallInstruction.Operand;
 
-                if (!this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out var contextBound, out var vanillaCallee, out var contextType)) {
+                if (!this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out _, out var vanillaCallee, out var contextType)) {
                     return;
                 }
                 var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
 
-                this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, contextBound, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
+                this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
             }
         }
     }

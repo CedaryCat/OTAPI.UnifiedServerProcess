@@ -213,7 +213,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 while (works.Count > 0) {
                     var current = works.Pop();
-                    var usages = MonoModCommon.Stack.AnalyzeStackTopValueUsage(cctor, current);
+                    var usages = MonoModCommon.Stack.TraceStackValueConsumers(cctor, current);
                     ExtractSources(feature, cctor, transformInsts, localMap, usages);
                     foreach (var usage in usages) {
                         if (MonoModCommon.Stack.GetPushCount(cctor.Body, usage) > 0) {
@@ -491,7 +491,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out _);
 
-                this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, contextBound, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
+                this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
             }
         }
         public void UseThisInsteadRecursiveCtorCalls(PatcherArguments arguments, MethodDefinition newCtor, ContextTypeData contextTypeData) {

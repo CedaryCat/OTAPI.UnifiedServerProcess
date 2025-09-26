@@ -35,7 +35,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 }
             }
             else if (inst.OpCode == OpCodes.Ldsflda) {
-                foreach (var usage in AnalyzeStackTopValueUsage(method, inst)) {
+                foreach (var usage in TraceStackValueConsumers(method, inst)) {
                     modificationOperations.Add(usage);
                 }
                 var field = ((FieldReference)inst.Operand).TryResolve();
@@ -79,7 +79,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             modified = [];
             modificationOperations = [];
 
-            foreach (var usage in AnalyzeStackTopValueUsage(method, pushedFieldReference)) {
+            foreach (var usage in TraceStackValueConsumers(method, pushedFieldReference)) {
                 if (usage.OpCode != OpCodes.Call && usage.OpCode != OpCodes.Callvirt) {
                     continue;
                 }

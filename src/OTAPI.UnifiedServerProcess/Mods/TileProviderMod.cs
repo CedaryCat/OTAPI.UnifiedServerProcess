@@ -171,7 +171,7 @@ class TileSystemPatchLogic
                 if (!inst.MatchLdflda(out var field) || !IsTileType(field.FieldType)) {
                     continue;
                 }
-                var usage = MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, inst);
+                var usage = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
                 if (usage.Length != 1 || !usage[0].MatchCallOrCallvirt(out var methodReference) || !modifiedTileParameters.TryGetValue(methodReference.GetIdentifier(), out var indexes)) {
                     continue;
                 }
@@ -905,7 +905,7 @@ class TileSystemPatchLogic
                                 case Code.Ldfld:
                                 case Code.Ldsfld:
 
-                                    if (workPaths.Count == 1 && (loadEnd.OpCode == OpCodes.Dup || MonoModCommon.Stack.AnalyzeStackTopValueUsage(method, loadBegin).Length == 1)) {
+                                    if (workPaths.Count == 1 && (loadEnd.OpCode == OpCodes.Dup || MonoModCommon.Stack.TraceStackValueConsumers(method, loadBegin).Length == 1)) {
                                         loadEnd = loadBegin;
                                     }
 

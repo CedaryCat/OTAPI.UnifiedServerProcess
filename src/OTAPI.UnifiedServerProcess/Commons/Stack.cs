@@ -31,7 +31,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             /// <param name="caller">Executing method</param>
             /// <param name="afterThisExec">Analyze after this instruction</param>
             /// <returns>Return all possible uses of the top value on the stack/returns>
-            public static Instruction[] AnalyzeStackTopValueUsage(MethodDefinition caller, Instruction afterThisExec) {
+            public static Instruction[] TraceStackValueConsumers(MethodDefinition caller, Instruction afterThisExec) {
                 var visited = new HashSet<(Instruction, int)>();
                 var results = new HashSet<Instruction>();
                 var workStack = new Stack<AnalysisContext>();
@@ -76,14 +76,14 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                 return results.ToArray();
             }
-            public static Instruction[] AnalyzeStackTopValueFinalUsage(MethodDefinition caller, Instruction afterThisExec) {
+            public static Instruction[] TraceStackValueFinalConsumers(MethodDefinition caller, Instruction afterThisExec) {
                 List<Instruction> results = [];
                 Stack<Instruction> works = [];
                 works.Push(afterThisExec);
 
                 while (works.Count > 0) {
                     var current = works.Pop();
-                    var usages = AnalyzeStackTopValueUsage(caller, current);
+                    var usages = TraceStackValueConsumers(caller, current);
                     foreach (var usage in usages) {
                         if (MonoModCommon.Stack.GetPushCount(caller.Body, usage) > 0) {
                             works.Push(usage);

@@ -1,7 +1,9 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
+using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Extensions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -103,6 +105,13 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                     }
                     if (inst.OpCode == OpCodes.Call || inst.OpCode == OpCodes.Callvirt) {
                         var methodRef = (MethodReference)inst.Operand;
+
+                        if (methodRef.Name == nameof(Action.Invoke) || methodRef.Name == nameof(Action.BeginInvoke)) {
+                            if (PatchingCommon.IsDelegateInjectedCtxParam(methodRef.DeclaringType)) {
+                                return CacheReturn(true, useCache, methodId);
+                            }
+                        }
+
                         string? autoDeleFieldName = null;
                         if (methodRef.Name.OrdinalStartsWith("add_")) {
                             autoDeleFieldName = methodRef.Name[4..];
@@ -113,6 +122,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         if (autoDeleFieldName is null) {
                             continue;
                         }
+
                         var declaringType = methodRef.DeclaringType.TryResolve();
                         if (declaringType is null) {
                             continue;
@@ -126,6 +136,12 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         }
                     }
                     if (inst.OpCode == OpCodes.Ldftn || inst.OpCode == OpCodes.Ldvirtftn) {
+                        if (inst.Next is { OpCode.Code: Code.Newobj, Operand: MethodReference deleCtor }) {
+                            if (PatchingCommon.IsDelegateInjectedCtxParam(deleCtor.DeclaringType)) {
+                                continue;
+                            }
+                        }
+
                         var methodRef = (MethodReference)inst.Operand;
                         if (methodRef.DeclaringType.Name == "<>c") {
                             var mDef = methodRef.Resolve();

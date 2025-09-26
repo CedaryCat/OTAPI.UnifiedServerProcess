@@ -307,7 +307,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                             break;
                         }
                     case Code.Ldsflda: {
-                            if (MonoModCommon.Stack.AnalyzeStackTopValueUsage(caller, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
+                            if (MonoModCommon.Stack.TraceStackValueConsumers(caller, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
                                 break;
                             }
                             goto case Code.Stsfld;
@@ -321,7 +321,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                             break;
                         }
                     case Code.Ldelema: {
-                            if (MonoModCommon.Stack.AnalyzeStackTopValueUsage(caller, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
+                            if (MonoModCommon.Stack.TraceStackValueConsumers(caller, instruction).All(inst => inst.OpCode.Code is Code.Call or Code.Callvirt or Code.Ldfld or Code.Ldflda)) {
                                 break;
                             }
                             goto case Code.Stelem_Any;

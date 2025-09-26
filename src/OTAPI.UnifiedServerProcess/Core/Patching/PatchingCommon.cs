@@ -15,6 +15,34 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 {
     public static class PatchingCommon
     {
+        public static bool IsDelegateInjectedCtxParam(TypeReference type) {
+            if (!type.IsDelegate()) {
+                return false;
+            }
+            if (type is GenericInstanceType genericInstance) {
+                var declaringType = genericInstance.ElementType.Resolve();
+                var paramType = declaringType.GetMethod(nameof(Action.Invoke)).Parameters.FirstOrDefault()?.ParameterType;
+                if (paramType is null) {
+                    return false;
+                }
+                if (paramType.FullName is Constants.RootContextFullName) {
+                    return true;
+                }
+                if (paramType is not GenericParameter genericParam) {
+                    return false;
+                }
+                var index = declaringType.GenericParameters.IndexOf(genericParam);
+                if (index == -1) {
+                    return false;
+                }
+                return genericInstance.GenericArguments[index].FullName is Constants.RootContextFullName;
+            }
+            else {
+                var declaringType = type.Resolve();
+                return declaringType.GetMethod(nameof(Action.Invoke)).Parameters.FirstOrDefault()
+                    ?.ParameterType.FullName is Constants.RootContextFullName;
+            }
+        }
         public static MethodDefinition CreateInstanceConvdMethod(MethodDefinition staticMethod, ContextTypeData instanceConvdType, ImmutableDictionary<string, FieldDefinition> instanceConvdFieldOrgiMap) {
             if (!staticMethod.IsStatic) {
                 throw new ArgumentException("Method must be static", nameof(staticMethod));
@@ -472,7 +500,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 
             // Clone parameters excluding context parameters
             foreach (var param in method.Parameters) {
-                if (param.ParameterType.FullName == rootContextType.FullName) {
+                if (param.ParameterType is GenericParameter genericParameter) {
+                    if (genericParameter.Owner is MethodReference genericOwnerMethod) {
+                        if (method is GenericInstanceMethod gMethod && 
+                            gMethod.GenericArguments[genericParameter.Position].FullName == rootContextType.FullName) {
+                            continue;
+                        }
+                    }
+                    else {
+                        if (method.DeclaringType is GenericInstanceType gType &&
+                            gType.GenericArguments[genericParameter.Position].FullName == rootContextType.FullName) {
+                            continue;
+                        }
+                    }
+                }
+                else if (param.ParameterType.FullName == rootContextType.FullName) {
                     continue; // Skip context Parameter for stack integrity
                 }
                 vanilla.Parameters.Add(param.Clone());
