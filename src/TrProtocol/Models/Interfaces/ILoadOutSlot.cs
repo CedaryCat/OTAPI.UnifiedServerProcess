@@ -1,7 +1,6 @@
-﻿namespace TrProtocol.Models.Interfaces
+﻿namespace TrProtocol.Models.Interfaces;
+
+public interface ILoadOutSlot
 {
-    public interface ILoadOutSlot
-    {
-        byte LoadOutSlot { get; set; }
-    }
+    byte LoadOutSlot { get; set; }
 }

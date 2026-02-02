@@ -28,6 +28,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
         public MethodInheritanceGraph MethodInheritanceGraph => methodInheritanceGraph;
 
         readonly TypeInheritanceGraph typeInheritance;
+        readonly TypeFlowSccIndex typeFlowSccIndex;
 
         public ParameterFlowAnalyzer(
             ILogger logger,
@@ -40,6 +41,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             this.delegateInvocationGraph = invocationGraph;
             this.methodInheritanceGraph = inheritanceGraph;
             this.typeInheritance = typeInheritance;
+            this.typeFlowSccIndex = TypeFlowSccIndex.Build(module);
 
             var methodStackTraces = new Dictionary<string, ParameterTraceCollection<string>>();
             var methodParameterTraces = new Dictionary<string, ParameterTraceCollection<string>>();
@@ -126,6 +128,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             ParameterTraceCollection<string> returnTraces,
             out bool dataChanged) {
             dataChanged = false;
+
+            if (method.Name is "NewTextInternal") {
+
+            }
 
             var hasExternalChange = false;
             if (!method.HasBody) return;
@@ -286,7 +292,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
                         var instanceKey = ParameterUsageTrack.GenerateStackKey(method, instanceLoad.RealPushValueInstruction);
 
-                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryExtendTracingWithMemberAccess(fieldRef, out var newTrace)) {
+                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryExtendTracingWithMemberAccess(fieldRef, typeFlowSccIndex, out var newTrace)) {
                             var stackKey = ParameterUsageTrack.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(stackKey, newTrace)) {
                                 hasInnerChange = true;
@@ -336,7 +342,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                             filteredValueTrace = valueTrace;
                         }
                         // Create field storage tracing tail
-                        instanceTrace = filteredValueTrace.CreateEncapsulatedInstance(fieldRef);
+                        instanceTrace = filteredValueTrace.CreateEncapsulatedInstance(fieldRef, typeFlowSccIndex);
                     }
 
                     if (instanceTrace is null) continue;
@@ -409,7 +415,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     var stackKey = ParameterUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                     if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                        baseTrace.TryExtendTracingWithArrayAccess(arrayType, out var newTrace)) {
+                        baseTrace.TryExtendTracingWithArrayAccess(arrayType, typeFlowSccIndex, out var newTrace)) {
                         var targetKey = ParameterUsageTrack.GenerateStackKey(method, loadEleInstruction);
                         if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                             hasInnerChange = true;
@@ -444,7 +450,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TracedParameter, []);
                     }
                     foreach (var chain in valueSingleParamTraceKV.Value.PartTracingPaths) {
-                        if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType))) {
+                        if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType, typeFlowSccIndex))) {
                             hasInnerChange = true;
                             instanceTraceHasChange = true;
                         }
@@ -457,7 +463,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     }
                     valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracedParameter, []);
                     foreach (var chain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                        if (chain.TryExtendTracingWithArrayAccess((ArrayType)instancePath.StackTopType, out var newChain)
+                        if (chain.TryExtendTracingWithArrayAccess((ArrayType)instancePath.StackTopType, typeFlowSccIndex, out var newChain)
                             && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
                             hasInnerChange = true;
                             valueTraceHasChange = true;
@@ -509,7 +515,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         var stackKey = ParameterUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                         if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                            baseTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, out var newTrace)) {
+                            baseTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, typeFlowSccIndex, out var newTrace)) {
                             var targetKey = ParameterUsageTrack.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                                 hasInnerChange = true;
@@ -520,6 +526,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             void HandleStoreCollectionElement(Instruction instruction, int indexOfValueInArguments) {
+                if (instruction.Offset is 155 && method.GetIdentifier() == "Terraria.GameContent.Generation.Dungeon.LayoutProviders.DualDungeonLayoutProvider/HallwayCalculator.MakeHall(Terraria.GameContent.Generation.Dungeon.LayoutProviders.DualDungeonLayoutProvider/HallwayCalculator/HallLine,Terraria.GameContent.Generation.Dungeon.Halls.DungeonHallType)") {
+                    // Debug
+                }
                 foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
                     var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
                         .First();
@@ -547,7 +556,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         }
                         instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TracedParameter, []);
                         foreach (var chain in valueSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType))) {
+                            if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType, typeFlowSccIndex))) {
                                 hasInnerChange = true;
                                 instanceTraceHasChange = true;
                             }
@@ -560,7 +569,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                             valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracedParameter, []);
                         }
                         foreach (var chain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (chain.TryExtendTracingWithCollectionAccess(instancePath.StackTopType, valuePath.StackTopType, out var newChain)
+                            if (chain.TryExtendTracingWithCollectionAccess(instancePath.StackTopType, valuePath.StackTopType, typeFlowSccIndex, out var newChain)
                                 && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
                                 hasInnerChange = true;
                                 valueTraceHasChange = true;
@@ -603,6 +612,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     //}
                 }
             }
+
             void HandleStoreCollectionElements(Instruction instruction) {
                 foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
                     var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
@@ -634,8 +644,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         }
                         instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TracedParameter, []);
                         foreach (var valueChain in valueSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (valueChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, out var elementChain)
-                                && instanceSingleParamTrace.PartTracingPaths.Add(elementChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType))) {
+                            if (valueChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, typeFlowSccIndex, out var elementChain)
+                                && instanceSingleParamTrace.PartTracingPaths.Add(elementChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType, typeFlowSccIndex))) {
                                 hasInnerChange = true;
                                 instanceTraceHasChange = true;
                             }
@@ -648,8 +658,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                             valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracedParameter, []);
                         }
                         foreach (var containChain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (containChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, out var innerChain)
-                                && valueSingleParamTrace.PartTracingPaths.Add(innerChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType))) {
+                            if (containChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, typeFlowSccIndex, out var innerChain)
+                                && valueSingleParamTrace.PartTracingPaths.Add(innerChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType, typeFlowSccIndex))) {
                                 hasInnerChange = true;
                                 valueTraceHasChange = true;
                             }
@@ -769,6 +779,33 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     returnTraces.TryGetTrace(implMethod.GetIdentifier(), out var calleeReturnTrace);
 
                     foreach (var paramGroup in loadParamsInEveryPaths) {
+                        // Call-site parameter-flow substitution
+                        //
+                        // ParameterFlowAnalyzer stores *summaries* for each method:
+                        // - `returnTraces[callee]` describes which callee parameters the return value is derived from.
+                        // - `parameterTraces[callee][targetParam]` describes how `targetParam` is mutated by copying
+                        //   from other callee parameters (including member/element paths).
+                        //
+                        // At a specific call-site we want to "collapse" the callee stack frame and express those
+                        // summaries in the caller's scope (i.e. in terms of the caller's actual arguments).
+                        //
+                        // The key detail is that we must preserve the callee parameter key:
+                        // - Cecil represents `this` as `implMethod.Body.ThisParameter`, whose `Name` is often `""`.
+                        // - `ParameterTraceCollection<string>` is keyed by that `Name`, so `""` is how we identify
+                        //   the callee's `this` parameter.
+                        //
+                        // If we accidentally iterate only values (dropping the key), we cannot tell which callee
+                        // parameter is the *target* of a mutation, and we will end up merging the result into the
+                        // wrong caller argument.
+                        //
+                        // The mapping below connects:
+                        //   calleeParamName ("" / "other" / ...) -> (caller argument load instruction, caller argument trace)
+                        //
+                        // That lets us:
+                        // 1) Pick the correct caller argument for each mutated callee parameter (target selection).
+                        // 2) Substitute origin parameters referenced in the callee summary with the caller's actual
+                        //    argument traces (origin substitution).
+                        var callerArgTracesByCalleeParamName = new Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedParameterProvenance Trace)>();
                         for (int paramIndex = 0; paramIndex < paramGroup.Length; paramIndex++) {
 
                             var paramIndexInImpl = paramIndex;
@@ -794,6 +831,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                             }
 
                             var paramInImpl = paramIndexInImpl == -1 ? implMethod.Body.ThisParameter : implMethod.Parameters[paramIndexInImpl];
+                            var calleeParamName = paramInImpl.Name ?? string.Empty;
 
                             if (paramIndexInImpl != -1 && paramInImpl.ParameterType.IsTruelyValueType()) {
                                 continue;
@@ -818,7 +856,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                                     continue;
                                 }
 
-                                if (!instanceTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, loadParam.StackTopType, out var elementAccess)) {
+                                if (!instanceTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, loadParam.StackTopType, typeFlowSccIndex, out var elementAccess)) {
                                     continue;
                                 }
 
@@ -829,38 +867,93 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                                 continue;
                             }
 
+                            callerArgTracesByCalleeParamName[calleeParamName] = (loadParam, loadingParamStackValue);
+
                             // Return value Parameter propagation
                             if (calleeReturnTrace is not null) {
-                                if (!calleeReturnTrace.ReferencedParameters.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                                // calleeReturnTrace describes "return depends on calleeParamName via these paths".
+                                // Combine caller argument provenance (outerPart) with callee return selector (innerPart),
+                                // producing a new chain expressed in caller scope for the call result.
+                                if (!calleeReturnTrace.ReferencedParameters.TryGetValue(calleeParamName, out var paramParts)) {
                                     continue;
                                 }
 
                                 foreach (var outerPart in loadingParamStackValue.ReferencedParameters.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
                                     foreach (var innerPart in paramParts.PartTracingPaths) {
-                                        var substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart);
+                                        var substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart, typeFlowSccIndex);
                                         if (substitution is not null && stackTrace.TryAddOriginChain(ParameterUsageTrack.GenerateStackKey(method, instruction), substitution)) {
                                             hasExternalChange = true;
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            // Parameter propagation of the caller
-                            if (parameterTraces.TryGetValue(implMethod.GetIdentifier(), out var calleeParameterValues)) {
-                                foreach (var paramValue in calleeParameterValues) {
-                                    if (!paramValue.ReferencedParameters.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                        // Parameter propagation of the caller:
+                        // Substitute callee's parameter mutation summary into caller arguments and merge into the
+                        // correct caller target argument (e.g. "" == callee this -> caller instance argument).
+                        //
+                        // Example:
+                        //   callee: void Copy(ChatLine other) { this.parsedText = other.parsedText; }
+                        //
+                        // A typical callee summary looks like:
+                        //   targetParam "" (this) references originParam "other" at path `.parsedText`
+                        //
+                        // At the call-site:
+                        //   caller maps "" -> caller-instance-arg, "other" -> caller-other-arg
+                        //
+                        // Then we:
+                        //   - take the caller-other-arg provenance (outerPart)
+                        //   - apply the callee selector path `.parsedText` (innerPart)
+                        //   - merge the resulting provenance into the caller-instance-arg
+                        //
+                        // This effectively removes the callee layer so upstream analysis does not have to reason
+                        // about intermediate stack frames.
+                        if (parameterTraces.TryGetValue(implMethod.GetIdentifier(), out var calleeParameterValues)) {
+                            foreach (var target in callerArgTracesByCalleeParamName) {
+                                if (!calleeParameterValues.TryGetTrace(target.Key, out var mutatedTargetTrace)) {
+                                    continue;
+                                }
+
+                                var targetKey = ParameterUsageTrack.GenerateStackKey(method, target.Value.LoadParam.RealPushValueInstruction);
+
+                                foreach (var originGroup in mutatedTargetTrace.ReferencedParameters) {
+                                    if (!callerArgTracesByCalleeParamName.TryGetValue(originGroup.Key, out var originTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var outerPart in loadingParamStackValue.ReferencedParameters.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
-                                        foreach (var innerPart in paramParts.PartTracingPaths) {
-                                            //// Ignore self
-                                            //if (innerPart.Parameter.Name == paramInImpl.Name) {
-                                            //    continue;
-                                            //}
-                                            var substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart);
-                                            if (substitution is not null && stackTrace.TryAddOriginChain(ParameterUsageTrack.GenerateStackKey(method, loadParam.RealPushValueInstruction), substitution)) {
-                                                hasExternalChange = true;
+                                    foreach (var outerPart in originTrace.Trace.ReferencedParameters.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
+                                        foreach (var innerPart in originGroup.Value.PartTracingPaths) {
+                                            var substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart, typeFlowSccIndex);
+                                            if (substitution is null) {
+                                                continue;
+                                            }
+
+                                            if (stackTrace.TryAddOriginChain(targetKey, substitution)) {
+                                                hasInnerChange = true;
+                                            }
+
+                                            // Also update the caller's *named* locations (parameters/locals) when the
+                                            // call-site argument is a direct parameter/local load.
+                                            //
+                                            // Rationale:
+                                            // - `stackTrace` is keyed by "where did this value come from on the stack".
+                                            //   For `ldarg` / `ldloc`, the stack key is stable (Param:/Variable:), but for
+                                            //   more complex expressions it may be "Others:...IL_xxxx".
+                                            // - `paramTrace` / `localTrace` are the method-level summaries that propagate
+                                            //   to callers in the outer fixed point.
+                                            //
+                                            // So when the argument corresponds to a real caller parameter/local, we also
+                                            // merge into those summaries to make the effect visible outside this method.
+                                            if (MonoModCommon.IL.TryGetReferencedParameter(method, target.Value.LoadParam.RealPushValueInstruction, out var callerParam)) {
+                                                if (paramTrace.TryAddOriginChain(callerParam.Name, substitution)) {
+                                                    hasExternalChange = true;
+                                                }
+                                            }
+                                            else if (method.HasBody && MonoModCommon.IL.TryGetReferencedVariable(method, target.Value.LoadParam.RealPushValueInstruction, out var callerVariable)) {
+                                                if (localTrace.TryAddOriginChain(callerVariable, substitution)) {
+                                                    hasInnerChange = true;
+                                                }
                                             }
                                         }
                                     }

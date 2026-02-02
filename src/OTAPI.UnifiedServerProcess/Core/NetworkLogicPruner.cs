@@ -3,9 +3,6 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using MonoMod.Cil;
-using MonoMod.Utils;
-using OTAPI.UnifiedServerProcess.Commons;
-using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -14,16 +11,20 @@ namespace OTAPI.UnifiedServerProcess.Core
     public class NetworkLogicPruner(ModuleDefinition module)
     {
         readonly FieldDefinition dedServ = module.GetType("Terraria.Main").Field("dedServ");
-        readonly FieldDefinition skipMenu = module.GetType("Terraria.Main").Field("skipMenu");
 
         // TODO: support more cases
         // readonly FieldDefinition netMode = module.GetType("Terraria.Main").Field("netMode");
 
+        /// <summary>
+        /// Prunes client-only code paths by assuming Terraria.Main.dedServ is constant true.
+        /// This pass is intentionally conservative and keeps the method body's structure intact
+        /// (especially exception handlers) by NOP'ing unreachable instructions in place.
+        /// </summary>
         public void Prune(params string[] skippedTypeFullNames) {
             var skipTypes = skippedTypeFullNames.ToHashSet();
-            foreach (var type in module.GetAllTypes()) {
 
-                if (skipTypes.Contains(type.FullName)) { 
+            foreach (var type in module.GetAllTypes()) {
+                if (skipTypes.Contains(type.FullName)) {
                     continue;
                 }
 
@@ -32,314 +33,270 @@ namespace OTAPI.UnifiedServerProcess.Core
                         continue;
                     }
 
-                    Dictionary<Instruction, Instruction> switchBlockEnd = [];
-
-                    bool anyTargetField = false;
-                    foreach (var inst in method.Body.Instructions) {
-                        if (inst.Operand is not FieldReference fieldReference) {
-                            continue;
-                        }
-                        if (fieldReference.FullName == dedServ.FullName || fieldReference.FullName == skipMenu.FullName) {
-                            anyTargetField = true;
-                            break;
-                        }
-                    }
-
-                    if (!anyTargetField) {
+                    var body = method.Body;
+                    if (!ReferencesDedServ(body)) {
                         continue;
                     }
 
-                    foreach (var inst in method.Body.Instructions) {
-                        if (inst.OpCode != OpCodes.Switch) {
-                            continue;
-                        }
-                        var targets = ((Instruction[])inst.Operand).ToHashSet();
-                        var spliters = targets.ToHashSet();
-                        if (inst.Next.OpCode != OpCodes.Ret && inst.Next.OpCode != OpCodes.Br && inst.Next.OpCode != OpCodes.Br_S) {
-                            targets.Add(inst.Next);
-                        }
+                    // The previous implementation rebuilt the instruction list, which is very easy to get wrong
+                    // with try/catch/finally/filter blocks. If EH boundaries reference instructions that no longer
+                    // exist in body.Instructions, Cecil can fail later (often surfacing around ReadExceptionHandlers).
+                    //
+                    // This implementation only mutates instructions in-place, so EH boundaries remain stable.
 
-                        Instruction? switchEnd = inst;
-                        while (switchEnd.OpCode != OpCodes.Br && switchEnd.OpCode != OpCodes.Br_S && switchEnd.OpCode != OpCodes.Ret) {
-                            switchEnd = switchEnd.Next;
-                        }
+                    body.SimplifyMacros();
 
-                        if (switchEnd.Operand is null) {
-                            spliters.Add(switchEnd.Next);
-                        }
-                        else {
-                            switchEnd = (Instruction)switchEnd.Operand;
-                            spliters.Add(switchEnd);
-                            switchEnd = switchEnd.Previous;
-                        }
+                    bool changed = FoldDedServConditionalBranches(body, assumeDedServ: true);
+                    changed |= NopUnreachableInstructions(body);
 
-                        foreach (var target in targets) {
-                            var checking = target.Next;
-                            var blockEnd = checking;
-                            HashSet<Instruction> block = [target];
-
-                            if (checking is null) {
-                                switchBlockEnd[target] = target;
-                                continue;
-                            }
-
-                            while (!spliters.Contains(checking)) {
-                                block.Add(checking);
-                                blockEnd = checking;
-                                if (checking.Next is null) {
-                                    break;
-                                }
-                                checking = checking.Next;
-                            }
-
-                            if (blockEnd.OpCode != OpCodes.Ret
-                                && blockEnd.OpCode != OpCodes.Br
-                                && blockEnd.OpCode != OpCodes.Br_S
-                                && blockEnd != switchEnd) {
-
-                                if (blockEnd.Next == switchEnd || blockEnd.Next.OpCode == OpCodes.Ret) {
-                                    block.Add(blockEnd);
-                                    blockEnd = switchEnd;
-                                }
-                                else {
-
-                                }
-                            }
-
-                            block.Add(blockEnd);
-                            foreach (var inst2 in block) {
-                                switchBlockEnd[inst2] = blockEnd;
-                            }
-                        }
+                    if (changed) {
+                        body.OptimizeMacros();
                     }
-
-                    List<Instruction> reachableInstructions = new List<Instruction>(method.Body.Instructions.Count);
-                    List<Instruction> removes = new List<Instruction>();
-
-                    var jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(method);
-
-                    Dictionary<Instruction, int> indexMap = [];
-                    for (int i = 0; i < method.Body.Instructions.Count; i++) {
-                        indexMap[method.Body.Instructions[i]] = i;
-                    }
-
-                    HashSet<int> visited = [];
-                    Stack<(int current, int end1, int end2)> paths = [];
-                    paths.Push((0, -1, -1));
-
-                    while (paths.TryPop(out var pathDetail)) {
-
-                        while (pathDetail.current < method.Body.Instructions.Count) {
-                            if (!visited.Add(pathDetail.current)) {
-                                break;
-                            }
-
-                            var reachableInst = method.Body.Instructions[pathDetail.current];
-                            CanReachCurrentInstruction(method.Body, jumpSites, switchBlockEnd, reachableInst, removes, indexMap, ref pathDetail);
-
-                            if (pathDetail.end1 == -1 && pathDetail.end2 == -1
-                                && reachableInst.Operand is Instruction jumpTo 
-                                && pathDetail.current < method.Body.Instructions.Count
-                                && method.Body.Instructions[pathDetail.current] != jumpTo
-                                && !visited.Contains(indexMap[jumpTo])) {
-
-                                paths.Push((indexMap[jumpTo], pathDetail.end1, pathDetail.end2));
-                            }
-
-                            reachableInstructions.Add(reachableInst);
-                        }
-                    }
-
-                    foreach (var rm in removes) {
-                        method.Body.RemoveInstructionSeamlessly(jumpSites, rm, reachableInstructions);
-                    }
-
-                    method.Body.Instructions.Clear();
-                    method.Body.Instructions.AddRange(reachableInstructions);
                 }
             }
         }
 
-
-
-        void CanReachCurrentInstruction(
-
-            MethodBody body,
-            Dictionary<Instruction, List<Instruction>> jumpSites,
-            Dictionary<Instruction, Instruction> switchBlockToEnd,
-            Instruction instruction,
-            List<Instruction> rm,
-            Dictionary<Instruction, int> inst2Index,
-
-            ref (int index, int end_dedServIsTrueBlock, int end_skipMenuIsFalseBlock) data) {
-
-
-            if (data.index > data.end_dedServIsTrueBlock) {
-                data.end_dedServIsTrueBlock = -1;
-            }
-
-            if (data.index > data.end_skipMenuIsFalseBlock) {
-                data.end_skipMenuIsFalseBlock = -1;
-            }
-
-            if (instruction.MatchLdsfld(out var fieldReference)) {
-
-                if (fieldReference.FullName == dedServ.FullName) {
-                    var nextInst = instruction.Next;
-
-                    if (nextInst.OpCode == OpCodes.Brtrue || nextInst.OpCode == OpCodes.Brtrue_S) {
-                        var jumpTo = (Instruction)nextInst.Operand;
-
-                        var jumpToIndex = inst2Index[jumpTo];
-                        data.index = jumpToIndex;
-
-                        if (switchBlockToEnd.TryGetValue(instruction, out var blockEnd)) {
-                            if (blockEnd.OpCode != OpCodes.Ret
-                                && blockEnd.OpCode != OpCodes.Br
-                                && blockEnd.OpCode != OpCodes.Br_S) {
-                                blockEnd = blockEnd.Next;
-                            }
-                            var switchEndIndex = inst2Index[blockEnd];
-                            if (switchEndIndex < jumpToIndex) {
-                                data.index = switchEndIndex;
-                            }
-                            rm.Add(instruction);
-                            return;
-                        }
-
-                        // else block
-                        if (instruction.Previous is not null && (instruction.Previous.OpCode == OpCodes.Br || instruction.Previous.OpCode == OpCodes.Br_S)) {
-                            jumpTo = (Instruction)instruction.Previous.Operand;
-                            jumpToIndex = inst2Index[jumpTo];
-                            data.end_dedServIsTrueBlock = jumpToIndex;
-                        }
-
-                        rm.Add(instruction);
-                        return;
-                    }
-
-                    if (nextInst.OpCode == OpCodes.Brfalse || nextInst.OpCode == OpCodes.Brfalse_S) {
-                        var jumpTarget = (Instruction)nextInst.Operand;
-                        if (jumpSites[jumpTarget].Count == 1) {
-                            data.end_dedServIsTrueBlock = inst2Index[jumpTarget];
-                            rm.Add(instruction);
-                            rm.Add(nextInst);
-                        }
-                    }
-                }
-                if (fieldReference.FullName == skipMenu.FullName) {
-                    var nextInst = instruction.Next;
-
-                    if (nextInst.OpCode == OpCodes.Brfalse || nextInst.OpCode == OpCodes.Brfalse_S) {
-                        var jumpTarget = (Instruction)nextInst.Operand;
-
-                        var jumpIndex = inst2Index[jumpTarget];
-                        data.index = jumpIndex;
-
-                        if (switchBlockToEnd.TryGetValue(instruction, out var blockEnd)) {
-                            if (blockEnd.OpCode != OpCodes.Ret
-                                && blockEnd.OpCode != OpCodes.Br
-                                && blockEnd.OpCode != OpCodes.Br_S) {
-                                blockEnd = blockEnd.Next;
-                            }
-                            var switchEndIndex = inst2Index[blockEnd];
-                            if (switchEndIndex < jumpIndex) {
-                                data.index = switchEndIndex;
-                            }
-                            rm.Add(instruction);
-                            return;
-                        }
-
-                        // else block
-                        if (instruction.Previous is not null && (instruction.Previous.OpCode == OpCodes.Br || instruction.Previous.OpCode == OpCodes.Br_S)) {
-                            jumpTarget = (Instruction)instruction.Previous.Operand;
-                            jumpIndex = inst2Index[jumpTarget];
-                            data.end_skipMenuIsFalseBlock = jumpIndex;
-                        }
-
-                        rm.Add(instruction);
-                        return;
-                    }
-
-                    if (nextInst.OpCode == OpCodes.Brtrue || nextInst.OpCode == OpCodes.Brtrue_S) {
-                        var jumpTarget = (Instruction)nextInst.Operand;
-                        if (jumpSites[jumpTarget].Count == 1) {
-                            data.end_skipMenuIsFalseBlock = inst2Index[jumpTarget];
-                            rm.Add(instruction);
-                            rm.Add(nextInst);
-                        }
-                    }
+        bool ReferencesDedServ(MethodBody body) {
+            foreach (var instruction in body.Instructions) {
+                if (instruction.Operand is FieldReference fieldReference
+                    && fieldReference.FullName == dedServ.FullName) {
+                    return true;
                 }
             }
+            return false;
+        }
 
-            if (CheckIsJumpOutOfBlock(body, instruction, switchBlockToEnd, rm, inst2Index, ref data.index, data.end_dedServIsTrueBlock)) {
-                return;
+        static bool IsConditionalBranch(OpCode opCode)
+            => opCode.Code is Code.Brtrue or Code.Brtrue_S or Code.Brfalse or Code.Brfalse_S;
+
+        static bool IsBrtrue(OpCode opCode) => opCode.Code is Code.Brtrue or Code.Brtrue_S;
+
+        static bool IsShortBranch(OpCode opCode)
+            => opCode.Code is Code.Brtrue_S or Code.Brfalse_S or Code.Br_S;
+
+        static bool TryResolveBranchTarget(object? operand, out Instruction? target) {
+            switch (operand) {
+                case Instruction instruction:
+                    target = instruction;
+                    return true;
+                case ILLabel label:
+                    target = label.Target;
+                    return target is not null;
+                default:
+                    target = null;
+                    return false;
+            }
+        }
+
+        static bool TryResolveSwitchTargets(object? operand, out IReadOnlyList<Instruction> targets) {
+            if (operand is Instruction[] insts) {
+                targets = insts;
+                return true;
             }
 
-            if (CheckIsJumpOutOfBlock(body, instruction, switchBlockToEnd, rm, inst2Index, ref data.index, data.end_skipMenuIsFalseBlock)) {
-                return;
-            }
-
-            data.index += 1;
-
-            return;
-
-            static bool CheckIsJumpOutOfBlock(MethodBody body, Instruction instruction, Dictionary<Instruction, Instruction> switchBlockToEnd, List<Instruction> rm, Dictionary<Instruction, int> indexMap, ref int index, int endOfBlock) {
-
-                if (endOfBlock >= 0) {
-
-                    if (instruction.OpCode == OpCodes.Br || instruction.OpCode == OpCodes.Br_S) {
-                        var jumpTarget = (Instruction)instruction.Operand;
-
-                        var jumpIndex = indexMap[jumpTarget];
-
-                        if (jumpIndex > endOfBlock) {
-                            index = jumpIndex;
-
-                            rm.Add(instruction);
-                            return true;
-                        }
-
-                        if (switchBlockToEnd.TryGetValue(instruction, out var blockEnd)) {
-                            if (blockEnd.OpCode != OpCodes.Ret
-                                && blockEnd.OpCode != OpCodes.Br
-                                && blockEnd.OpCode != OpCodes.Br_S) {
-                                blockEnd = blockEnd.Next;
-                            }
-                            var switchEndIndex = indexMap[blockEnd];
-                            if (switchEndIndex < index) {
-                                index = switchEndIndex;
-                            }
-                            return true;
-                        }
-                    }
-
-                    if (instruction.OpCode == OpCodes.Ret) {
-                        index = body.Instructions.Count;
-
-                        if (switchBlockToEnd.TryGetValue(instruction, out var blockEnd)) {
-
-                            if (blockEnd.OpCode != OpCodes.Ret
-                                && blockEnd.OpCode != OpCodes.Br
-                                && blockEnd.OpCode != OpCodes.Br_S) {
-                                blockEnd = blockEnd.Next;
-                            }
-
-                            if (blockEnd.OpCode == OpCodes.Ret && blockEnd != instruction) {
-                                rm.Add(instruction);
-                            }
-
-                            var switchEndIndex = indexMap[blockEnd];
-                            if (switchEndIndex < index) {
-                                index = switchEndIndex + 1;
-                            }
-                            return true;
-                        }
+            if (operand is ILLabel[] labels) {
+                var resolved = new List<Instruction>(labels.Length);
+                foreach (var label in labels) {
+                    if (label.Target is not null) {
+                        resolved.Add(label.Target);
                     }
                 }
+                targets = resolved;
+                return true;
+            }
 
+            targets = [];
+            return false;
+        }
+
+        bool FoldDedServConditionalBranches(MethodBody body, bool assumeDedServ) {
+            bool changed = false;
+            var instructions = body.Instructions;
+
+            for (int i = 0; i < instructions.Count - 1; i++) {
+                var load = instructions[i];
+                if (load.OpCode.Code != Code.Ldsfld) {
+                    continue;
+                }
+
+                if (load.Operand is not FieldReference fieldReference || fieldReference.FullName != dedServ.FullName) {
+                    continue;
+                }
+
+                var branch = instructions[i + 1];
+                if (!IsConditionalBranch(branch.OpCode)) {
+                    continue;
+                }
+
+                // The conditional branch consumes the value produced by ldsfld. Replace both instructions so the stack stays valid.
+                bool takeBranch = IsBrtrue(branch.OpCode) ? assumeDedServ : !assumeDedServ;
+
+                load.OpCode = OpCodes.Nop;
+                load.Operand = null;
+
+                if (takeBranch) {
+                    branch.OpCode = IsShortBranch(branch.OpCode) ? OpCodes.Br_S : OpCodes.Br;
+                }
+                else {
+                    branch.OpCode = OpCodes.Nop;
+                    branch.Operand = null;
+                }
+
+                changed = true;
+                i += 1; // Skip the branch we just handled.
+            }
+
+            return changed;
+        }
+
+        bool NopUnreachableInstructions(MethodBody body) {
+            var instructions = body.Instructions;
+            if (instructions.Count == 0) {
                 return false;
             }
+
+            var indexMap = new Dictionary<Instruction, int>(instructions.Count);
+            for (int i = 0; i < instructions.Count; i++) {
+                indexMap[instructions[i]] = i;
+            }
+
+            // Conservative EH edge: if any instruction in a try region is reachable, consider its handler/filter reachable too.
+            // This is important for finally blocks (executed via "hidden" control-flow during leave/unwind).
+            List<(int tryStart, int tryEnd, int handlerStart, int filterStart)> exceptionHandlers = [];
+            if (body.HasExceptionHandlers) {
+                foreach (var handler in body.ExceptionHandlers) {
+                    if (handler.TryStart is null || !indexMap.TryGetValue(handler.TryStart, out var tryStart)) {
+                        continue;
+                    }
+
+                    int tryEnd;
+                    if (handler.TryEnd is null) {
+                        tryEnd = instructions.Count;
+                    }
+                    else if (!indexMap.TryGetValue(handler.TryEnd, out tryEnd)) {
+                        // Invalid boundary (likely already broken). Avoid making things worse by skipping EH-driven edges.
+                        continue;
+                    }
+
+                    int handlerStart = -1;
+                    if (handler.HandlerStart is not null && indexMap.TryGetValue(handler.HandlerStart, out var hs)) {
+                        handlerStart = hs;
+                    }
+
+                    int filterStart = -1;
+                    if (handler.FilterStart is not null && indexMap.TryGetValue(handler.FilterStart, out var fs)) {
+                        filterStart = fs;
+                    }
+
+                    exceptionHandlers.Add((tryStart, tryEnd, handlerStart, filterStart));
+                }
+            }
+
+            var reachable = new bool[instructions.Count];
+            var work = new Stack<int>();
+
+            reachable[0] = true;
+            work.Push(0);
+
+            while (work.TryPop(out var currentIndex)) {
+                var current = instructions[currentIndex];
+
+                foreach (var (tryStart, tryEnd, handlerStart, filterStart) in exceptionHandlers) {
+                    if (currentIndex < tryStart || currentIndex >= tryEnd) {
+                        continue;
+                    }
+
+                    if (filterStart >= 0 && !reachable[filterStart]) {
+                        reachable[filterStart] = true;
+                        work.Push(filterStart);
+                    }
+
+                    if (handlerStart >= 0 && !reachable[handlerStart]) {
+                        reachable[handlerStart] = true;
+                        work.Push(handlerStart);
+                    }
+                }
+
+                if (current.OpCode.Code == Code.Switch) {
+                    if (TryResolveSwitchTargets(current.Operand, out var targets)) {
+                        foreach (var target in targets) {
+                            if (indexMap.TryGetValue(target, out var targetIndex) && !reachable[targetIndex]) {
+                                reachable[targetIndex] = true;
+                                work.Push(targetIndex);
+                            }
+                        }
+                    }
+
+                    var fallthrough = currentIndex + 1;
+                    if (fallthrough < instructions.Count && !reachable[fallthrough]) {
+                        reachable[fallthrough] = true;
+                        work.Push(fallthrough);
+                    }
+
+                    continue;
+                }
+
+                switch (current.OpCode.FlowControl) {
+                    case FlowControl.Branch: {
+                            if (TryResolveBranchTarget(current.Operand, out var target)
+                                && target is not null
+                                && indexMap.TryGetValue(target, out var targetIndex)
+                                && !reachable[targetIndex]) {
+                                reachable[targetIndex] = true;
+                                work.Push(targetIndex);
+                            }
+                            break;
+                        }
+
+                    case FlowControl.Cond_Branch: {
+                            if (TryResolveBranchTarget(current.Operand, out var target)
+                                && target is not null
+                                && indexMap.TryGetValue(target, out var targetIndex)
+                                && !reachable[targetIndex]) {
+                                reachable[targetIndex] = true;
+                                work.Push(targetIndex);
+                            }
+
+                            var fallthrough = currentIndex + 1;
+                            if (fallthrough < instructions.Count && !reachable[fallthrough]) {
+                                reachable[fallthrough] = true;
+                                work.Push(fallthrough);
+                            }
+                            break;
+                        }
+
+                    case FlowControl.Return:
+                    case FlowControl.Throw:
+                        break;
+
+                    default: {
+                            var next = currentIndex + 1;
+                            if (next < instructions.Count && !reachable[next]) {
+                                reachable[next] = true;
+                                work.Push(next);
+                            }
+                            break;
+                        }
+                }
+            }
+
+            bool changed = false;
+            for (int i = 0; i < instructions.Count; i++) {
+                if (reachable[i]) {
+                    continue;
+                }
+
+                var instruction = instructions[i];
+                if (instruction.OpCode.Code == Code.Nop && instruction.Operand is null) {
+                    continue;
+                }
+
+                instruction.OpCode = OpCodes.Nop;
+                instruction.Operand = null;
+                changed = true;
+            }
+
+            return changed;
         }
     }
 }

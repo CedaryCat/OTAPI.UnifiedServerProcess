@@ -1,4 +1,5 @@
 ﻿using Terraria;
+using Terraria.DataStructures;
 using TrProtocol.Attributes;
 
 namespace TrProtocol.NetPackets;
@@ -98,4 +99,9 @@ public partial struct WorldData : INetPacket
     [InitDefaultValue] public sbyte InvasionType;
     [InitDefaultValue] public ulong LobbyID;
     [InitDefaultValue] public float SandstormSeverity;
+
+    [InitDefaultValue] public byte ExtraSpawnPointCount;
+    [InitDefaultValue]
+    [ArraySize(nameof(ExtraSpawnPointCount))]
+    public Point16[] ExtraSpawnPoints;
 }

@@ -1,7 +1,6 @@
-﻿namespace TrProtocol.Interfaces
+﻿namespace TrProtocol.Interfaces;
+
+public interface ISerializableView<TView> where TView : unmanaged, IPackedSerializable
 {
-    public interface ISerializableView<TView> where TView : unmanaged, IPackedSerializable
-    {
-        TView View { get; set; }
-    }
+    TView View { get; set; }
 }

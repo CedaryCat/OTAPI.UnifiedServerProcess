@@ -42,18 +42,117 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             EncapsulationHierarchy = encapsulationHierarchy?.ToImmutableArray() ?? [];
             ComponentAccessPath = componentAccessPath?.ToImmutableArray() ?? [];
             Key = ToString();
+            if (Key is "{ $this.chatLine.{Element}.parsedText.parsedText }") {
+                // BreakPoint
+            }
         }
         private ParameterTracingChain(ParameterTracingChain baseChain, MemberAccessStep encapsulationLayer) {
             TracingParameter = baseChain.TracingParameter;
             EncapsulationHierarchy = baseChain.EncapsulationHierarchy.Insert(0, encapsulationLayer);
+            ComponentAccessPath = baseChain.ComponentAccessPath;
             Key = ToString();
+            if (Key is "{ $this.chatLine.{Element}.parsedText.parsedText }") {
+
+            }
         }
         public ParameterTracingChain CreateEncapsulatedArrayInstance(ArrayType arrayType)
-            => new(this, new ArrayElementLayer(arrayType));
+            => CreateEncapsulatedInstance(new ArrayElementLayer(arrayType), null);
+        public ParameterTracingChain CreateEncapsulatedArrayInstance(ArrayType arrayType, TypeFlowSccIndex? sccIndex)
+            => CreateEncapsulatedInstance(new ArrayElementLayer(arrayType), sccIndex);
         public ParameterTracingChain CreateEncapsulatedInstance(MemberReference storeIn)
-            => new(this, storeIn);
+            => CreateEncapsulatedInstance((MemberAccessStep)storeIn, null);
+        public ParameterTracingChain CreateEncapsulatedInstance(MemberReference storeIn, TypeFlowSccIndex? sccIndex)
+            => CreateEncapsulatedInstance((MemberAccessStep)storeIn, sccIndex);
         public ParameterTracingChain CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType)
-            => new(this, new CollectionElementLayer(collectionType, elementType));
+            => CreateEncapsulatedInstance(new CollectionElementLayer(collectionType, elementType), null);
+        public ParameterTracingChain CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex)
+            => CreateEncapsulatedInstance(new CollectionElementLayer(collectionType, elementType), sccIndex);
+
+        private ParameterTracingChain CreateEncapsulatedInstance(MemberAccessStep storedIn, TypeFlowSccIndex? sccIndex) {
+            if (sccIndex is null) {
+                return new ParameterTracingChain(this, storedIn);
+            }
+
+            var newHierarchy = EncapsulationHierarchy.Insert(0, storedIn);
+            var normalizedHierarchy = NormalizeEncapsulationHierarchyWithSccLoops(newHierarchy, sccIndex);
+
+            return new ParameterTracingChain(TracingParameter, normalizedHierarchy, ComponentAccessPath);
+        }
+
+        private static ImmutableArray<MemberAccessStep> NormalizeEncapsulationHierarchyWithSccLoops(
+            ImmutableArray<MemberAccessStep> hierarchy,
+            TypeFlowSccIndex sccIndex) {
+
+            if (hierarchy.IsEmpty) {
+                return hierarchy;
+            }
+
+            var builder = ImmutableArray.CreateBuilder<MemberAccessStep>(hierarchy.Length);
+
+            int? activeSccId = null;
+            bool hasLoopSummary = false;
+            HashSet<string>? seen = null;
+
+            foreach (var step in hierarchy) {
+                if (step is SccLoopLayer loop) {
+                    activeSccId = loop.SccId;
+                    hasLoopSummary = true;
+                    seen = null;
+
+                    if (builder.Count == 0 || builder[^1] is not SccLoopLayer prev || prev.SccId != loop.SccId) {
+                        builder.Add(loop);
+                    }
+
+                    continue;
+                }
+
+                if (!sccIndex.TryGetRecursiveSccIdIncludingBaseTypes(step.DeclaringType, out var sccId)
+                    || !sccIndex.IsRecursiveScc(sccId)
+                    || !sccIndex.IsInSccIncludingBaseTypes(step.MemberType, sccId)) {
+
+                    activeSccId = null;
+                    hasLoopSummary = false;
+                    seen = null;
+                    builder.Add(step);
+                    continue;
+                }
+
+                if (activeSccId != sccId) {
+                    activeSccId = sccId;
+                    hasLoopSummary = false;
+                    seen = new HashSet<string>(StringComparer.Ordinal) { step.DeclaringType.FullName };
+
+                    builder.Add(step);
+
+                    if (!seen.Add(step.MemberType.FullName)) {
+                        builder.Add(new SccLoopLayer(sccId, step.DeclaringType));
+                        hasLoopSummary = true;
+                        seen = null;
+                    }
+
+                    continue;
+                }
+
+                if (hasLoopSummary) {
+                    continue;
+                }
+
+                builder.Add(step);
+
+                seen ??= new HashSet<string>(StringComparer.Ordinal);
+                if (seen.Count == 0) {
+                    seen.Add(step.DeclaringType.FullName);
+                }
+
+                if (!seen.Add(step.MemberType.FullName)) {
+                    builder.Add(new SccLoopLayer(sccId, step.DeclaringType));
+                    hasLoopSummary = true;
+                    seen = null;
+                }
+            }
+
+            return builder.ToImmutable();
+        }
         public ParameterTracingChain? CreateEncapsulatedEnumeratorInstance() {
             if (EncapsulationHierarchy.IsEmpty) {
                 return null;
@@ -85,16 +184,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
         }
 
         public bool TryExtendTracingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out ParameterTracingChain? result)
-            => TryExtendTracingWithMemberAccess((MemberAccessStep)member, out result);
-        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out ParameterTracingChain? result) {
+            => TryExtendTracingWithMemberAccess((MemberAccessStep)member, null, out result);
+        public bool TryExtendTracingWithMemberAccess(MemberReference member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result)
+            => TryExtendTracingWithMemberAccess((MemberAccessStep)member, sccIndex, out result);
+        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
             var indexer = new ArrayElementLayer(arrayType);
-            return TryExtendTracingWithMemberAccess(indexer, out result);
+            return TryExtendTracingWithMemberAccess(indexer, sccIndex, out result);
         }
-        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out ParameterTracingChain? result) {
+        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
             var collection = new CollectionElementLayer(collectionType, elementType);
-            return TryExtendTracingWithMemberAccess(collection, out result);
+            return TryExtendTracingWithMemberAccess(collection, sccIndex, out result);
         }
-        private bool TryExtendTracingWithMemberAccess(MemberAccessStep member, [NotNullWhen(true)] out ParameterTracingChain? result) {
+        private bool TryExtendTracingWithMemberAccess(MemberAccessStep member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
             result = null;
 
             if (EncapsulationHierarchy.IsEmpty) {
@@ -120,15 +221,42 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
 
                 if (isValidReference) {
+                    return TryExtendComponentAccessPath(member, sccIndex, out result);
+                }
+                return false;
+            }
 
-                    // ** very special case **
-                    // it's means that storeIn is a reference part of the argument
-                    // so we treat it as the argument itself
-                    // and the encapsulation hierarchy is empty
+            if (EncapsulationHierarchy[0] is SccLoopLayer loopLayer) {
+                if (sccIndex is null || !sccIndex.IsRecursiveScc(loopLayer.SccId)) {
+                    return false;
+                }
 
-                    result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
+                if (!sccIndex.IsInSccIncludingBaseTypes(member.DeclaringType, loopLayer.SccId)) {
+                    return false;
+                }
+
+                // Access within the SCC doesn't narrow the path.
+                if (member is ArrayElementLayer or CollectionElementLayer) {
+                    if (sccIndex.IsInSccIncludingBaseTypes(member.MemberType, loopLayer.SccId)) {
+                        result = this;
+                        return true;
+                    }
+                }
+                else if (sccIndex.IsInSccIncludingBaseTypes(member.MemberType, loopLayer.SccId)) {
+                    result = this;
                     return true;
                 }
+
+                // Exiting the SCC must match the next concrete layer (if any).
+                if (EncapsulationHierarchy.Length >= 2 && member.IsSameLayer(EncapsulationHierarchy[1])) {
+                    result = new ParameterTracingChain(
+                        TracingParameter,
+                        EncapsulationHierarchy.RemoveAt(0).RemoveAt(0),
+                        ComponentAccessPath
+                    );
+                    return true;
+                }
+
                 return false;
             }
 
@@ -142,6 +270,168 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             return false;
+        }
+
+        private enum ComponentStateKind { ExactType, InScc }
+        private readonly struct ComponentPathState
+        {
+            public ComponentStateKind Kind { get; }
+            public TypeReference? ExactType { get; }
+            public int SccId { get; }
+
+            private ComponentPathState(ComponentStateKind kind, TypeReference? exactType, int sccId) {
+                Kind = kind;
+                ExactType = exactType;
+                SccId = sccId;
+            }
+
+            public static ComponentPathState Exact(TypeReference type) => new(ComponentStateKind.ExactType, type, -1);
+            public static ComponentPathState InScc(int sccId) => new(ComponentStateKind.InScc, null, sccId);
+        }
+
+        private ComponentPathState ComputeComponentPathState(TypeFlowSccIndex sccIndex) {
+            var state = ComponentPathState.Exact(TracingParameter.ParameterType);
+
+            foreach (var step in ComponentAccessPath) {
+                if (step is SccLoopLayer loop) {
+                    state = ComponentPathState.InScc(loop.SccId);
+                    continue;
+                }
+
+                if (state.Kind == ComponentStateKind.ExactType) {
+                    state = ComponentPathState.Exact(step.MemberType);
+                    continue;
+                }
+
+                if (step is ArrayElementLayer or CollectionElementLayer) {
+                    continue;
+                }
+
+                if (sccIndex.IsInSccIncludingBaseTypes(step.DeclaringType, state.SccId) && !sccIndex.IsInSccIncludingBaseTypes(step.MemberType, state.SccId)) {
+                    state = ComponentPathState.Exact(step.MemberType);
+                }
+            }
+
+            return state;
+        }
+
+        private bool TryExtendComponentAccessPath(MemberAccessStep member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
+            if (sccIndex is null) {
+                result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
+                return true;
+            }
+
+            if (member is SccLoopLayer loop) {
+                if (!sccIndex.IsRecursiveScc(loop.SccId)) {
+                    result = null;
+                    return false;
+                }
+
+                var loopState = ComputeComponentPathState(sccIndex);
+
+                if (loopState.Kind == ComponentStateKind.InScc) {
+                    result = this;
+                    return true;
+                }
+
+                var loopBaseType = loopState.ExactType ?? TracingParameter.ParameterType;
+                if (!sccIndex.IsInSccIncludingBaseTypes(loopBaseType, loop.SccId)) {
+                    result = this;
+                    return true;
+                }
+
+                if (!ComponentAccessPath.IsEmpty
+                    && ComponentAccessPath[^1] is SccLoopLayer prev
+                    && prev.SccId == loop.SccId) {
+
+                    result = this;
+                    return true;
+                }
+
+                result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, loop]);
+                return true;
+            }
+
+            var currentState = ComputeComponentPathState(sccIndex);
+
+            // If we are currently "inside" a recursive SCC (unknown node), only allow exit edges.
+            if (currentState.Kind == ComponentStateKind.InScc) {
+                var activeSccId = currentState.SccId;
+                if (!sccIndex.IsInSccIncludingBaseTypes(member.DeclaringType, activeSccId)) {
+                    result = null;
+                    return false;
+                }
+                // Element access inside an SCC can blow up (.{Element}.{Element}...) when generic typing is imprecise.
+                // Treat element access as always internal while inside an SCC; exits should be expressed via a real member edge.
+                if (member is ArrayElementLayer or CollectionElementLayer) {
+                    result = this;
+                    return true;
+                }
+                if (sccIndex.IsInSccIncludingBaseTypes(member.MemberType, activeSccId)) {
+                    result = this;
+                    return true;
+                }
+                result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
+                return true;
+            }
+
+            var baseType = currentState.ExactType ?? TracingParameter.ParameterType;
+            if (!sccIndex.TryGetRecursiveSccIdIncludingBaseTypes(baseType, out var sccId) || !sccIndex.IsRecursiveScc(sccId)) {
+                result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
+                return true;
+            }
+
+            if (!sccIndex.IsInSccIncludingBaseTypes(member.MemberType, sccId)) {
+                result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
+                return true;
+            }
+
+            // Insert a loop summary once we detect a repeated type within the SCC.
+            if (WouldRevisitTypeWithinScc(TracingParameter.ParameterType, ComponentAccessPath, member, sccIndex, sccId)) {
+                result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member, new SccLoopLayer(sccId, baseType)]);
+                return true;
+            }
+
+            result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
+            return true;
+        }
+
+        private static bool WouldRevisitTypeWithinScc(
+            TypeReference startType,
+            ImmutableArray<MemberAccessStep> existingPath,
+            MemberAccessStep nextStep,
+            TypeFlowSccIndex sccIndex,
+            int sccId) {
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            var current = startType;
+
+            bool inScc = sccIndex.IsInSccIncludingBaseTypes(current, sccId);
+            if (inScc) {
+                seen.Add(current.FullName);
+            }
+
+            foreach (var step in existingPath) {
+                if (step is SccLoopLayer loop && loop.SccId == sccId) {
+                    // Previous loop summaries shouldn't prevent detecting a new cycle after exiting and re-entering the SCC.
+                    seen.Clear();
+                    inScc = true;
+                    continue;
+                }
+
+                current = step.MemberType;
+                inScc = sccIndex.IsInSccIncludingBaseTypes(current, sccId);
+
+                if (!inScc) {
+                    seen.Clear();
+                    continue;
+                }
+
+                seen.Add(current.FullName);
+            }
+
+            var nextType = nextStep.MemberType;
+            return sccIndex.IsInSccIncludingBaseTypes(nextType, sccId) && seen.Contains(nextType.FullName);
         }
         public bool TryTraceEnumeratorCurrent([NotNullWhen(true)] out ParameterTracingChain? result) {
             if (EncapsulationHierarchy.Length < 2) {
@@ -162,50 +452,54 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             );
             return true;
         }
-        public static ParameterTracingChain? CombineParameterTraces(ParameterTracingChain outerPart, ParameterTracingChain innerPart) {
-            static bool AreEqualLengthSegmentsEqual(ImmutableArray<MemberAccessStep> a, ImmutableArray<MemberAccessStep> b) {
-                var length = Math.Min(a.Length, b.Length);
-                for (int i = 0; i < length; i++) {
-                    if (!a[i].IsSameLayer(b[i])) {
-                        return false;
-                    }
-                }
-                return true;
-            }
+        public static ParameterTracingChain? CombineParameterTraces(ParameterTracingChain outerPart, ParameterTracingChain innerPart)
+            => CombineParameterTraces(outerPart, innerPart, null);
+
+        public static ParameterTracingChain? CombineParameterTraces(ParameterTracingChain outerPart, ParameterTracingChain innerPart, TypeFlowSccIndex? sccIndex) {
             if (innerPart.ComponentAccessPath.Length != 0 && outerPart.EncapsulationHierarchy.Length != 0) {
-                if (!AreEqualLengthSegmentsEqual(innerPart.ComponentAccessPath, outerPart.EncapsulationHierarchy)) {
+                if (!TryMatchPrefixWithSccLoops(innerPart.ComponentAccessPath, outerPart.EncapsulationHierarchy, sccIndex, out var consumedInner, out var consumedOuter)) {
                     return null;
                 }
-                if (innerPart.ComponentAccessPath.Length < outerPart.EncapsulationHierarchy.Length) {
-                    return new ParameterTracingChain(outerPart.TracingParameter,
-                        [.. innerPart.EncapsulationHierarchy, .. outerPart.EncapsulationHierarchy.Skip(innerPart.ComponentAccessPath.Length)],
-                        []
-                    );
+
+                var combinedEncapsulation = innerPart.EncapsulationHierarchy.AddRange(outerPart.EncapsulationHierarchy.Skip(consumedOuter));
+                if (sccIndex is not null) {
+                    combinedEncapsulation = NormalizeEncapsulationHierarchyWithSccLoops(combinedEncapsulation, sccIndex);
                 }
-                else if (innerPart.ComponentAccessPath.Length > outerPart.EncapsulationHierarchy.Length) {
-                    return new ParameterTracingChain(outerPart.TracingParameter,
-                        innerPart.EncapsulationHierarchy,
-                        innerPart.ComponentAccessPath.Skip(outerPart.EncapsulationHierarchy.Length)
-                    );
-                }
-                else {
-                    return new ParameterTracingChain(outerPart.TracingParameter,
-                        innerPart.EncapsulationHierarchy,
-                        []
-                    );
-                }
+
+                return new ParameterTracingChain(
+                    outerPart.TracingParameter,
+                    combinedEncapsulation,
+                    innerPart.ComponentAccessPath.Skip(consumedInner)
+                );
             }
             else if (innerPart.ComponentAccessPath.Length == 0 && outerPart.EncapsulationHierarchy.Length != 0) {
+                var combinedEncapsulation = innerPart.EncapsulationHierarchy.AddRange(outerPart.EncapsulationHierarchy);
+                if (sccIndex is not null) {
+                    combinedEncapsulation = NormalizeEncapsulationHierarchyWithSccLoops(combinedEncapsulation, sccIndex);
+                }
+
                 return new ParameterTracingChain(outerPart.TracingParameter,
-                    [.. innerPart.EncapsulationHierarchy, .. outerPart.EncapsulationHierarchy],
+                    combinedEncapsulation,
                     outerPart.ComponentAccessPath
                 );
             }
             else if (innerPart.ComponentAccessPath.Length != 0 && outerPart.EncapsulationHierarchy.Length == 0) {
-                return new ParameterTracingChain(outerPart.TracingParameter,
-                    [],
-                    [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
-                );
+                if (sccIndex is null) {
+                    return new ParameterTracingChain(outerPart.TracingParameter,
+                        [],
+                        [.. outerPart.ComponentAccessPath, .. innerPart.ComponentAccessPath]
+                    );
+                }
+
+                var combined = new ParameterTracingChain(outerPart.TracingParameter, [], outerPart.ComponentAccessPath);
+                foreach (var step in innerPart.ComponentAccessPath) {
+                    if (!combined.TryExtendComponentAccessPath(step, sccIndex, out var next)) {
+                        return null;
+                    }
+                    combined = next;
+                }
+
+                return combined;
             }
             else {
                 return new ParameterTracingChain(outerPart.TracingParameter,
@@ -213,6 +507,87 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     []
                 );
             }
+        }
+
+        private static bool TryMatchPrefixWithSccLoops(
+            ImmutableArray<MemberAccessStep> innerComponent,
+            ImmutableArray<MemberAccessStep> outerEncapsulation,
+            TypeFlowSccIndex? sccIndex,
+            out int consumedInner,
+            out int consumedOuter) {
+
+            int i = 0;
+            int j = 0;
+
+            while (i < innerComponent.Length) {
+                while (j < outerEncapsulation.Length && outerEncapsulation[j] is SccLoopLayer outerLoop) {
+                    if (sccIndex is null || !sccIndex.IsRecursiveScc(outerLoop.SccId)) {
+                        consumedInner = 0;
+                        consumedOuter = 0;
+                        return false;
+                    }
+                    j++;
+                }
+
+                var step = innerComponent[i];
+
+                if (step is SccLoopLayer loop) {
+                    if (sccIndex is null || !sccIndex.IsRecursiveScc(loop.SccId)) {
+                        consumedInner = 0;
+                        consumedOuter = 0;
+                        return false;
+                    }
+
+                    while (j < outerEncapsulation.Length && sccIndex.IsInSccIncludingBaseTypes(outerEncapsulation[j].DeclaringType, loop.SccId)) {
+                        j++;
+                    }
+
+                    i++;
+                    continue;
+                }
+
+                if (j >= outerEncapsulation.Length) {
+                    break;
+                }
+
+                if (!step.IsSameLayer(outerEncapsulation[j])) {
+                    consumedInner = 0;
+                    consumedOuter = 0;
+                    return false;
+                }
+
+                i++;
+                j++;
+            }
+
+            consumedInner = i;
+            consumedOuter = j;
+            return true;
+        }
+
+        private static ImmutableArray<MemberAccessStep> ConcatWithoutOverlappingPrefix(
+            ImmutableArray<MemberAccessStep> left,
+            ImmutableArray<MemberAccessStep> right) {
+
+            if (left.IsEmpty) return right;
+            if (right.IsEmpty) return left;
+
+            var maxOverlap = Math.Min(left.Length, right.Length);
+
+            for (int overlap = maxOverlap; overlap >= 1; overlap--) {
+                bool matches = true;
+                for (int i = 0; i < overlap; i++) {
+                    if (!left[left.Length - overlap + i].IsSameLayer(right[i])) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    return [.. left, .. right.Skip(overlap)];
+                }
+            }
+
+            return [.. left, .. right];
         }
         public override bool Equals(object? obj) => Equals(obj as ParameterTracingChain);
         public bool Equals(ParameterTracingChain? other) =>

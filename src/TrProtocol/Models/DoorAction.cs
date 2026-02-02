@@ -1,18 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿namespace TrProtocol.Models;
 
-namespace TrProtocol.Models
+public enum DoorAction : byte
 {
-    public enum DoorAction : byte
-    {
-        OpenDoor = 0,
-        CloseDoor,
-        OpenTrapdoor,
-        CloseTrapdoor,
-        OpenTallGate,
-        CloseTallGate
-    }
+    OpenDoor = 0,
+    CloseDoor,
+    OpenTrapdoor,
+    CloseTrapdoor,
+    OpenTallGate,
+    CloseTallGate
 }

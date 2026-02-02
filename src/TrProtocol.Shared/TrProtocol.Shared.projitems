@@ -11,6 +11,7 @@
   <ItemGroup>
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ArraySizeAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\C2SOnlyAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\Int7BitEncodedAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\CompressAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionArrayAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\ConditionAttribute.cs" />
@@ -31,6 +32,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\PolymorphicBaseAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\S2COnlyAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Attributes\SerializeAsAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\SparseArrayAttribute.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Attributes\TerminatedArrayAttribute.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Exceptions\UnknownDiscriminatorException.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IAutoSerializable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Interfaces\IBinarySerializable.cs" />

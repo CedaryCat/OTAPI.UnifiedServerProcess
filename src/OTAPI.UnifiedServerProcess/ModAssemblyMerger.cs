@@ -287,6 +287,8 @@ namespace OTAPI.UnifiedServerProcess
                 }
             }
             else {
+                modType.BaseType = target.BaseType;
+
                 var existingMethods = target.Methods.ToDictionary(m => m.GetIdentifier(), m => m);
                 foreach (var method in modType.Methods) {
                     if (!existingMethods.TryGetValue(method.GetIdentifier(), out var existingMethod)) {
@@ -315,8 +317,20 @@ namespace OTAPI.UnifiedServerProcess
         }
         static void PrepareMethod(TypeDefinition targetType, MethodDefinition modMethod, MethodDefinition? originalMethod) {
             if (modMethod.IsConstructor && !modMethod.IsStatic) {
-                var attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
-                modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+                int instCount = 0;
+                foreach (var inst in modMethod.Body.Instructions) {
+                    if (inst.OpCode != OpCodes.Nop) {
+                        instCount += 1;
+                    }
+                }
+                if (instCount <= 3 && originalMethod is not null) {
+                    var attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
+                    modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+                }
+                else {
+                    var attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
+                    modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+                }
             }
         }
         static void SetMemberReplace(ModuleDefinition module, Collection<CustomAttribute> attributes, bool isEnum) {

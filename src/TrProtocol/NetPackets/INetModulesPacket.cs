@@ -2,13 +2,12 @@
 using TrProtocol.Interfaces;
 using TrProtocol.Models;
 
-namespace TrProtocol.NetPackets
-{
+namespace TrProtocol.NetPackets;
 
-    [PolymorphicBase(typeof(NetModuleType), nameof(ModuleType))]
-    [ImplementationClaim(MessageID.NetModules)]
-    public partial interface INetModulesPacket : INetPacket, IAutoSerializable
-    {
-        public abstract NetModuleType ModuleType { get; }
-    }
+
+[PolymorphicBase(typeof(NetModuleType), nameof(ModuleType))]
+[ImplementationClaim(MessageID.NetModules)]
+public partial interface INetModulesPacket : INetPacket, IAutoSerializable
+{
+    public abstract NetModuleType ModuleType { get; }
 }

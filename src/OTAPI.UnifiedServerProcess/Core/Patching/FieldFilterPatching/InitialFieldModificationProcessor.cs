@@ -721,6 +721,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     continue;
                 }
 
+                if (!resolvedCallee.HasBody || resolvedCallee.Module.Name != method.Module.Name) {
+                    continue;
+                }
+
                 if (!UsedStaticField(resolvedCallee)) {
                     continue;
                 }

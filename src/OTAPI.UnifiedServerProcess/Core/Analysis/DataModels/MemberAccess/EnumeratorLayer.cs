@@ -53,7 +53,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             return true;
         }
         public static bool IsGetCurrentMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction getEnumeratorInstruction) {
-            if (getEnumeratorInstruction.OpCode != OpCodes.Call || getEnumeratorInstruction.OpCode != OpCodes.Callvirt) {
+            if (getEnumeratorInstruction.OpCode != OpCodes.Call && getEnumeratorInstruction.OpCode != OpCodes.Callvirt) {
                 return false;
             }
             if (getEnumeratorInstruction.Operand is not MethodReference methodRef) {

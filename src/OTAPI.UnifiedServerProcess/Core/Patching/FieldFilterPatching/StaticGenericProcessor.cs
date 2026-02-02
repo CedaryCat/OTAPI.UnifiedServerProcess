@@ -24,6 +24,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         readonly HashSet<string> ignoredStaticGenericFieldDeclaringFullNames = new HashSet<string>() {
             "ReLogic.Utilities.AttributeUtilities/TypeAttributeCache`2",
             "ReLogic.Content.Asset`1",
+            "Terraria.WorldBuilding.WorldGenerationOptions/OptionStorage`1",
         };
 
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {

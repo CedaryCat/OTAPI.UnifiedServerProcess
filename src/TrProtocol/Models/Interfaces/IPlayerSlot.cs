@@ -1,7 +1,6 @@
-﻿namespace TrProtocol.Models.Interfaces
+﻿namespace TrProtocol.Models.Interfaces;
+
+public interface IPlayerSlot
 {
-    public interface IPlayerSlot
-    {
-        public byte PlayerSlot { get; set; }
-    }
+    public byte PlayerSlot { get; set; }
 }

@@ -273,7 +273,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                     var argsPaths = MonoModCommon.Stack.AnalyzeParametersSources(processingMethod, instruction, jumpSitess);
 
                                     // For debug
-                                    if (argsPaths.Length != 1) {
+                                    if (!argsPaths.BeginAtSameInstruction(out _)) {
                                         throw new Exception("Expected 1 args path");
                                     }
 

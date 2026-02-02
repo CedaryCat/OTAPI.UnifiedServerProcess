@@ -1,4 +1,4 @@
-﻿using Terraria;
+using Terraria;
 using Terraria.DataStructures;
 using TrProtocol.Models.Interfaces;
 
@@ -12,5 +12,6 @@ public partial struct SpawnPlayer : INetPacket, IPlayerSlot
     public int Timer;
     public short DeathsPVE;
     public short DeathsPVP;
+    public byte Team;
     public PlayerSpawnContext Context;
 }

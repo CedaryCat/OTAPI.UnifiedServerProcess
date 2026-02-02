@@ -1,4 +1,5 @@
-﻿using TrProtocol.Models.Interfaces;
+using TrProtocol.Models;
+using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
@@ -10,4 +11,5 @@ public partial struct SyncEquipment : INetPacket, IPlayerSlot
     public short Stack;
     public byte Prefix;
     public short ItemType;
+    public SyncEquipmentDetails Details;
 }

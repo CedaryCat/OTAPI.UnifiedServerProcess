@@ -40,6 +40,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
                 return false;
             }
 
+            if (!storeMethod.HasThis) {
+                return false;
+            }
+
             LazyInit(caller.Module);
 
             var resolvedStoreMethod = storeMethod.Resolve();
@@ -54,6 +58,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
 
             indexOfValueInParameters = -1;
             if (storeMethodCallInstruction.Operand is not MethodReference storeMethod) {
+                return false;
+            }
+
+            if (!storeMethod.HasThis) {
                 return false;
             }
 
@@ -114,6 +122,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
                 return false;
             }
 
+            if (!loadMethod.HasThis) {
+                return false;
+            }
+
             var resolvedLoadMethod = loadMethod.Resolve();
 
             if (resolvedLoadMethod.Name is "get_Item" && resolvedLoadMethod.IsSpecialName) {
@@ -143,17 +155,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             if (inheritancesTypes.ContainsKey(StackType.FullName)) {
                 if (resolvedLoadMethod.Name is "Peek" or "Pop") {
                     indexOfOutValueInParameters = 0;
+                    return true;
                 }
                 if (resolvedLoadMethod.Name is "TryPeek" or "TryPop") {
                     indexOfOutValueInParameters = 1;
+                    return true;
                 }
-                return true;
             }
 
             return false;
         }
         public static bool IsModificationMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction modifyMethodCallInstruction) {
             if (modifyMethodCallInstruction.Operand is not MethodReference modifyMethod) {
+                return false;
+            }
+
+            if (!modifyMethod.HasThis) {
                 return false;
             }
 

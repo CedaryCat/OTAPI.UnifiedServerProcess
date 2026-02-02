@@ -1,6 +1,8 @@
-﻿namespace Terraria.GameContent
+﻿namespace Terraria.GameContent;
+
+public static class LucyAxeMessage
 {
-    public enum LucyAxeMessage_MessageSource : byte
+    public enum MessageSource : byte
     {
         Idle,
         Storage,

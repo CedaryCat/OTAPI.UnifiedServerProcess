@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
@@ -13,6 +13,5 @@ public partial struct SyncItemCannotBeTakenByEnemies : INetPacket, IItemSlot
     public byte Prefix;
     public byte Owner;
     public short ItemType;
-    public bool Shimmered;
     public byte TimeLeftInWhichTheItemCannotBeTakenByEnemies;
 }

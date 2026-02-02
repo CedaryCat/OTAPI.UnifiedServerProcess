@@ -1,4 +1,7 @@
-﻿using TrProtocol.Attributes;
+﻿using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using TrProtocol.Attributes;
+using TrProtocol.Interfaces;
 using TrProtocol.Models;
 using TrProtocol.Models.Interfaces;
 
@@ -8,6 +11,7 @@ public partial struct SendNPCBuffs : INetPacket, INPCSlot
 {
     public readonly MessageID Type => MessageID.SendNPCBuffs;
     public short NPCSlot { get; set; }
-    [ArraySize(20)]
+
+    [TerminatedArray(20)]
     public Buff[] Buffs;
 }

@@ -40,6 +40,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 TypeInheritanceGraph);
         public StaticFieldReferenceAnalyzer StaticFieldReferenceAnalyzer =>
             staticFieldReferenceAnalyzer ??= new StaticFieldReferenceAnalyzer(logger, module,
+                ParameterFlowAnalyzer,
                 TypeInheritanceGraph,
                 MethodCallGraph,
                 DelegateInvocationGraph,
@@ -76,6 +77,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 MethodInheritanceGraph,
                 TypeInheritanceGraph);
             staticFieldReferenceAnalyzer = new StaticFieldReferenceAnalyzer(logger, module,
+                ParameterFlowAnalyzer,
                 TypeInheritanceGraph,
                 MethodCallGraph,
                 DelegateInvocationGraph,

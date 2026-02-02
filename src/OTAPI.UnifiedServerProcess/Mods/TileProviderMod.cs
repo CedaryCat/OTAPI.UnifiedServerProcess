@@ -37,11 +37,14 @@ class TileSystemPatchLogic
     readonly TypeDefinition refTileTypeDef;
     readonly TypeDefinition tileTypeOldDef;
     readonly TypeDefinition tileTypeImplDef;
-    bool IsTileType(TypeReference type) {
+    bool IsTileType(TypeReference type, bool handleByRef = true, bool includingOriginal = false) {
         if (type is ByReferenceType byReferenceType) {
-            return IsTileType(byReferenceType.ElementType);
+            return handleByRef && IsTileType(byReferenceType.ElementType);
         }
-        return type.FullName == tileTypeDef.FullName || type.FullName == refTileTypeDef.FullName || type.FullName == tileTypeOldDef.FullName;
+        return type.FullName == tileTypeDef.FullName 
+            || type.FullName == refTileTypeDef.FullName 
+            || type.FullName == tileTypeOldDef.FullName
+            || (includingOriginal && type.FullName == tileTypeImplDef.FullName);
     }
 
     readonly MethodDefinition tileCreate;
@@ -68,18 +71,18 @@ class TileSystemPatchLogic
         tileTypeOldDef = modder.Module.GetDefinition<Terraria.ITile>();
         tileTypeImplDef = modder.Module.GetDefinition<Terraria.Tile>();
 
-        tileCreate = tileTypeDef.Methods.Single(x => x.Name == nameof(Terraria.TileData.New) && x.Parameters.Count == 0);
-        tileCreateWithExistingTile = tileTypeDef.Methods.Single(x => x.Name == nameof(Terraria.TileData.New) && x.Parameters.Count == 1);
+        tileCreate = tileTypeDef.Methods.Single(x => x.Name == nameof(TileData.New) && x.Parameters.Count == 0);
+        tileCreateWithExistingTile = tileTypeDef.Methods.Single(x => x.Name == nameof(TileData.New) && x.Parameters.Count == 1);
 
         refTile_GetTempMDef = refTileTypeDef.Method("get_" + nameof(RefTileData.Temporary));
         refTile_GetDataMDef = refTileTypeDef.Method("get_" + nameof(RefTileData.Data));
 
         tileCollectionDef = modder.Module.GetDefinition<Terraria.TileCollection>();
-        tileCollection_CreateMDef = tileCollectionDef.Method(nameof(Terraria.TileCollection.Create));
+        tileCollection_CreateMDef = tileCollectionDef.Method(nameof(TileCollection.Create));
         tileCollection_getItemMDef = tileCollectionDef.Method("get_Item");
         tileCollection_GetRefTileMDef = tileCollectionDef.Method(nameof(TileCollection.GetRefTile));
 
-        tileCollectionFieldDefInMain = modder.Module.GetType(typeof(Terraria.Main).FullName).FindField(nameof(Terraria.Main.tile))!;
+        tileCollectionFieldDefInMain = modder.Module.GetType(typeof(Terraria.Main).FullName).FindField(nameof(Main.tile))!;
         tileCollectionDefOld = tileCollectionFieldDefInMain.FieldType;
         tileCollectionFieldDefInMain.FieldType = tileCollectionDef;
 
@@ -98,6 +101,8 @@ class TileSystemPatchLogic
         Analyze_ModifiedTileParameter(modder, out var modifiedTileParameters);
 
         Replace_TileCollection(modder);
+
+        Replace_TileDelegate(modder);
 
         Adjust_MFWHMethods(modder, modifiedTileParameters);
 
@@ -141,8 +146,8 @@ class TileSystemPatchLogic
                 tileTypeImplDef.Properties.Remove(prop);
             }
         }
-        tileTypeImplDef.Attributes |= Mono.Cecil.TypeAttributes.Sealed;
-        tileTypeImplDef.Attributes |= Mono.Cecil.TypeAttributes.Abstract;
+        tileTypeImplDef.Attributes |= TypeAttributes.Sealed;
+        tileTypeImplDef.Attributes |= TypeAttributes.Abstract;
     }
 
     private void Adjust_UseRefTileModel(ModFwModder modder,
@@ -199,11 +204,11 @@ class TileSystemPatchLogic
             }
             var ilProcessor = currentMethod.Body.GetILProcessor();
             var jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(currentMethod);
-            HashSet<Instruction> skipArgmentOperations = new();
+            HashSet<Instruction> skipArgmentOperations = [];
             Dictionary<int, TypeReference> paramOriginalType = [];
             Dictionary<int, VariableDefinition> localMap = [];
 
-            Dictionary<string, MethodDefinition> usedFields = new();
+            Dictionary<string, MethodDefinition> usedFields = [];
 
             var currentMethodOldId = currentMethod.GetIdentifier();
             Instruction[] instArray = currentMethod.Body.Instructions.ToArray();
@@ -766,12 +771,80 @@ class TileSystemPatchLogic
                     HashSet<MonoModCommon.Stack.StackTopTypePath> workPaths = new();
                     HashSet<MonoModCommon.Stack.StackTopTypePath> visited = new();
 
+                    switch (instruction.OpCode.Code) {
+                        case Code.Call:
+                        case Code.Callvirt:
+                            var mRef = (MethodReference)instruction.Operand;
+                            if (IsTileType(mRef.DeclaringType, false, true) && mRef.HasThis) {
+                                instruction.OpCode = OpCodes.Call;
+                                foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpTargets)) {
+                                    foreach (var inst in path.ParametersSources[0].Instructions) {
+                                        if (inst.OpCode == OpCodes.Ldind_Ref) {
+                                            method.Body.Instructions.Remove(inst);
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                        case Code.Stfld:
+                        case Code.Ldfld:
+                        case Code.Ldflda:
+                            var fRef = (FieldReference)instruction.Operand;
+                            if (IsTileType(fRef.DeclaringType, false, true) && tileTypeDef.Fields.FirstOrDefault(f => f.Name == fRef.Name) is { IsStatic: false }) {
+                                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpTargets)) {
+                                    foreach (var inst in path.ParametersSources[0].Instructions) {
+                                        if (inst.OpCode == OpCodes.Ldind_Ref) {
+                                            method.Body.Instructions.Remove(inst);
+                                        }
+                                    }
+                                }
+                            }
+                            break;
+                    }
+
                     int sourceIndexOfLoadTileRef = -1;
                     switch (instruction.OpCode.Code) {
                         case Code.Callvirt:
                         case Code.Call:
                         case Code.Newobj: {
                                 var calleeRef = (MethodReference)instruction.Operand!;
+
+                                if ((calleeRef.DeclaringType is GenericInstanceType || calleeRef is GenericInstanceMethod) &&
+                                    calleeRef.Parameters.Any(p => p.ParameterType is ByReferenceType { ElementType: GenericParameter })) {
+
+                                    var methodCallPaths = MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpTargets);
+
+                                    for (int i = 0; i < calleeRef.Parameters.Count; i++) {
+                                        if (calleeRef.Parameters[i].ParameterType is ByReferenceType { ElementType: GenericParameter gp }) {
+                                            static GenericInstanceType FindGenericInstanceType(TypeReference declaring, GenericParameter gpOfType) {
+                                                var t = (TypeReference)gpOfType.Owner;
+                                                while (declaring is not GenericInstanceType git || git.ElementType.FullName != t.FullName) {
+                                                    declaring = declaring.DeclaringType;
+                                                }
+                                                return (GenericInstanceType)declaring;
+                                            }
+                                            var ga = gp.Owner switch {
+                                                MethodReference m => ((GenericInstanceMethod)calleeRef).GenericArguments[gp.Position],
+                                                TypeReference t => FindGenericInstanceType(calleeRef.DeclaringType, gp).GenericArguments[gp.Position],
+                                                _ => throw new InvalidOperationException()
+                                            };
+
+                                            if (IsTileType(ga, false, true)) {
+
+                                                foreach (var methodCallPath in methodCallPaths) {
+                                                    var paths = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(
+                                                        method,
+                                                        methodCallPath.ParametersSources[i + (calleeRef.HasThis ? 1 : 0)].Instructions.Last(),
+                                                        jumpTargets);
+
+                                                    foreach (var path in paths) {
+                                                        workPaths.Add(path);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
 
                                 if (allMethods.TryGetValue(calleeRef.GetIdentifier(), out var calleeDef)) {
 
@@ -962,43 +1035,50 @@ class TileSystemPatchLogic
                                     }
                                     break;
                                 case Code.Ldarg:
-                                    if (MonoModCommon.IL.TryGetReferencedParameter(method, loadBegin, out var p)) {
-                                        if (p.ParameterType is not ByReferenceType) {
-                                            loadBegin.OpCode = OpCodes.Ldarga;
-                                            loadBegin.Operand = p;
-                                        }
-                                    }
-                                    break;
                                 case Code.Ldarg_S:
                                 case Code.Ldarg_0:
                                 case Code.Ldarg_1:
                                 case Code.Ldarg_2:
                                 case Code.Ldarg_3:
-                                    if (MonoModCommon.IL.TryGetReferencedParameter(method, loadBegin, out var p_s)) {
-                                        if (p_s.ParameterType is not ByReferenceType) {
-                                            loadBegin.OpCode = OpCodes.Ldarga_S;
-                                            loadBegin.Operand = p_s;
+                                    if (MonoModCommon.IL.TryGetReferencedParameter(method, loadBegin, out var p)) {
+                                        if (p.ParameterType is not ByReferenceType) {
+                                            var inst = MonoModCommon.IL.BuildParameterLoadAddress(method, method.Body, p);
+                                            loadBegin.OpCode = inst.OpCode;
+                                            loadBegin.Operand = inst.Operand;
                                         }
                                     }
                                     break;
-
+                                case Code.Ldarga:
+                                case Code.Ldarga_S:
+                                    if (MonoModCommon.IL.TryGetReferencedParameter(method, loadBegin, out var p_r)) {
+                                        if (p_r.ParameterType is ByReferenceType) {
+                                            var inst = MonoModCommon.IL.BuildParameterLoad(method, method.Body, p_r);
+                                            loadBegin.OpCode = inst.OpCode;
+                                            loadBegin.Operand = inst.Operand;
+                                        }
+                                    }
+                                    break;
                                 case Code.Ldloc:
-                                    if (MonoModCommon.IL.TryGetReferencedVariable(method, loadBegin, out var v)) {
-                                        if (v.VariableType is not ByReferenceType) {
-                                            loadBegin.OpCode = OpCodes.Ldloca;
-                                            loadBegin.Operand = v;
-                                        }
-                                    }
-                                    break;
                                 case Code.Ldloc_S:
                                 case Code.Ldloc_0:
                                 case Code.Ldloc_1:
                                 case Code.Ldloc_2:
                                 case Code.Ldloc_3:
-                                    if (MonoModCommon.IL.TryGetReferencedVariable(method, loadBegin, out var v_s)) {
-                                        if (v_s.VariableType is not ByReferenceType) {
-                                            loadBegin.OpCode = OpCodes.Ldloca_S;
-                                            loadBegin.Operand = v_s;
+                                    if (MonoModCommon.IL.TryGetReferencedVariable(method, loadBegin, out var v)) {
+                                        if (v.VariableType is not ByReferenceType) {
+                                            var inst = MonoModCommon.IL.BuildVariableLoadAddress(method, method.Body, v);
+                                            loadBegin.OpCode = inst.OpCode;
+                                            loadBegin.Operand = inst.Operand;
+                                        }
+                                    }
+                                    break;
+                                case Code.Ldloca_S:
+                                case Code.Ldloca:
+                                    if (MonoModCommon.IL.TryGetReferencedVariable(method, loadBegin, out var v_r)) {
+                                        if (v_r.VariableType is ByReferenceType) {
+                                            var inst = MonoModCommon.IL.BuildVariableLoad(method, method.Body, v_r);
+                                            loadBegin.OpCode = inst.OpCode;
+                                            loadBegin.Operand = inst.Operand;
                                         }
                                     }
                                     break;
@@ -1207,7 +1287,7 @@ class TileSystemPatchLogic
                     }
                     var calleeRef_Monitor_Enter = (MethodReference)instructionEnterCheck.Operand!;
                     if (calleeRef_Monitor_Enter.DeclaringType.FullName != typeof(System.Threading.Monitor).FullName ||
-                        calleeRef_Monitor_Enter.Name != nameof(System.Threading.Monitor.Enter)) {
+                        calleeRef_Monitor_Enter.Name != nameof(Monitor.Enter)) {
                         continue;
                     }
                     var paramPath_Monitor_Enter = MonoModCommon.Stack.AnalyzeParametersSources(method, instructionEnterCheck, jumpTargets);
@@ -2027,44 +2107,54 @@ class TileSystemPatchLogic
                         // Therefore, the mapping relationship from mfwh_XXX input Parameter index to InvokeXXX input Parameter index is +2
                         paramIndexExculdeThis += 2;
 
-                        var loadParam = invokeCallPath.ParametersSources[paramIndexExculdeThis].Instructions.Single();
+                        var loadParamInsts = invokeCallPath.ParametersSources[paramIndexExculdeThis].Instructions;
+                        if (loadParamInsts.Length is 1) {
+                            var loadParam = loadParamInsts.Single();
 
-                        if (!MonoModCommon.IL.TryGetReferencedParameter(method, loadParam, out var parameter)) {
-                            throw new NotSupportedException($"Cannot get the {index + 1}th TracingParameter of Invoke{method.Name}");
-                        }
+                            if (!MonoModCommon.IL.TryGetReferencedParameter(method, loadParam, out var parameter)) {
+                                throw new NotSupportedException($"Cannot get the {index + 1}th TracingParameter of Invoke{method.Name}");
+                            }
 
-                        var iLProcessor = method.Body.GetILProcessor();
+                            var iLProcessor = method.Body.GetILProcessor();
 
-                        // Since we expect to modify the parameters of the tail method to match the ref parameters of mfwh_XXX,
-                        // we need to extract the value of the ref Parameter of the tail method when calling the InvokeXXX input parameters
-                        iLProcessor.InsertAfter(loadParam, Instruction.Create(OpCodes.Ldobj, tileTypeDef));
+                            // Since we expect to modify the parameters of the tail method to match the ref parameters of mfwh_XXX,
+                            // we need to extract the value of the ref Parameter of the tail method when calling the InvokeXXX input parameters
+                            iLProcessor.InsertAfter(loadParam, Instruction.Create(OpCodes.Ldobj, tileTypeDef));
 
-                        // Next, we need to extract the mapping relationship between the parameters and event fields from the input parameters of mfwh_XXX,
-                        // so we need to convert paramIndex from InvokeXXX to the index of the input parameters of mfwh_XXX
-                        paramIndexExculdeThis -= 2;
+                            // Next, we need to extract the mapping relationship between the parameters and event fields from the input parameters of mfwh_XXX,
+                            // so we need to convert paramIndex from InvokeXXX to the index of the input parameters of mfwh_XXX
+                            paramIndexExculdeThis -= 2;
 
-                        var loadField = mfwhCallPath.ParametersSources[paramIndexExculdeThis].Instructions.Last();
+                            var loadField = mfwhCallPath.ParametersSources[paramIndexExculdeThis].Instructions.Last();
 
-                        if (loadField.OpCode != OpCodes.Ldfld && loadField.OpCode != OpCodes.Ldflda) {
-                            throw new NotSupportedException($"The {index + 1}th TracingParameter of mfwh_{method.Name} is not a field");
-                        }
+                            if (loadField.OpCode != OpCodes.Ldfld && loadField.OpCode != OpCodes.Ldflda) {
+                                throw new NotSupportedException($"The {index + 1}th TracingParameter of mfwh_{method.Name} is not a field");
+                            }
 
-                        var field = (FieldReference)loadField.Operand!;
+                            var field = (FieldReference)loadField.Operand!;
 
-                        loadParam = MonoModCommon.IL.BuildParameterLoad(method, method.Body, method.Parameters[paramIndexExculdeThis]);
+                            loadParam = MonoModCommon.IL.BuildParameterLoad(method, method.Body, method.Parameters[paramIndexExculdeThis]);
 
-                        // Ensure that the ref Parameter can get the updated value after the InvokeXXX call
-                        iLProcessor.InsertAfter(firstSetLocal!, [
-                            loadParam,
+                            // Ensure that the ref Parameter can get the updated value after the InvokeXXX call
+                            iLProcessor.InsertAfter(firstSetLocal!, [
+                                loadParam,
                             Instruction.Create(OpCodes.Ldloc_0),
                             Instruction.Create(OpCodes.Ldfld, field),
                             Instruction.Create(OpCodes.Stobj, tileTypeDef),
                         ]);
 
-                        loadField.Previous.OpCode = OpCodes.Nop;
-                        loadField.Previous.Operand = null;
-                        loadField.OpCode = loadParam.OpCode;
-                        loadField.Operand = loadParam.Operand;
+                            loadField.Previous.OpCode = OpCodes.Nop;
+                            loadField.Previous.Operand = null;
+                            loadField.OpCode = loadParam.OpCode;
+                            loadField.Operand = loadParam.Operand;
+                        }
+                        else if (loadParamInsts.Length is 2 && loadParamInsts[1].OpCode.Code is Code.Ldind_Ref or Code.Ldobj) {
+                            loadParamInsts[1].OpCode = OpCodes.Ldobj;
+                            loadParamInsts[1].Operand = tileTypeDef;
+                        }
+                        else {
+                            throw new NotSupportedException($"Unexpected IL structure when loading the {index + 1}th TracingParameter of Invoke{method.Name}");
+                        }
                     }
                 }
             }
@@ -2074,7 +2164,7 @@ class TileSystemPatchLogic
     private void Analyze_ModifiedTileParameter(ModFwModder modder, out Dictionary<string, HashSet<int>> modifiedTileParameter) {
         Console.WriteLine($"Preparing to analyze non-readonly methods");
 
-        modifiedTileParameter = new();
+        modifiedTileParameter = [];
 
         // Find non-readonly methods that modify fields
 
@@ -2121,6 +2211,12 @@ class TileSystemPatchLogic
                     continue;
                 }
 
+                foreach (var local in method.Body.Variables) {
+                    if (local.VariableType.FullName == tileCollectionDefOld.FullName) {
+                        local.VariableType = tileCollectionDef;
+                    }
+                }
+
                 foreach (var instruction in method.Body.Instructions) {
                     if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) {
                         var calleeRef = (MethodReference)instruction.Operand!;
@@ -2130,6 +2226,203 @@ class TileSystemPatchLogic
                                 instruction.Operand = tileCollection_getItemMDef;
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+    readonly Dictionary<string, TypeDefinition> byRefDelegateDefs = [];
+    private void Replace_TileDelegate(ModFwModder modder) {
+        void Transform(TypeReference type, Action<GenericInstanceType> replace, ModuleDefinition module) {
+            if (type is not GenericInstanceType gen) {
+                return;
+            }
+            var etName = gen.ElementType.FullName;
+            bool isAction = etName.StartsWith("System.Action`");
+            bool isFunc = etName.StartsWith("System.Func`");
+
+            if (isAction || isFunc) {
+                int gaCount = gen.GenericArguments.Count;
+                int paramCount = isFunc ? gaCount - 1 : gaCount;
+
+                string key = isFunc ? "Func" : "Action";
+                bool any = false;
+
+                for (int i = 0; i < paramCount; i++) {
+                    if (IsTileType(gen.GenericArguments[i], handleByRef: false, includingOriginal: true)) {
+                        key += "ref";
+                        any = true;
+                    }
+                    else {
+                        key += "_";
+                    }
+                }
+
+                if (!any) {
+                    return;
+                }
+
+                key += $"`{gaCount}";
+
+                if (!byRefDelegateDefs.TryGetValue(key, out var delegateDef)) {
+                    #region Create DelegateDef
+                    delegateDef = new TypeDefinition(
+                        "OTAPI.Delegates",
+                        key,
+                        TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
+                        new TypeReference("System", nameof(MulticastDelegate), module, module.TypeSystem.CoreLibrary)
+                    );
+
+                    // .ctor(object, IntPtr)
+                    var ctor = new MethodDefinition(
+                        ".ctor",
+                        MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.RTSpecialName | MethodAttributes.SpecialName,
+                        module.TypeSystem.Void
+                    );
+                    ctor.Parameters.Add(new ParameterDefinition("object", ParameterAttributes.None, module.TypeSystem.Object));
+                    ctor.Parameters.Add(new ParameterDefinition("method", ParameterAttributes.None, module.TypeSystem.IntPtr));
+                    ctor.ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed;
+                    delegateDef.Methods.Add(ctor);
+
+                    var gps = new GenericParameter[gaCount];
+                    for (int i = 0; i < gaCount; i++) {
+                        var gp = new GenericParameter(delegateDef);
+                        gp.Name = $"T{i + 1}";
+                        delegateDef.GenericParameters.Add(gp);
+                        gps[i] = gp;
+                    }
+
+                    var methodAtt = MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.NewSlot | MethodAttributes.Virtual;
+                    var runtimeImpl = MethodImplAttributes.Runtime | MethodImplAttributes.Managed;
+
+                    var invokeReturn = isFunc ? gps[gaCount - 1] : module.TypeSystem.Void;
+
+                    var iasyncResultType = new TypeReference("System", nameof(IAsyncResult), module, module.TypeSystem.CoreLibrary);
+                    var asyncCallbackType = new TypeReference("System", nameof(AsyncCallback), module, module.TypeSystem.CoreLibrary);
+
+                    var invoke = new MethodDefinition("Invoke", methodAtt, invokeReturn) { ImplAttributes = runtimeImpl };
+                    var beginInvoke = new MethodDefinition("BeginInvoke", methodAtt, iasyncResultType) { ImplAttributes = runtimeImpl };
+                    var endInvoke = new MethodDefinition("EndInvoke", methodAtt, invokeReturn) { ImplAttributes = runtimeImpl };
+
+                    for (int i = 0; i < paramCount; i++) {
+                        var pType = IsTileType(gen.GenericArguments[i], handleByRef: false, includingOriginal: true)
+                            ? gps[i].MakeByReferenceType()
+                            : (TypeReference)gps[i];
+
+                        invoke.Parameters.Add(new ParameterDefinition($"arg{i + 1}", ParameterAttributes.None, pType));
+                        beginInvoke.Parameters.Add(new ParameterDefinition($"arg{i + 1}", ParameterAttributes.None, pType));
+                    }
+
+                    // BeginInvoke( ... , AsyncCallback, object)
+                    beginInvoke.Parameters.Add(new ParameterDefinition("callback", ParameterAttributes.None, asyncCallbackType));
+                    beginInvoke.Parameters.Add(new ParameterDefinition("object", ParameterAttributes.None, module.TypeSystem.Object));
+
+                    // EndInvoke(IAsyncResult)
+                    endInvoke.Parameters.Add(new ParameterDefinition("result", ParameterAttributes.None, iasyncResultType));
+
+                    delegateDef.Methods.AddRange([invoke, beginInvoke, endInvoke]);
+                    module.Types.Add(delegateDef);
+                    byRefDelegateDefs.Add(key, delegateDef);
+
+                    #endregion
+                }
+
+                var genericDelegateRef = new GenericInstanceType(delegateDef);
+                foreach (var ga in gen.GenericArguments) {
+                    if (IsTileType(ga, handleByRef: false, includingOriginal: true)) {
+                        genericDelegateRef.GenericArguments.Add(tileTypeDef);
+                    }
+                    else {
+                        genericDelegateRef.GenericArguments.Add(ga);
+                    }
+                }
+                replace(genericDelegateRef);
+            }
+        }
+
+        HashSet<VariableDefinition> deleLocals = [];
+        foreach (var type in modder.Module.GetAllTypes().ToArray()) {
+            foreach (var field in type.Fields) {
+                Transform(field.FieldType, n => field.FieldType = n, modder.Module);
+            }
+            foreach (var prop in type.Properties) {
+                Transform(prop.PropertyType, n => prop.PropertyType = n, modder.Module);
+            }
+            foreach (var method in type.Methods) {
+                foreach (var p in method.Parameters) {
+                    Transform(p.ParameterType, n => p.ParameterType = n, modder.Module);
+                }
+                Transform(method.ReturnType, n => method.ReturnType = n, modder.Module);
+
+                if (!method.HasBody) {
+                    continue;
+                }
+
+
+                foreach(var local in method.Body.Variables) {
+                    Transform(local.VariableType, n => local.VariableType = n, modder.Module);
+                }
+
+                foreach (var inst in method.Body.Instructions) {
+                    switch (inst.Operand) {
+                        case FieldReference field:
+                            Transform(field.FieldType, n => field.FieldType = n, modder.Module);
+
+                            break;
+                        case PropertyReference prop:
+                            Transform(prop.PropertyType, n => prop.PropertyType = n, modder.Module);
+                            break;
+                        case MethodReference mRef:
+                            Transform(mRef.DeclaringType, n => {
+
+                                if (inst.OpCode == OpCodes.Newobj) {
+                                    Instruction ldftn = inst;
+                                    while (ldftn.OpCode != OpCodes.Ldftn) {
+                                        ldftn = inst.Previous;
+                                    }
+                                    var targetMethodRef = (MethodReference)ldftn.Operand;
+                                    var targetMethodDef = targetMethodRef.Resolve();
+                                    foreach(var p in targetMethodRef.Parameters) {
+                                        if (IsTileType(p.ParameterType, handleByRef: false, includingOriginal: true)) {
+                                            p.ParameterType = tileTypeDef.MakeByReferenceType();
+                                        }
+                                    }
+                                    foreach (var p in targetMethodDef.Parameters) {
+                                        if (IsTileType(p.ParameterType, handleByRef: false, includingOriginal: true)) {
+                                            p.ParameterType = tileTypeDef.MakeByReferenceType();
+                                        }
+                                    }
+                                }
+
+                                var old = (GenericInstanceType)mRef.DeclaringType;
+                                mRef.DeclaringType = n;
+                                if (mRef.Name is nameof(Action.Invoke) or nameof(Action.BeginInvoke)) {
+                                    if (n.ElementType.FullName.StartsWith("System.Action")) {
+                                        for (int i = 0; i < n.GenericArguments.Count; i++) {
+                                            var p = mRef.Parameters[i];
+                                            p.ParameterType = n.ElementType.GenericParameters[((GenericParameter)p.ParameterType).Position];
+                                            if (IsTileType(old.GenericArguments[i], handleByRef: false, includingOriginal: true)) {
+                                                p.ParameterType = p.ParameterType.MakeByReferenceType();
+                                            }
+                                        }
+                                    }
+                                    else {
+                                        for (int i = 0; i < n.GenericArguments.Count - 1; i++) {
+                                            var p = mRef.Parameters[i];
+                                            p.ParameterType = n.ElementType.GenericParameters[((GenericParameter)p.ParameterType).Position];
+                                            if (IsTileType(old.GenericArguments[i], handleByRef: false, includingOriginal: true)) {
+                                                p.ParameterType = p.ParameterType.MakeByReferenceType();
+                                            }
+                                        }
+                                    }
+                                }
+
+                            }, modder.Module);
+                            foreach (var p in mRef.Parameters) {
+                                Transform(p.ParameterType, n => p.ParameterType = n, modder.Module);
+                            }
+                            Transform(mRef.ReturnType, n => mRef.ReturnType = n, modder.Module);
+                            break;
                     }
                 }
             }
@@ -2245,11 +2538,11 @@ class TileSystemPatchLogic
                                                 if (database.TryGetValue(ldftn.GetIdentifier(), out var indexes)) {
                                                     HashSet<int> newIndexes;
                                                     if (ldftn.HasThis && !ldftn.IsConstructor) {
-                                                        newIndexes = new(indexes);
+                                                        newIndexes = [.. indexes];
                                                         newIndexes.Remove(0);
                                                     }
                                                     else {
-                                                        newIndexes = new(indexes.Select(index => index + 1));
+                                                        newIndexes = [.. indexes.Select(index => index + 1)];
                                                     }
 
                                                     var delegateInvoke = declaringType.Method("Invoke");
@@ -2461,7 +2754,7 @@ namespace Terraria
                 GC.SuppressFinalize(this);
             }
 
-            protected virtual void Dispose(bool disposing) {
+            protected void Dispose(bool disposing) {
                 if (data is null) return;
 
                 NativeMemory.Free(data);
@@ -2579,27 +2872,24 @@ namespace Terraria
         public static bool operator ==(TileData a, TileData b) => a.Equals(b);
         public static bool operator !=(TileData a, TileData b) => !a.Equals(b);
         private static readonly object _lock = new();
-        public object GetLock() => _lock;
+        public readonly object GetLock() => _lock;
 
         #region Implement Method
+
         public readonly int collisionType {
             get {
                 if (!active()) {
                     return 0;
                 }
-
                 if (halfBrick()) {
                     return 2;
                 }
-
                 if (slope() > 0) {
                     return 2 + slope();
                 }
-
                 if (Main.tileSolid[type] && !Main.tileSolidTop[type]) {
                     return 1;
                 }
-
                 return -1;
             }
         }
@@ -2619,11 +2909,21 @@ namespace Terraria
             frameX = 0;
             frameY = 0;
         }
+
         public void ClearTile() {
-            slope(0);
-            halfBrick(halfBrick: false);
+            ClearSlope();
             active(active: false);
             inActive(inActive: false);
+        }
+
+        public void ClearSlope() {
+            slope(0);
+            halfBrick(halfBrick: false);
+        }
+
+        public void ClearTileAndPaint() {
+            ClearTile();
+            ClearBlockPaintAndCoating();
         }
 
         public void CopyFrom(TileData from) {
@@ -2642,30 +2942,24 @@ namespace Terraria
             if (compTile.IsNull) {
                 return false;
             }
-
             if (sTileHeader != compTile.sTileHeader) {
                 return false;
             }
-
             if (active()) {
                 if (type != compTile.type) {
                     return false;
                 }
-
                 if (Main.tileFrameImportant[type] && (frameX != compTile.frameX || frameY != compTile.frameY)) {
                     return false;
                 }
             }
-
             if (wall != compTile.wall || liquid != compTile.liquid) {
                 return false;
             }
-
             if (compTile.liquid == 0) {
                 if (wallColor() != compTile.wallColor()) {
                     return false;
                 }
-
                 if (wire4() != compTile.wire4()) {
                     return false;
                 }
@@ -2673,11 +2967,9 @@ namespace Terraria
             else if (bTileHeader != compTile.bTileHeader) {
                 return false;
             }
-
             if (invisibleBlock() != compTile.invisibleBlock() || invisibleWall() != compTile.invisibleWall() || fullbrightBlock() != compTile.fullbrightBlock() || fullbrightWall() != compTile.fullbrightWall()) {
                 return false;
             }
-
             return true;
         }
 
@@ -2685,12 +2977,10 @@ namespace Terraria
             if (halfBrick()) {
                 return 1;
             }
-
             int num = slope();
             if (num > 0) {
                 num++;
             }
-
             return num;
         }
 
@@ -2719,11 +3009,10 @@ namespace Terraria
             if ((sTileHeader & 0x60) == 32) {
                 return true;
             }
-
             return false;
         }
 
-        public void ResetToType(ushort _type) {
+        public void ResetToType(ushort type) {
             liquid = 0;
             sTileHeader = 32;
             bTileHeader = 0;
@@ -2731,7 +3020,7 @@ namespace Terraria
             bTileHeader3 = 0;
             frameX = 0;
             frameY = 0;
-            this.type = _type;
+            this.type = type;
         }
 
         public void ClearMetadata() {
@@ -2744,11 +3033,10 @@ namespace Terraria
             frameY = 0;
         }
 
-        public readonly Color actColor(Color oldColor) {
+        public Color actColor(Color oldColor) {
             if (!inActive()) {
                 return oldColor;
             }
-
             double num = 0.4;
             return new Color((byte)(num * (double)(int)oldColor.R), (byte)(num * (double)(int)oldColor.G), (byte)(num * (double)(int)oldColor.B), oldColor.A);
         }
@@ -2764,7 +3052,6 @@ namespace Terraria
             if (b != 1) {
                 return b == 2;
             }
-
             return true;
         }
 
@@ -2773,7 +3060,6 @@ namespace Terraria
             if (b != 3) {
                 return b == 4;
             }
-
             return true;
         }
 
@@ -2782,7 +3068,6 @@ namespace Terraria
             if (b != 2) {
                 return b == 4;
             }
-
             return true;
         }
 
@@ -2791,7 +3076,6 @@ namespace Terraria
             if (b != 1) {
                 return b == 3;
             }
-
             return true;
         }
 
@@ -2844,6 +3128,38 @@ namespace Terraria
             else {
                 bTileHeader &= 159;
             }
+        }
+
+        public readonly bool water() {
+            return liquidType() == 0;
+        }
+
+        public readonly bool anyWater() {
+            if (liquid > 0) {
+                return water();
+            }
+            return false;
+        }
+
+        public readonly bool anyLava() {
+            if (liquid > 0) {
+                return lava();
+            }
+            return false;
+        }
+
+        public readonly bool anyHoney() {
+            if (liquid > 0) {
+                return honey();
+            }
+            return false;
+        }
+
+        public readonly bool anyShimmer() {
+            if (liquid > 0) {
+                return shimmer();
+            }
+            return false;
         }
 
         public readonly bool wire4() {
@@ -2939,7 +3255,7 @@ namespace Terraria
                 bTileHeader3 |= 64;
             }
             else {
-                bTileHeader3 = (byte)(bTileHeader3 & 0xFFFFFFBFu);
+                bTileHeader3 = (byte)(bTileHeader3 & -65);
             }
         }
 
@@ -3072,8 +3388,15 @@ namespace Terraria
                 sTileHeader |= 32768;
             }
             else {
-                sTileHeader = (ushort)(sTileHeader & 0xFFFF7FFFu);
+                sTileHeader = (ushort)(sTileHeader & -32769);
             }
+        }
+
+        public readonly bool anyWire() {
+            if ((sTileHeader & 0x380) == 0) {
+                return (bTileHeader & 0x80) != 0;
+            }
+            return true;
         }
 
         public void Clear(TileDataType types) {
@@ -3083,39 +3406,32 @@ namespace Terraria
                 frameX = 0;
                 frameY = 0;
             }
-
             if ((types & TileDataType.Wall) != 0) {
                 wall = 0;
                 wallFrameX(0);
                 wallFrameY(0);
             }
-
             if ((types & TileDataType.TilePaint) != 0) {
                 ClearBlockPaintAndCoating();
             }
-
             if ((types & TileDataType.WallPaint) != 0) {
                 ClearWallPaintAndCoating();
             }
-
             if ((types & TileDataType.Liquid) != 0) {
                 liquid = 0;
                 liquidType(0);
                 checkingLiquid(checkingLiquid: false);
             }
-
             if ((types & TileDataType.Slope) != 0) {
                 slope(0);
                 halfBrick(halfBrick: false);
             }
-
             if ((types & TileDataType.Wiring) != 0) {
                 wire(wire: false);
                 wire2(wire2: false);
                 wire3(wire3: false);
                 wire4(wire4: false);
             }
-
             if ((types & TileDataType.Actuator) != 0) {
                 actuator(actuator: false);
                 inActive(inActive: false);
@@ -3128,20 +3444,20 @@ namespace Terraria
             fullbrightBlock(other.fullbrightBlock());
         }
 
-        public readonly TileColorCache BlockColorAndCoating() {
-            TileColorCache result = default(TileColorCache);
-            result.Color = color();
-            result.FullBright = fullbrightBlock();
-            result.Invisible = invisibleBlock();
-            return result;
+        public TileColorCache BlockColorAndCoating() {
+            return new TileColorCache {
+                Color = color(),
+                FullBright = fullbrightBlock(),
+                Invisible = invisibleBlock()
+            };
         }
 
-        public readonly TileColorCache WallColorAndCoating() {
-            TileColorCache result = default(TileColorCache);
-            result.Color = wallColor();
-            result.FullBright = fullbrightWall();
-            result.Invisible = invisibleWall();
-            return result;
+        public TileColorCache WallColorAndCoating() {
+            return new TileColorCache {
+                Color = wallColor(),
+                FullBright = fullbrightWall(),
+                Invisible = invisibleWall()
+            };
         }
 
         public void UseBlockColors(TileColorCache cache) {
@@ -3168,7 +3484,7 @@ namespace Terraria
             invisibleWall(invisibleWall: false);
         }
 
-        public override readonly string ToString() {
+        public new readonly string ToString() {
             return "Tile Type:" + type + " Active:" + active().ToString() + " Wall:" + wall + " Slope:" + slope() + " fX:" + frameX + " fY:" + frameY;
         }
 

@@ -7,6 +7,7 @@ public partial struct PlayerBuffs : INetPacket, IPlayerSlot
 {
     public readonly MessageID Type => MessageID.PlayerBuffs;
     public byte PlayerSlot { get; set; }
-    [ArraySize(44)]
+
+    [TerminatedArray(44)]
     public ushort[] BuffTypes;
 }

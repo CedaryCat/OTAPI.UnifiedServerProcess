@@ -1,13 +1,12 @@
-﻿using Microsoft.Xna.Framework;
-using ModFramework;
+﻿using ModFramework;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using MonoMod.Cil;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Extensions;
-using Steamworks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -17,44 +16,63 @@ namespace OTAPI.UnifiedServerProcess.Core
 {
     public partial class PatchLogic
     {
+        static readonly HashSet<string> tlsFields = [
+            nameof(Collision._cacheForConveyorBelts),
+            nameof(Collision.contacts),
+        ];
+
+        static bool IsTargetCollisionField(FieldReference fieldRef) {
+            return
+                fieldRef.DeclaringType.FullName == "Terraria.Collision" &&
+                fieldRef.Name != nameof(Collision.Epsilon) &&
+                !tlsFields.Contains(fieldRef.Name);
+        }
         public static void PatchCollision(ModuleDefinition module) {
 
-            // Dictionary to store lookUp Mutations
-            Dictionary<string, MethodWithPreparedVariables> methodsWithVariables = new();
+            // Key: MethodReference identifier. Value: analysis + rewrite plan for that method.
+            Dictionary<string, MethodWithPreparedVariables> collisionStateMethodsById = new();
 
             // Get the type definition for Terraria.Collision
             var collisionType = module.GetType("Terraria.Collision");
 
-            // Iterate through each lookUp in the collision type
+            // Seed: methods inside Terraria.Collision that assign to Collision static fields.
             foreach (var method in collisionType.Methods.Where(m => m.Name != ".cctor" && m.Name != ".ctor")) {
-                // Iterate through each instruction in the lookUp
-                var arr = method.Body.Instructions.ToArray();
-                foreach (var instruction in arr) {
-                    if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference setField && setField.DeclaringType.FullName == "Terraria.Collision") {
-                        if (!methodsWithVariables.TryGetValue(method.GetIdentifier(), out var methodData)) {
+                var instructionSnapshot = method.Body.Instructions.ToArray();
+                foreach (var instruction in instructionSnapshot) {
+                    if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference setField && setField.DeclaringType.FullName is "Terraria.Collision") {
+                        if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var methodData)) {
                             methodData = new MethodWithPreparedVariables(method);
-                            methodData.PrepareVariables(methodsWithVariables);
+                            methodData.PrepareVariables(collisionStateMethodsById);
                             break;
                         }
                     }
                 }
-                foreach (var instruction in arr) {
-                    if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference LdsOperand && LdsOperand.Name == nameof(Collision._cacheForConveyorBelts)) {
-                        instruction.OpCode = OpCodes.Newobj;
-                        instruction.Operand = new MethodReference(".ctor", module.TypeSystem.Void, LdsOperand.FieldType) { HasThis = true };
-                    }
+            }
+
+            foreach (var fieldDef in collisionType.Fields) {
+                if (tlsFields.Contains(fieldDef.Name) && !fieldDef.CustomAttributes.Any(a => a.AttributeType.Name is "ThreadStaticAttribute")) {
+                    fieldDef.CustomAttributes.Add(new CustomAttribute(
+                        new MethodReference(
+                            ".ctor",
+                            module.TypeSystem.Void, 
+                            new TypeReference("System", "ThreadStaticAttribute", module, module.TypeSystem.CoreLibrary)) 
+                        { 
+                            HasThis = true
+                        }
+                    ));
                 }
             }
 
-            Console.WriteLine($"Found {methodsWithVariables.Count} methods that assign to Terraria.Collision static variables:");
-            foreach (var m in methodsWithVariables.Values) {
-                Console.WriteLine($"    【{m.Method.GetDebugName()}】 | {string.Join(",", m.VariableItems.Values)}");
+            Console.WriteLine($"Collision static field writers found: {collisionStateMethodsById.Count}");
+            foreach (var m in collisionStateMethodsById.Values) {
+                Console.WriteLine($"    【{m.Method.GetDebugName()}】 | {string.Join(",", m.VariablesByFieldName.Values)}");
             }
             //Console.WriteLine($"Press Enter to continue");
             //Console.ReadLine();
 
 
-            Dictionary<string, MethodWithPreparedVariables> methodsWithVariables_read = new();
+            // Second seed: all methods across the module that *read* Collision static fields.
+            Dictionary<string, MethodWithPreparedVariables> collisionFieldReadersById = new();
 
             foreach (var type in module.Types) {
                 foreach (var method in type.Methods) {
@@ -62,18 +80,15 @@ namespace OTAPI.UnifiedServerProcess.Core
                         continue;
                     }
 
-                    var ilProcessor = method.Body.GetILProcessor();
+                    var instructionSnapshot = method.Body.Instructions.ToArray();
+                    foreach (var instruction in instructionSnapshot) {
+                        if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference getField && IsTargetCollisionField(getField)) {
 
-                    var arr = method.Body.Instructions.ToArray();
-                    foreach (var instruction in arr) {
-                        if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference getField &&
-                            getField.DeclaringType.FullName == "Terraria.Collision" && getField.Name != nameof(Collision.Epsilon)) {
-
-                            if (!methodsWithVariables.TryGetValue(method.GetIdentifier(), out var added)) {
+                            if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var added)) {
                                 added = new MethodWithPreparedVariables(method);
-                                added.PrepareVariables(methodsWithVariables);
+                                added.PrepareVariables(collisionStateMethodsById);
                             }
-                            methodsWithVariables_read.TryAdd(method.GetIdentifier(), added);
+                            collisionFieldReadersById.TryAdd(method.GetIdentifier(), added);
 
                             break;
                         }
@@ -81,328 +96,359 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
             }
 
-            Console.WriteLine($"Found {methodsWithVariables_read.Count} methods that read from Terraria.Collision static variables:");
-            foreach (var kv in methodsWithVariables_read) {
+            Console.WriteLine($"Collision static field readers found: {collisionFieldReadersById.Count}");
+            foreach (var kv in collisionFieldReadersById) {
                 var m = kv.Value;
-                Console.WriteLine($"    【{m.Method.GetDebugName()}】 | {string.Join(",", m.VariableItems.Values)}");
+                Console.WriteLine($"    【{m.Method.GetDebugName()}】 | {string.Join(",", m.VariablesByFieldName.Values)}");
             }
             //Console.WriteLine($"Press Enter to continue");
             //Console.ReadLine();
 
-            Dictionary<string, MethodWithPreparedVariables> methodsWithVariablesLastDeepth = new(methodsWithVariables);
-            Dictionary<string, MethodWithPreparedVariables> methodsWithVariablesThisDeepth = new();
+            // Expand callers via a shallow call graph walk (bounded to keep runtime reasonable).
+            Dictionary<string, MethodWithPreparedVariables> previousDepthMethodsById = new(collisionStateMethodsById);
+            Dictionary<string, MethodWithPreparedVariables> currentDepthMethodsById = new();
 
 
-            for (int currentDeepth = 0; currentDeepth < 6; currentDeepth++) {
+            for (int depthIndex = 0; depthIndex < 6; depthIndex++) {
+                var callDepth = depthIndex + 2;
                 // Iterate through each type in the module
                 foreach (var type in module.Types) {
-                    // Iterate through each lookUp in the type
+                    // Iterate through each method in the type
                     foreach (var method in type.Methods) {
                         if (!method.HasBody) {
                             continue;
                         }
 
-                        bool anyCall = false;
+                        bool callsPreviousDepthMethod = false;
 
-                        // Iterate through each instruction in the lookUp
-                        var arr = method.Body.Instructions.ToArray();
-                        foreach (var instruction in arr) {
+                        var instructionSnapshot = method.Body.Instructions.ToArray();
+                        foreach (var instruction in instructionSnapshot) {
                             if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference methodRef) {
 
-                                if (methodsWithVariablesLastDeepth.TryGetValue(methodRef.GetIdentifier(), out var methodData)) {
-                                    Console.WriteLine($"In the {currentDeepth + 2}th level of call, {method.Name} called the method {methodRef.Name} in the last level, recorded");
-                                    anyCall = true;
+                                if (previousDepthMethodsById.TryGetValue(methodRef.GetIdentifier(), out var _)) {
+                                    Console.WriteLine($"[Call depth {callDepth}] {method.GetDebugName()} calls previous-depth method {methodRef.GetDebugName()}");
+                                    callsPreviousDepthMethod = true;
                                 }
                             }
                         }
 
-                        if (anyCall) {
-                            if (!methodsWithVariables.TryGetValue(method.GetIdentifier(), out var added)) {
+                        if (callsPreviousDepthMethod) {
+                            if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var added)) {
                                 added = new MethodWithPreparedVariables(method);
-                                added.PrepareVariables(methodsWithVariables);
+                                added.PrepareVariables(collisionStateMethodsById);
                             }
                             else {
-                                added.PrepareVariables(methodsWithVariables);
+                                added.PrepareVariables(collisionStateMethodsById);
                             }
-                            methodsWithVariablesThisDeepth.TryAdd(method.GetIdentifier(), added);
+                            currentDepthMethodsById.TryAdd(method.GetIdentifier(), added);
                         }
                     }
                 }
 
-                Console.WriteLine($"In the {currentDeepth + 2}th level of call, found {methodsWithVariablesThisDeepth.Count} methods: 【Method Name】| [Operation Parameters]");
-                foreach (var m in methodsWithVariablesThisDeepth.Values) {
-                    Console.WriteLine($"    【{m.Method.GetDebugName()}】| {string.Join(",", m.VariableItems.Values)}");
+                Console.WriteLine($"[Call depth {callDepth}] caller methods found: {currentDepthMethodsById.Count} (【Method】 | [variables])");
+                foreach (var m in currentDepthMethodsById.Values) {
+                    Console.WriteLine($"    【{m.Method.GetDebugName()}】| {string.Join(",", m.VariablesByFieldName.Values)}");
                 }
                 //Console.WriteLine($"Press Enter to continue");
                 //Console.ReadLine();
 
-                methodsWithVariablesLastDeepth = new(methodsWithVariablesThisDeepth);
-                methodsWithVariablesThisDeepth.Clear();
+                previousDepthMethodsById = new(currentDepthMethodsById);
+                currentDepthMethodsById.Clear();
             }
 
-            Dictionary<string, MethodWithPreparedVariables> requiredPushValue = methodsWithVariables.Values.Where(m => m.VariableItems.Values.Any(v => v.mode == VariableMode.InParam)).ToDictionary(x => x.GetIdentifier, x => x);
+            Dictionary<string, MethodWithPreparedVariables> methodsRequiringInputParamsById =
+                collisionStateMethodsById.Values
+                    .Where(m => m.VariablesByFieldName.Values.Any(v => v.Mode == VariableMode.InParam))
+                    .ToDictionary(x => x.Identifier, x => x);
 
-            foreach (var m in methodsWithVariables.Values.ToArray()) {
-                HashSet<string> inputs = new();
-                var reversed = m.Method.Body.Instructions.Reverse().ToArray();
-                foreach (var instruction in reversed) {
+            foreach (var methodData in collisionStateMethodsById.Values.ToArray()) {
+                // Names of Collision fields whose values are required later in this method body.
+                HashSet<string> pendingRequiredStateNames = new();
+
+                var reverseInstructions = methodData.Method.Body.Instructions.Reverse().ToArray();
+                foreach (var instruction in reverseInstructions) {
                     if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference methodRef) {
-                        if (requiredPushValue.TryGetValue(methodRef.GetIdentifier(), out var methodCallingWithInPut)) {
-                            foreach (var item in methodCallingWithInPut.VariableItems.Values.Where(
-                                v => v.mode == VariableMode.InParam && v.Name is not nameof(Collision.shimmer) or nameof(Collision.honey))) {
-                                inputs.Add(item.Name);
+                        if (methodsRequiringInputParamsById.TryGetValue(methodRef.GetIdentifier(), out var calleeRequiringInputs)) {
+                            foreach (var item in calleeRequiringInputs.VariablesByFieldName.Values.Where(
+                                v => v.Mode == VariableMode.InParam && v.FieldName is not nameof(Collision.shimmer) or nameof(Collision.honey))) {
+                                pendingRequiredStateNames.Add(item.FieldName);
                             }
-                            Console.WriteLine($"Detected that {m.Method.GetDebugName()} calls the method {methodRef.GetDebugName()} that requires external parameters: {string.Join(",", inputs)}");
-                            Console.WriteLine($"    Set the upstream parameter before {methodRef.GetDebugName()} in the body of {m.Method.GetDebugName()} to OutParam mode");
+                            Console.WriteLine($"Detected that {methodData.Method.GetDebugName()} calls {methodRef.GetDebugName()} which requires inputs: {string.Join(",", pendingRequiredStateNames)}");
                         }
-                        if (methodsWithVariables.TryGetValue(methodRef.GetIdentifier(), out var methodCalling)) {
-                            var canTransferOutParams = methodCalling.VariableItems.Values.Where(v => inputs.Contains(v.Name) && v.mode != VariableMode.InParam).ToArray();
+                        if (collisionStateMethodsById.TryGetValue(methodRef.GetIdentifier(), out var calleeMethodData)) {
+                            var transferableOutParams = calleeMethodData.VariablesByFieldName.Values
+                                .Where(v => pendingRequiredStateNames.Contains(v.FieldName) && v.Mode != VariableMode.InParam)
+                                .ToArray();
 
-                            methodCalling.PrepareVariables(methodsWithVariables, [.. canTransferOutParams.Select(v => v.fieldDefinition.Name)]);
-                            foreach (var item in canTransferOutParams) {
-                                inputs.Remove(item.Name);
-                                Console.WriteLine($"    Set the upstream parameter before {methodRef.GetDebugName()} in the body of {m.Method.GetDebugName()} to OutParam mode");
-                                Console.WriteLine($"    The remaining input parameters are: {string.Join(",", inputs)}");
+                            calleeMethodData.PrepareVariables(collisionStateMethodsById, [.. transferableOutParams.Select(v => v.Field.Name)]);
+                            foreach (var item in transferableOutParams) {
+                                pendingRequiredStateNames.Remove(item.FieldName);
+                                Console.WriteLine($"    Promote {item.FieldName} to out-param for {calleeMethodData.Method.GetDebugName()} (needed later in {methodData.Method.GetDebugName()})");
+                                Console.WriteLine($"    Pending state values: {string.Join(",", pendingRequiredStateNames)}");
                             }
                         }
                     }
-                    else if (instruction.OpCode == OpCodes.Ldsfld &&
-                        instruction.Operand is FieldReference field &&
-                        field.DeclaringType.FullName == "Terraria.Collision" &&
-                        field.Name != nameof(Collision.Epsilon)) {
+                    else if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && IsTargetCollisionField(field)) {
 
-                        inputs.Add(field.Name);
-                        Console.WriteLine($"Detected that {m.Method.GetDebugName()} calls the field {field.Name}");
-                        Console.WriteLine($"    The upstream parameter before {field.Name} in the body of {m.Method.GetDebugName()} is set to OutParam mode");
+                        pendingRequiredStateNames.Add(field.Name);
+                        Console.WriteLine($"Detected that {methodData.Method.GetDebugName()} reads Collision.{field.Name}");
                     }
                 }
             }
 
-            HashSet<string> predefined = [
-                MonoModCommon.Reference.Method(() => Collision.SlopeCollision(default,default,default,default,default,default)).GetSimpleIdentifier(),
+            HashSet<string> outParamPreferenceMethodIds = [
+                MonoModCommon.Reference.Method(() => Collision.SlopeCollision(default,default,default,default,default,default,default)).GetSimpleIdentifier(),
                 MonoModCommon.Reference.Method(() => Collision.noSlopeCollision(default,default,default,default,default,default)).GetSimpleIdentifier(),
-                MonoModCommon.Reference.Method(() => Collision.TileCollision(default, default, default, default, default, default, default)).GetSimpleIdentifier(),
-                MonoModCommon.Reference.Method(() => Collision.AdvancedTileCollision(default, default, default, default, default, default, default, default)).GetSimpleIdentifier(),
+                MonoModCommon.Reference.Method(() => Collision.TileCollision(default,default,default,default,default,default,default,default,default,default)).GetSimpleIdentifier(),
+                MonoModCommon.Reference.Method(() => Collision.AdvancedTileCollision(default,default,default,default,default,default,default,default)).GetSimpleIdentifier(),
                 MonoModCommon.Reference.Method(() => default(Player)!.SlopingCollision(default,default)).GetSimpleIdentifier(),
             ];
 
-            foreach (var m in methodsWithVariables.Values.ToArray()) {
-                if (predefined.Contains(m.GetIdentifier)) {
-                    m.PrepareVariables(methodsWithVariables, [.. m.VariableItems.Values.Where(v => v.mode is not VariableMode.InParam).Select(v => v.fieldDefinition.Name)]);
+            foreach (var m in collisionStateMethodsById.Values.ToArray()) {
+                if (outParamPreferenceMethodIds.Contains(m.Identifier)) {
+                    m.PrepareVariables(collisionStateMethodsById, [.. m.VariablesByFieldName.Values.Where(v => v.Mode is not VariableMode.InParam).Select(v => v.Field.Name)]);
                 }
                 else {
-                    m.PrepareVariables(methodsWithVariables);
+                    m.PrepareVariables(collisionStateMethodsById);
                 }
             }
 
-            foreach (var m in methodsWithVariables.Values.ToArray()) {
-                m.PrepareVariables(methodsWithVariables);
+            foreach (var m in collisionStateMethodsById.Values.ToArray()) {
+                m.PrepareVariables(collisionStateMethodsById);
             }
 
-            List<MethodWithPreparedVariables> lookUps = [.. methodsWithVariables.Values.Where(m => m.VariableItems.Values.Any(v => v.mode != VariableMode.Local))];
-            Dictionary<string, MethodWithPreparedVariables> involvedMethods = new(lookUps.ToDictionary(l => l.GetIdentifier, l => l));
+            // Methods that require signature changes (i.e. they need in/out params, not just locals).
+            List<MethodWithPreparedVariables> signatureRewriteQueue =
+                [.. collisionStateMethodsById.Values.Where(m => m.VariablesByFieldName.Values.Any(v => v.Mode != VariableMode.Local))];
+            Dictionary<string, MethodWithPreparedVariables> methodsToRewriteById =
+                new(signatureRewriteQueue.ToDictionary(l => l.Identifier, l => l));
 
 
-            Console.WriteLine($"Finished, there are {methodsWithVariables.Count} related methods, and {lookUps.Count} methods have been filtered out:");
-            foreach (var m in lookUps) {
-                Console.WriteLine($"    【 {m.Method.GetDebugName()} 】 | {string.Join(",", m.VariableItems.Values)}");
+            Console.WriteLine($"Analysis complete: {collisionStateMethodsById.Count} related methods; {signatureRewriteQueue.Count} require signature rewrites:");
+            foreach (var m in signatureRewriteQueue) {
+                Console.WriteLine($"    【 {m.Method.GetDebugName()} 】 | {string.Join(",", m.VariablesByFieldName.Values)}");
             }
             //Console.WriteLine($"Press Enter to continue");
             //Console.ReadLine();
 
             //Avoid infinite recursion
-            HashSet<string> allRemoved = [];
-            int round = 1;
-            while (lookUps.Count > 0) {
-                round++;
-                Dictionary<string, MethodWithPreparedVariables> removed = new();
-                var arr = lookUps.ToArray();
-                foreach (var lookUp in arr) {
-                    foreach (var kv in methodsWithVariables) {
-                        var method = kv.Value;
-                        var key = kv.Key;
+            HashSet<string> processedQueueMethodIds = [];
+            int iteration = 1;
+            while (signatureRewriteQueue.Count > 0) {
+                iteration++;
+                Dictionary<string, MethodWithPreparedVariables> processedThisIterationById = new();
+                var queueSnapshot = signatureRewriteQueue.ToArray();
+                foreach (var queuedMethod in queueSnapshot) {
+                    foreach (var kv in collisionStateMethodsById) {
+                        var candidateCaller = kv.Value;
+                        var candidateCallerId = kv.Key;
 
-                        if (method.MyCallingMethods.ContainsKey(lookUp.GetIdentifier)) {
-                            Console.WriteLine($"Found that {method.Method.GetDebugName()} calls a non-local variable function {lookUp.Method.GetDebugName()}, added to the necessary function list");
+                        // If this candidate calls a method that needs signature rewrites, this candidate must
+                        // also be rewritten so it can pass state variables along (even if it does not touch statics itself).
+                        if (candidateCaller.CalleesById.ContainsKey(queuedMethod.Identifier)) {
+                            Console.WriteLine($"Detected caller {candidateCaller.Method.GetDebugName()} -> non-local method {queuedMethod.Method.GetDebugName()}; mark caller as involved");
 
-                            involvedMethods.TryAdd(kv.Key, method);
+                            methodsToRewriteById.TryAdd(candidateCallerId, candidateCaller);
 
-                            if (!allRemoved.Contains(method.GetIdentifier) && method.VariableItems.Values.Any(v => v.mode != VariableMode.Local)) {
-                                Console.WriteLine($"Detected that {method.Method.GetDebugName()} is a non-local variable method, added to the task queue");
-                                lookUps.Add(method);
+                            if (!processedQueueMethodIds.Contains(candidateCaller.Identifier) && candidateCaller.VariablesByFieldName.Values.Any(v => v.Mode != VariableMode.Local)) {
+                                Console.WriteLine($"    Caller {candidateCaller.Method.GetDebugName()} also has non-local variables; enqueue");
+                                signatureRewriteQueue.Add(candidateCaller);
                             }
 
-                            removed.TryAdd(lookUp.GetIdentifier, lookUp);
-                            allRemoved.Add(lookUp.GetIdentifier);
-                            lookUps.Remove(lookUp);
+                            processedThisIterationById.TryAdd(queuedMethod.Identifier, queuedMethod);
+                            processedQueueMethodIds.Add(queuedMethod.Identifier);
+                            signatureRewriteQueue.Remove(queuedMethod);
                         }
                     }
                 }
 
-                Console.WriteLine($"This round processed non-local variable methods: {removed.Count} pieces, remaining {lookUps.Count} pieces");
-                foreach (var m in removed.Values) {
-                    Console.WriteLine($"    【 {m.Method.GetDebugName()} 】 | {string.Join(",", m.VariableItems.Values)}");
+                Console.WriteLine($"[Iteration {iteration}] processed non-local methods: {processedThisIterationById.Count}, remaining {signatureRewriteQueue.Count}");
+                foreach (var m in processedThisIterationById.Values) {
+                    Console.WriteLine($"    【 {m.Method.GetDebugName()} 】 | {string.Join(",", m.VariablesByFieldName.Values)}");
                 }
 
-                if (lookUps.Count > 0) {
+                if (signatureRewriteQueue.Count > 0) {
                     //Console.WriteLine($"Press Enter to continue");
                     //Console.ReadLine();
                 }
             }
 
 
-            Console.WriteLine($"Found {involvedMethods.Count} methods:");
-            foreach (var n in involvedMethods.Values) {
-                n.InstallVariable();
-                Console.WriteLine($"    【 {n.Method.GetDebugName()} 】 | {string.Join(",", n.VariableItems.Values)}");
-                Console.WriteLine($"        【params】{string.Join(",", n.Method.Parameters.Where(p => n.VariableItems.Values.Any(nv => nv.IsSameVariableReference(p))).Select(v => v.Index))}");
-                Console.WriteLine($"        【locals】{string.Join(",", n.Method.Body.Variables.Where(v => n.VariableItems.Values.Any(nv => nv.IsSameVariableReference(v))).Select(v => v.Index))}");
+            Console.WriteLine($"Methods involved in rewrite: {methodsToRewriteById.Count}");
+            foreach (var methodData in methodsToRewriteById.Values) {
+                methodData.ApplyVariables();
+                Console.WriteLine($"    【 {methodData.Method.GetDebugName()} 】 | {string.Join(",", methodData.VariablesByFieldName.Values)}");
+                Console.WriteLine($"        【params】{string.Join(",", methodData.Method.Parameters.Where(p => methodData.VariablesByFieldName.Values.Any(nv => nv.IsSameVariableReference(p))).Select(v => v.Index))}");
+                Console.WriteLine($"        【locals】{string.Join(",", methodData.Method.Body.Variables.Where(v => methodData.VariablesByFieldName.Values.Any(nv => nv.IsSameVariableReference(v))).Select(v => v.Index))}");
             }
             //Console.WriteLine($"Press Enter to continue");
             //Console.ReadLine();
 
-            Console.WriteLine($"For the involved methods, modify the method body");
-            foreach (var currentEditMethod in involvedMethods.Values) {
+            Console.WriteLine($"Rewriting IL for involved methods...");
+            foreach (var methodToRewrite in methodsToRewriteById.Values) {
 
-                if (currentEditMethod.VariableItems.Values.Any(v => v.mode is not VariableMode.Local)) {
-                    foreach (var param in currentEditMethod.Method.Parameters) {
-                        param.IsOptional = false;
+                //if (methodToRewrite.VariablesByFieldName.Values.Any(v => v.Mode is not VariableMode.Local)) {
+                //    foreach (var param in methodToRewrite.Method.Parameters) {
+                //        param.IsOptional = false;
+                //    }
+                //}
+
+                var ilProcessor = methodToRewrite.Method.Body.GetILProcessor();
+
+                // Initialize out-params at method entry to keep callers from observing uninitialized data.
+                foreach (var outParam in methodToRewrite.VariablesByFieldName.Values.Where(v => v.Mode == VariableMode.OutParam)) {
+                    var methodEntryInstruction = methodToRewrite.Method.Body.Instructions.First();
+
+                    foreach (var instruction in outParam.CreateSetValueFromStackInstructions(methodToRewrite.Method, [ilProcessor.Create(OpCodes.Ldc_I4_0)])) {
+                        ilProcessor.InsertBefore(methodEntryInstruction, instruction);
                     }
                 }
 
-                var ilProcessor = currentEditMethod.Method.Body.GetILProcessor();
-
-                foreach (var outParam in currentEditMethod.VariableItems.Values.Where(v => v.mode == VariableMode.OutParam)) {
-                    var top = currentEditMethod.Method.Body.Instructions.First();
-
-                    foreach (var instruction in outParam.SetValueFromStackInstrustion(currentEditMethod.Method, [ilProcessor.Create(OpCodes.Ldc_I4_0)])) {
-                        ilProcessor.InsertBefore(top, instruction);
-                    }
-                }
-
-                var cachedInstructions = currentEditMethod.Method.Body.Instructions.ToArray();
-                foreach (var instruction in cachedInstructions) {
+                var instructionSnapshot = methodToRewrite.Method.Body.Instructions.ToArray();
+                foreach (var instruction in instructionSnapshot) {
                     if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference methodRef) {
 
-                        List<VariableItem> added = new();
+                        if (methodRef.Name is "mfwh_Collision_MoveWhileWet") {
 
-                        var callingMethodName = methodRef.GetIdentifier();
-                        if (involvedMethods.TryGetValue(callingMethodName, out var callingMethod)) {
-                            foreach (var variable in callingMethod.VariableItems.Values) {
+                        }
 
-                                if (currentEditMethod.VariableItems.TryGetValue(variable.Name, out var item)) {
-                                    if (variable.mode == VariableMode.InParam) {
-                                        added.Add(item);
-                                        foreach (var inst in item.PushValueToStackInstruction(currentEditMethod.Method)) {
-                                            ilProcessor.InsertBefore(instruction, inst);
+                        var calleeId = methodRef.GetIdentifier();
+                        if (methodsToRewriteById.TryGetValue(calleeId, out var calleeMethodData)) {
+
+                            Instruction? insertBefore = null;
+                            if (calleeMethodData.AnyOptionalParameter) {
+                                var paths = MonoModCommon.Stack.AnalyzeParametersSources(methodToRewrite.Method, instruction, methodToRewrite.JumpSitesCache);
+                                if (!paths.BeginAtSameInstruction(out _)) {
+                                    throw new InvalidOperationException($"Cannot handle multiple parameter source paths for optional parameter at call to {methodRef.GetDebugName()} in {methodToRewrite.Method.GetDebugName()}");
+                                }
+                                insertBefore = paths
+                                    .Select(path => { 
+                                        var inst = path.ParametersSources[calleeMethodData.NonOptionalParameterCount + (methodRef.HasThis ? 1 : 0)].Instructions.First();
+                                        var index = methodToRewrite.Method.Body.Instructions.IndexOf(inst);
+                                        if (index < 0) {
+                                            throw new Exception();
+                                        }
+                                        return (inst, index);
+                                    })
+                                    .OrderBy(t => t.index)
+                                    .First()
+                                    .inst;
+                            }
+                            else {
+                                insertBefore = instruction;
+                            }
+
+
+                            List<VariableItem> insertedVariables = [];
+
+                            foreach (var variable in calleeMethodData.VariablesByFieldName.Values) {
+
+                                if (methodToRewrite.VariablesByFieldName.TryGetValue(variable.FieldName, out var item)) {
+                                    if (variable.Mode == VariableMode.InParam) {
+                                        insertedVariables.Add(item);
+                                        foreach (var inst in item.CreatePushValueInstructions(methodToRewrite.Method)) {
+                                            ilProcessor.InsertBefore(insertBefore, inst);
                                         }
                                     }
-                                    else if (variable.mode == VariableMode.OutParam) {
-                                        added.Add(item);
-                                        foreach (var inst in item.PushAddressToStackInstruction(currentEditMethod.Method)) {
-                                            ilProcessor.InsertBefore(instruction, inst);
+                                    else if (variable.Mode == VariableMode.OutParam) {
+                                        insertedVariables.Add(item);
+                                        foreach (var inst in item.CreatePushAddressInstructions(methodToRewrite.Method)) {
+                                            ilProcessor.InsertBefore(insertBefore, inst);
                                         }
                                     }
                                     else {
-                                        Console.WriteLine($"    【{currentEditMethod.Method.GetDebugName()}】Skip {methodRef.GetDebugName()} related variable：{variable}");
+                                        Console.WriteLine($"    【{methodToRewrite.Method.GetDebugName()}】Skip {methodRef.GetDebugName()} variable: {variable}");
                                     }
                                 }
                                 else {
-                                    Console.WriteLine($"    【{currentEditMethod.Method.GetDebugName()}】There is no {methodRef.GetDebugName()} related variable：{variable}");
+                                    Console.WriteLine($"    【{methodToRewrite.Method.GetDebugName()}】Missing variable for {methodRef.GetDebugName()}: {variable}");
                                 }
                             }
-                        }
 
-                        if (added.Count > 0) {
-                            Console.WriteLine($"    【{currentEditMethod.Method.GetDebugName()}】The call of {methodRef.GetDebugName()} is modified, add parameters：{string.Join(",", added)}");
+                            if (insertedVariables.Count > 0) {
+                                Console.WriteLine($"    【{methodToRewrite.Method.GetDebugName()}】Updated call to {methodRef.GetDebugName()}, add args: {string.Join(",", insertedVariables)}");
+                            }
                         }
                     }
-                    else if (instruction.OpCode == OpCodes.Ldsfld &&
-                        instruction.Operand is FieldReference readField &&
-                        readField.DeclaringType.FullName == "Terraria.Collision" &&
-                        readField.Name != nameof(Collision.Epsilon)) {
+                    else if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference readField && IsTargetCollisionField(readField)) {
 
-                        if (currentEditMethod.VariableItems.TryGetValue(readField.Name, out var item)) {
-                            var arr = item.PushValueToStackInstruction(currentEditMethod.Method);
+                        if (methodToRewrite.VariablesByFieldName.TryGetValue(readField.Name, out var item)) {
+                            var replacementInstructions = item.CreatePushValueInstructions(methodToRewrite.Method);
 
-                            foreach (var i in cachedInstructions) {
+                            // Update any instruction operands (including branch labels) that point at the old instruction.
+                            foreach (var i in instructionSnapshot) {
                                 if (i.Operand == instruction) {
-                                    i.Operand = arr[0];
+                                    i.Operand = replacementInstructions[0];
                                 }
                                 if (i.Operand is ILLabel label && label.Target == instruction) {
-                                    label.Target = arr[0];
+                                    label.Target = replacementInstructions[0];
                                 }
                             }
 
                             Instruction[] rmInstructions = [instruction];
                             int[] rmIndex = [.. rmInstructions.Select(ilProcessor.Body.Instructions.IndexOf)];
 
-                            ilProcessor.InsertAfter(instruction, arr.AsEnumerable());
+                            ilProcessor.InsertAfter(instruction, replacementInstructions.AsEnumerable());
                             foreach (var index in rmIndex) {
                                 ilProcessor.Body.Instructions.RemoveAt(index);
                             }
 
-                            Console.WriteLine($"    【{currentEditMethod.Method.GetDebugName()}】The call of Collision field [{readField.Name}] is modified, through the variable {item}");
+                            Console.WriteLine($"    【{methodToRewrite.Method.GetDebugName()}】Replaced read of Collision.{readField.Name} with {item}");
                         }
                     }
                     else if (instruction.OpCode == OpCodes.Stsfld &&
                         instruction.Operand is FieldReference writeField &&
                         writeField.DeclaringType.FullName == "Terraria.Collision") {
 
-                        if (currentEditMethod.VariableItems.TryGetValue(writeField.Name, out var item) && item.mode == VariableMode.OutParam) {
-                            var arr = item.SetValueFromStackInstrustion(currentEditMethod.Method, [instruction.Previous]);
+                        if (methodToRewrite.VariablesByFieldName.TryGetValue(writeField.Name, out var item) && item.Mode == VariableMode.OutParam) {
 
-                            foreach (var i in cachedInstructions) {
+                            var replacementInstructions = item.CreateSetValueFromStackInstructions(methodToRewrite.Method, [instruction.Previous]);
+
+                            foreach (var i in instructionSnapshot) {
                                 if (i.Operand == instruction.Previous) {
-                                    i.Operand = arr[0];
+                                    i.Operand = replacementInstructions[0];
                                 }
                                 if (i.Operand is ILLabel label && label.Target == instruction.Previous) {
-                                    label.Target = arr[0];
+                                    label.Target = replacementInstructions[0];
                                 }
                             }
 
                             Instruction[] rmInstructions = [instruction.Previous, instruction];
                             int[] rmIndex = [.. rmInstructions.Select(ilProcessor.Body.Instructions.IndexOf)];
 
-                            ilProcessor.InsertAfter(instruction, arr.AsEnumerable());
+                            ilProcessor.InsertAfter(instruction, replacementInstructions.AsEnumerable());
                             // Must use reverse order, otherwise the index of the front will be removed first, resulting in the index of the back - 1
                             foreach (var index in rmIndex.OrderByDescending(x => x)) {
                                 ilProcessor.Body.Instructions.RemoveAt(index);
                             }
 
-                            Console.WriteLine($"    【{currentEditMethod.Method.GetDebugName()}】The assignment of Collision field [{writeField.Name}] is modified, through the variable {item}");
+                            Console.WriteLine($"    【{methodToRewrite.Method.GetDebugName()}】Replaced write to Collision.{writeField.Name} with {item}");
                         }
                     }
                 }
 
-                //currentEditMethod.GetMethod.Parameters.Clear();
-                //currentEditMethod.GetMethod.Parameters.AddRange(currentEditMethod.GetMethod.Parameters);
-                //currentEditMethod.GetMethod.Body.Variables.Clear();
-                //currentEditMethod.GetMethod.Body.Variables.AddRange(currentEditMethod.GetMethod.Body.Variables);
-                //currentEditMethod.GetMethod.Body.Instructions.Clear();
-                //currentEditMethod.GetMethod.Body.Instructions.AddRange(currentEditMethod.GetMethod.Body.Instructions);
-
-                Console.WriteLine($"【{currentEditMethod.Method.GetDebugName()}】Modification completed");
+                Console.WriteLine($"【{methodToRewrite.Method.GetDebugName()}】Rewrite completed");
             }
 
-            Console.WriteLine($"Replacing all modified method calls");
-            int count = 0;
+            Console.WriteLine($"Rewriting call sites to point at updated method signatures...");
+            int replacedCallCount = 0;
             foreach (var type in module.Types) {
                 foreach (var method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
                     foreach (var instruction in method.Body.Instructions) {
-                        if (instruction.Operand is MethodReference methodRef && involvedMethods.TryGetValue(methodRef.GetIdentifier(), out var newMethod)) {
+                        if (instruction.Operand is MethodReference methodRef && methodsToRewriteById.TryGetValue(methodRef.GetIdentifier(), out var newMethod)) {
                             instruction.Operand = MonoModCommon.Structure.DeepMapMethodReference(newMethod.Method, new());
-                            count++;
+                            replacedCallCount++;
                         }
                     }
                 }
             }
-            Console.WriteLine($"Replaced {count} method calls");
+            Console.WriteLine($"Replaced {replacedCallCount} method calls");
 
-            foreach (var m in involvedMethods.Values) {
+            // If a method was wrapped with a delegate helper (mfwh_...), ensure the delegate Invoke/BeginInvoke signature matches.
+            foreach (var m in methodsToRewriteById.Values) {
                 if (!m.Method.DeclaringType.Methods.Any(other => other.Name == "mfwh_" + m.Method.Name)) {
                     continue;
                 }
@@ -430,145 +476,113 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
             }
         }
-    }
 
-    [MonoMod.MonoModIgnore]
-    public class VariableItem
-    {
-        public override string ToString() {
-            return
-                mode switch {
-                    VariableMode.Local => $"[local {Name}]",
-                    VariableMode.OutParam => $"[out {Name}]",
-                    VariableMode.InParam => $"[in {Name}]",
-                    _ => throw new NotImplementedException(),
-                };
-        }
-        public readonly string Name;
-        public readonly FieldDefinition fieldDefinition;
-        public readonly VariableDefinition? variableDefinition;
-        public readonly ParameterDefinition? parameterDefinition;
-        public readonly VariableMode mode;
-        public int GetIndex(MethodDefinition definition) {
-            if (variableDefinition is not null) {
-                return definition.Body.Variables.IndexOf(variableDefinition);
-            }
-            else if (parameterDefinition is not null) {
-                return (definition.HasThis ? 1 : 0) + definition.Parameters.IndexOf(parameterDefinition);
-            }
-            else {
-                throw new NotImplementedException();
-            }
-        }
-        public VariableItem(FieldDefinition field, VariableDefinition variable) {
-            Name = field.Name;
-            fieldDefinition = field;
-            variableDefinition = variable;
-            mode = VariableMode.Local;
-        }
-        public VariableItem(FieldDefinition field, ParameterDefinition parameter) {
-            Name = field.Name;
-            fieldDefinition = field;
-            parameterDefinition = parameter;
-            if (parameter.IsOut) {
-                mode = VariableMode.OutParam;
-            }
-            else {
-                mode = VariableMode.InParam;
-            }
-        }
-        public bool IsSameVariableReference(ParameterDefinition parameter) {
-            if (parameterDefinition is null) {
-                return false;
-            }
-            return parameter == parameterDefinition;
-        }
-        public bool IsSameVariableReference(VariableDefinition variable) {
-            if (variableDefinition is null) {
-                return false;
-            }
-            return variable == variableDefinition;
-        }
 
-        public void InstallMethodVariables(MethodDefinition definition) {
-            if (variableDefinition is not null) {
-                if (!definition.Body.Variables.Contains(variableDefinition)) {
-                    definition.Body.Variables.Add(variableDefinition);
-                }
-            }
-            else if (parameterDefinition is not null) {
-                if (!definition.Parameters.Contains(parameterDefinition)) {
-                    definition.Parameters.Add(parameterDefinition);
-                }
-            }
-        }
-        public Instruction[] PushValueToStackInstruction(MethodDefinition definition) {
-
-            var index = GetIndex(definition);
-            if (variableDefinition is not null) {
-                var inst = Instruction.Create(OpCodes.Ldloc, variableDefinition);
-                if (index <= byte.MaxValue) {
-                    inst.OpCode = index switch {
-                        0 => OpCodes.Ldloc_0,
-                        1 => OpCodes.Ldloc_1,
-                        2 => OpCodes.Ldloc_2,
-                        3 => OpCodes.Ldloc_3,
-                        _ => OpCodes.Ldloc_S,
+        public class VariableItem
+        {
+            public override string ToString() {
+                return
+                    Mode switch {
+                        VariableMode.Local => $"[local {FieldName}]",
+                        VariableMode.OutParam => $"[out {FieldName}]",
+                        VariableMode.InParam => $"[in {FieldName}]",
+                        _ => throw new NotImplementedException(),
                     };
-                    if (index <= 3) {
-                        inst.Operand = null;
-                    }
-                }
-                return [inst];
             }
-            else if (parameterDefinition is not null) {
-                var inst = Instruction.Create(OpCodes.Ldarg, parameterDefinition);
-                if (index <= byte.MaxValue) {
-                    inst.OpCode = index switch {
-                        0 => OpCodes.Ldarg_0,
-                        1 => OpCodes.Ldarg_1,
-                        2 => OpCodes.Ldarg_2,
-                        3 => OpCodes.Ldarg_3,
-                        _ => OpCodes.Ldarg_S,
-                    };
-                    if (index <= 3) {
-                        inst.Operand = null;
-                    }
+
+            // The Terraria.Collision static field name this variable represents.
+            public readonly string FieldName;
+
+            // Resolved field definition for that Terraria.Collision static field.
+            public readonly FieldDefinition Field;
+
+            // Exactly one of Local/Parameter is non-null depending on Mode.
+            public readonly VariableDefinition? Local;
+            public readonly ParameterDefinition? Parameter;
+            public readonly VariableMode Mode;
+
+            public int GetIndex(MethodDefinition method) {
+                if (Local is not null) {
+                    return method.Body.Variables.IndexOf(Local);
                 }
-                if (mode == VariableMode.OutParam) {
-                    OpCode opCode;
-                    if (fieldDefinition.FieldType.Name == typeof(int).Name) {
-                        opCode = OpCodes.Ldind_I4;
-                    }
-                    else if (fieldDefinition.FieldType.Name == typeof(bool).Name) {
-                        opCode = OpCodes.Ldind_U1;
-                    }
-                    else {
-                        throw new NotImplementedException($"Unknown type {fieldDefinition.FieldType.Name}");
-                    }
-                    var getValue = Instruction.Create(opCode);
-                    return [inst, getValue];
+                else if (Parameter is not null) {
+                    return (method.HasThis ? 1 : 0) + method.Parameters.IndexOf(Parameter);
                 }
                 else {
+                    throw new NotImplementedException();
+                }
+            }
+            public VariableItem(FieldDefinition field, VariableDefinition variable) {
+                FieldName = field.Name;
+                Field = field;
+                Local = variable;
+                Mode = VariableMode.Local;
+            }
+            public VariableItem(FieldDefinition field, ParameterDefinition parameter) {
+                FieldName = field.Name;
+                Field = field;
+                Parameter = parameter;
+                if (parameter.IsOut) {
+                    Mode = VariableMode.OutParam;
+                }
+                else {
+                    Mode = VariableMode.InParam;
+                }
+            }
+            public bool IsSameVariableReference(ParameterDefinition parameter) {
+                if (Parameter is null) {
+                    return false;
+                }
+                return parameter == Parameter;
+            }
+            public bool IsSameVariableReference(VariableDefinition variable) {
+                if (Local is null) {
+                    return false;
+                }
+                return variable == Local;
+            }
+
+            public void ApplyMethodVariables(MethodDefinition method) {
+                if (Local is not null) {
+                    if (!method.Body.Variables.Contains(Local)) {
+                        method.Body.Variables.Add(Local);
+                    }
+                }
+                else if (Parameter is not null) {
+                    if (!method.Parameters.Contains(Parameter)) {
+                        int count = 0;
+                        for (; count < method.Parameters.Count; count++) {
+                            if (method.Parameters[count].IsOptional) {
+                                break;
+                            }
+                        }
+                        PatchingCommon.InsertParamAndRemapIndices(method.Body, count, Parameter);
+                    }
+                }
+            }
+            public Instruction[] CreatePushValueInstructions(MethodDefinition method) {
+                var index = GetIndex(method);
+                if (index is -1) {
+                    throw new InvalidOperationException();
+                }
+                if (Local is not null) {
+                    var inst = Instruction.Create(OpCodes.Ldloc, Local);
+                    if (index <= byte.MaxValue) {
+                        inst.OpCode = index switch {
+                            0 => OpCodes.Ldloc_0,
+                            1 => OpCodes.Ldloc_1,
+                            2 => OpCodes.Ldloc_2,
+                            3 => OpCodes.Ldloc_3,
+                            _ => OpCodes.Ldloc_S,
+                        };
+                        if (index <= 3) {
+                            inst.Operand = null;
+                        }
+                    }
                     return [inst];
                 }
-            }
-            else {
-                throw new InvalidOperationException();
-            }
-        }
-        public Instruction[] PushAddressToStackInstruction(MethodDefinition definition) {
-            var index = GetIndex(definition);
-            if (variableDefinition is not null) {
-                var inst = Instruction.Create(OpCodes.Ldloca, variableDefinition);
-                if (index <= byte.MaxValue) {
-                    inst.OpCode = OpCodes.Ldloca_S;
-                }
-                return [inst];
-            }
-            else if (parameterDefinition is not null) {
-                if (mode == VariableMode.OutParam) {
-                    var inst = Instruction.Create(OpCodes.Ldarg, parameterDefinition);
+                else if (Parameter is not null) {
+                    var inst = Instruction.Create(OpCodes.Ldarg, Parameter);
                     if (index <= byte.MaxValue) {
                         inst.OpCode = index switch {
                             0 => OpCodes.Ldarg_0,
@@ -581,205 +595,271 @@ namespace OTAPI.UnifiedServerProcess.Core
                             inst.Operand = null;
                         }
                     }
-                    return [inst];
-                }
-                else {
-                    var inst = Instruction.Create(OpCodes.Ldarga, parameterDefinition);
-                    if (index <= byte.MaxValue) {
-                        inst.OpCode = OpCodes.Ldarga_S;
-                    }
-                    return [inst];
-                }
-            }
-            else {
-                throw new InvalidOperationException();
-            }
-        }
-        public Instruction[] SetValueFromStackInstrustion(MethodDefinition definition, Instruction[] valueInStack) {
-            var index = GetIndex(definition);
-            if (variableDefinition is not null) {
-                var inst = Instruction.Create(OpCodes.Stloc, variableDefinition);
-                if (index <= byte.MaxValue) {
-                    inst.OpCode = index switch {
-                        0 => OpCodes.Stloc_0,
-                        1 => OpCodes.Stloc_1,
-                        2 => OpCodes.Stloc_2,
-                        3 => OpCodes.Stloc_3,
-                        _ => OpCodes.Stloc_S,
-                    };
-                    if (index <= 3) {
-                        inst.Operand = null;
-                    }
-                }
-                return [.. valueInStack, inst];
-            }
-            else if (parameterDefinition is not null) {
-                if (mode == VariableMode.OutParam) {
-                    var inst = Instruction.Create(OpCodes.Ldarg, parameterDefinition);
-                    if (index <= byte.MaxValue) {
-                        inst.OpCode = index switch {
-                            0 => OpCodes.Ldarg_0,
-                            1 => OpCodes.Ldarg_1,
-                            2 => OpCodes.Ldarg_2,
-                            3 => OpCodes.Ldarg_3,
-                            _ => OpCodes.Ldarg_S,
-                        };
-                        if (index <= 3) {
-                            inst.Operand = null;
+                    if (Mode == VariableMode.OutParam) {
+                        OpCode opCode;
+                        if (Field.FieldType.Name == typeof(int).Name) {
+                            opCode = OpCodes.Ldind_I4;
                         }
-                    }
-                    OpCode opCode;
-                    if (fieldDefinition.FieldType.Name == typeof(int).Name) {
-                        opCode = OpCodes.Stind_I4;
-                    }
-                    else if (fieldDefinition.FieldType.Name == typeof(bool).Name) {
-                        opCode = OpCodes.Stind_I1;
+                        else if (Field.FieldType.Name == typeof(bool).Name) {
+                            opCode = OpCodes.Ldind_U1;
+                        }
+                        else {
+                            throw new NotImplementedException($"Unknown type {Field.FieldType.Name}");
+                        }
+                        var getValue = Instruction.Create(opCode);
+                        return [inst, getValue];
                     }
                     else {
-                        throw new NotImplementedException($"Unknown type {fieldDefinition.FieldType.Name}");
+                        return [inst];
                     }
-                    var setValueToAddress = Instruction.Create(opCode);
-                    return [inst, .. valueInStack, setValueToAddress];
                 }
                 else {
-                    var inst = Instruction.Create(OpCodes.Starg, parameterDefinition);
-                    if (index <= byte.MaxValue) {
-                        inst.OpCode = OpCodes.Starg_S;
-                    }
-                    return [.. valueInStack, inst];
-                }
-            }
-            else {
-                throw new InvalidOperationException();
-            }
-        }
-    }
-    [MonoMod.MonoModIgnore]
-    public enum VariableMode
-    {
-        InParam,
-        Local,
-        OutParam,
-    }
-    [MonoMod.MonoModIgnore]
-    public class MethodWithPreparedVariables
-    {
-        public readonly string GetIdentifier;
-        public readonly MethodDefinition Method;
-        public readonly Dictionary<string, VariableItem> VariableItems = new();
-        public readonly Dictionary<string, MethodWithPreparedVariables> MyCallingMethods = new();
-        private HashSet<string> PreferredOutParam = [];
-
-        public MethodWithPreparedVariables(MethodDefinition method) {
-            GetIdentifier = method.GetIdentifier();
-            Method = method;
-        }
-        public void InstallVariable() {
-            foreach (var variable in VariableItems.Values) {
-                variable.InstallMethodVariables(Method);
-            }
-        }
-        public void PrepareVariables(Dictionary<string, MethodWithPreparedVariables> collection, params string[] shouldChangeToOutParam) {
-            foreach (var item in shouldChangeToOutParam) {
-                PreferredOutParam.Add(item);
-            }
-
-            // First, look for direct field writes, this priority is highest
-            foreach (var instruction in Method.Body.Instructions) {
-                if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference field && field.DeclaringType.FullName == "Terraria.Collision") {
-                    PreferredOutParam.Add(field.Name);
-                    VariableItems.Remove(field.Name);
-                    VariableItems.Add(field.Name, new VariableItem(field.Resolve(), new ParameterDefinition(field.Name, ParameterAttributes.Out, field.FieldType.MakeByReferenceType())));
-                }
-            }
-            // Next, look for direct field calls, pre-designed as in param, but can be overridden by the following logic
-            foreach (var instruction in Method.Body.Instructions) {
-                if (instruction.OpCode == OpCodes.Ldsfld &&
-                    instruction.Operand is FieldReference field &&
-                    field.DeclaringType.FullName == "Terraria.Collision" &&
-                    field.Name != nameof(Collision.Epsilon)) {
-
-                    if (!VariableItems.TryGetValue(field.Name, out var item)) {
-                        VariableItems.Add(field.Name, new VariableItem(field.Resolve(), new ParameterDefinition(field.Name, ParameterAttributes.None, field.FieldType)));
-                    }
-                }
-            }
-
-            foreach (var instruction in Method.Body.Instructions) {
-                if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference calleeRef) {
-                    var calleeId = calleeRef.GetIdentifier();
-                    if (collection.TryGetValue(calleeId, out var calleeData)) {
-
-                        MyCallingMethods.TryAdd(calleeId, calleeData);
-
-                        if (calleeData.VariableItems.Values.Any(v => v.mode is VariableMode.Local && PreferredOutParam.Contains(v.fieldDefinition.Name))) {
-                            Console.WriteLine($"【Process PrepareVariables 1】The input parameter {string.Join(",", PreferredOutParam)} of callee {calleeData.Method.GetDebugName()} in caller {Method.GetDebugName()} is set to Out parameter");
-                            calleeData.PrepareVariables(collection, [.. PreferredOutParam]);
-                        }
-
-                        foreach (var inhereVariable in calleeData.VariableItems.Values.ToArray()) {
-                            if (inhereVariable.mode is VariableMode.Local) {
-                                // Inherit the variable of the called function
-                                if (!VariableItems.TryGetValue(inhereVariable.Name, out var old)) {
-                                    VariableItems.Add(inhereVariable.Name,
-                                        new VariableItem(
-                                            inhereVariable.fieldDefinition,
-                                            new VariableDefinition(inhereVariable.fieldDefinition.FieldType)));
-                                }
-                                else if (old.mode is VariableMode.InParam) {
-                                    VariableItems.Remove(inhereVariable.Name);
-                                    VariableItems.Add(inhereVariable.Name,
-                                        new VariableItem(
-                                            inhereVariable.fieldDefinition,
-                                            new VariableDefinition(inhereVariable.fieldDefinition.FieldType)));
-                                }
-                            }
-                            else if (inhereVariable.mode is VariableMode.OutParam) {
-                                if (VariableItems.TryGetValue(inhereVariable.Name, out var item)) {
-                                    var mode = VariableMode.Local;
-                                    if (PreferredOutParam.Contains(inhereVariable.Name)) {
-                                        mode = VariableMode.OutParam;
-                                    }
-                                    if (item.mode != mode) {
-                                        VariableItems.Remove(inhereVariable.Name);
-                                    } 
-                                }
-                                if (!VariableItems.ContainsKey(inhereVariable.Name)) {
-                                    if (PreferredOutParam.Contains(inhereVariable.Name)) {
-                                        VariableItems.Add(inhereVariable.Name, 
-                                            new VariableItem(
-                                                inhereVariable.fieldDefinition, 
-                                                new ParameterDefinition(inhereVariable.Name, ParameterAttributes.Out, inhereVariable.fieldDefinition.FieldType.MakeByReferenceType())));
-                                    }
-                                    else {
-                                        VariableItems.Add(inhereVariable.Name, 
-                                            new VariableItem(
-                                                inhereVariable.fieldDefinition,
-                                                new VariableDefinition(inhereVariable.fieldDefinition.FieldType)));
-                                    }
-                                }
-                            }
-                            else {
-                                if (!VariableItems.ContainsKey(inhereVariable.Name)) {
-                                    VariableItems.Add(inhereVariable.Name, 
-                                        new VariableItem(
-                                            inhereVariable.fieldDefinition, 
-                                            new ParameterDefinition(inhereVariable.Name, ParameterAttributes.None, inhereVariable.fieldDefinition.FieldType)));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            var key = Method.GetIdentifier();
-            if (collection.TryGetValue(key, out var m)) {
-                if (m != this) {
                     throw new InvalidOperationException();
                 }
             }
-            else {
-                collection.Add(key, this);
+            public Instruction[] CreatePushAddressInstructions(MethodDefinition method) {
+                var index = GetIndex(method);
+                if (index is -1) {
+                    throw new InvalidOperationException();
+                }
+                if (Local is not null) {
+                    var inst = Instruction.Create(OpCodes.Ldloca, Local);
+                    if (index <= byte.MaxValue) {
+                        inst.OpCode = OpCodes.Ldloca_S;
+                    }
+                    return [inst];
+                }
+                else if (Parameter is not null) {
+                    if (Mode == VariableMode.OutParam) {
+                        var inst = Instruction.Create(OpCodes.Ldarg, Parameter);
+                        if (index <= byte.MaxValue) {
+                            inst.OpCode = index switch {
+                                0 => OpCodes.Ldarg_0,
+                                1 => OpCodes.Ldarg_1,
+                                2 => OpCodes.Ldarg_2,
+                                3 => OpCodes.Ldarg_3,
+                                _ => OpCodes.Ldarg_S,
+                            };
+                            if (index <= 3) {
+                                inst.Operand = null;
+                            }
+                        }
+                        return [inst];
+                    }
+                    else {
+                        var inst = Instruction.Create(OpCodes.Ldarga, Parameter);
+                        if (index <= byte.MaxValue) {
+                            inst.OpCode = OpCodes.Ldarga_S;
+                        }
+                        return [inst];
+                    }
+                }
+                else {
+                    throw new InvalidOperationException();
+                }
+            }
+            public Instruction[] CreateSetValueFromStackInstructions(MethodDefinition method, Instruction[] valueOnStack) {
+                var index = GetIndex(method);
+                if (index is -1) {
+                    throw new InvalidOperationException();
+                }
+                if (Local is not null) {
+                    var inst = Instruction.Create(OpCodes.Stloc, Local);
+                    if (index <= byte.MaxValue) {
+                        inst.OpCode = index switch {
+                            0 => OpCodes.Stloc_0,
+                            1 => OpCodes.Stloc_1,
+                            2 => OpCodes.Stloc_2,
+                            3 => OpCodes.Stloc_3,
+                            _ => OpCodes.Stloc_S,
+                        };
+                        if (index <= 3) {
+                            inst.Operand = null;
+                        }
+                    }
+                    return [.. valueOnStack, inst];
+                }
+                else if (Parameter is not null) {
+                    if (Mode == VariableMode.OutParam) {
+                        var inst = Instruction.Create(OpCodes.Ldarg, Parameter);
+                        if (index <= byte.MaxValue) {
+                            inst.OpCode = index switch {
+                                0 => OpCodes.Ldarg_0,
+                                1 => OpCodes.Ldarg_1,
+                                2 => OpCodes.Ldarg_2,
+                                3 => OpCodes.Ldarg_3,
+                                _ => OpCodes.Ldarg_S,
+                            };
+                            if (index <= 3) {
+                                inst.Operand = null;
+                            }
+                        }
+                        OpCode opCode;
+                        if (Field.FieldType.Name == typeof(int).Name) {
+                            opCode = OpCodes.Stind_I4;
+                        }
+                        else if (Field.FieldType.Name == typeof(bool).Name) {
+                            opCode = OpCodes.Stind_I1;
+                        }
+                        else {
+                            throw new NotImplementedException($"Unknown type {Field.FieldType.Name}");
+                        }
+                        var setValueToAddress = Instruction.Create(opCode);
+                        return [inst, .. valueOnStack, setValueToAddress];
+                    }
+                    else {
+                        var inst = Instruction.Create(OpCodes.Starg, Parameter);
+                        if (index <= byte.MaxValue) {
+                            inst.OpCode = OpCodes.Starg_S;
+                        }
+                        return [.. valueOnStack, inst];
+                    }
+                }
+                else {
+                    throw new InvalidOperationException();
+                }
+            }
+        }
+        public enum VariableMode
+        {
+            InParam,
+            Local,
+            OutParam,
+        }
+        public class MethodWithPreparedVariables
+        {
+            public readonly string Identifier;
+            public readonly MethodDefinition Method;
+            public readonly int NonOptionalParameterCount;
+            public readonly bool AnyOptionalParameter;
+
+            // Key: Collision static field name (e.g. "up", "down", ...)
+            public readonly Dictionary<string, VariableItem> VariablesByFieldName = [];
+
+            // Key: method identifier of a callee that is also in the analysis set.
+            public readonly Dictionary<string, MethodWithPreparedVariables> CalleesById = [];
+
+            private readonly HashSet<string> _preferredOutParamFieldNames = [];
+
+            public readonly Dictionary<Instruction, List<Instruction>> JumpSitesCache;
+
+            public MethodWithPreparedVariables(MethodDefinition method) {
+                Identifier = method.GetIdentifier();
+                Method = method;
+                int count = 0;
+                for (; count < method.Parameters.Count; count++) {
+                    if (method.Parameters[count].IsOptional) {
+                        AnyOptionalParameter = true;
+                        break;
+                    }
+                }
+                NonOptionalParameterCount = count;
+                JumpSitesCache = MonoModCommon.Stack.BuildJumpSitesMap(method);
+            }
+            public void ApplyVariables() {
+                foreach (var variable in VariablesByFieldName.Values) {
+                    variable.ApplyMethodVariables(Method);
+                }
+            }
+            public void PrepareVariables(Dictionary<string, MethodWithPreparedVariables> collection, params string[] shouldChangeToOutParam) {
+                foreach (var item in shouldChangeToOutParam) {
+                    _preferredOutParamFieldNames.Add(item);
+                }
+
+                // First, look for direct field writes, this priority is highest
+                foreach (var instruction in Method.Body.Instructions) {
+                    if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference field && PatchLogic.IsTargetCollisionField(field)) {
+                        _preferredOutParamFieldNames.Add(field.Name);
+                        VariablesByFieldName.Remove(field.Name);
+                        VariablesByFieldName.Add(field.Name, new VariableItem(field.Resolve(), new ParameterDefinition(field.Name, ParameterAttributes.Out, field.FieldType.MakeByReferenceType())));
+                    }
+                }
+                // Next, look for direct field calls, pre-designed as in param, but can be overridden by the following logic
+                foreach (var instruction in Method.Body.Instructions) {
+                    if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && PatchLogic.IsTargetCollisionField(field)) {
+
+                        if (!VariablesByFieldName.TryGetValue(field.Name, out var _)) {
+                            VariablesByFieldName.Add(field.Name, new VariableItem(field.Resolve(), new ParameterDefinition(field.Name, ParameterAttributes.None, field.FieldType)));
+                        }
+                    }
+                }
+
+                foreach (var instruction in Method.Body.Instructions) {
+                    if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference calleeRef) {
+                        var calleeId = calleeRef.GetIdentifier();
+                        if (collection.TryGetValue(calleeId, out var calleeData)) {
+
+                            CalleesById.TryAdd(calleeId, calleeData);
+
+                            if (calleeData.VariablesByFieldName.Values.Any(v => v.Mode is VariableMode.Local && _preferredOutParamFieldNames.Contains(v.Field.Name))) {
+                                Console.WriteLine($"【PrepareVariables】Promote preferred out-params ({string.Join(",", _preferredOutParamFieldNames)}) for callee {calleeData.Method.GetDebugName()} (called from {Method.GetDebugName()})");
+                                calleeData.PrepareVariables(collection, [.. _preferredOutParamFieldNames]);
+                            }
+
+                            foreach (var inheritedVariable in calleeData.VariablesByFieldName.Values.ToArray()) {
+                                if (inheritedVariable.Mode is VariableMode.Local) {
+                                    // Inherit the variable of the called function
+                                    if (!VariablesByFieldName.TryGetValue(inheritedVariable.FieldName, out var old)) {
+                                        VariablesByFieldName.Add(inheritedVariable.FieldName,
+                                            new VariableItem(
+                                                inheritedVariable.Field,
+                                                new VariableDefinition(inheritedVariable.Field.FieldType)));
+                                    }
+                                    else if (old.Mode is VariableMode.InParam) {
+                                        VariablesByFieldName.Remove(inheritedVariable.FieldName);
+                                        VariablesByFieldName.Add(inheritedVariable.FieldName,
+                                            new VariableItem(
+                                                inheritedVariable.Field,
+                                                new VariableDefinition(inheritedVariable.Field.FieldType)));
+                                    }
+                                }
+                                else if (inheritedVariable.Mode is VariableMode.OutParam) {
+                                    if (VariablesByFieldName.TryGetValue(inheritedVariable.FieldName, out var item)) {
+                                        var expectedMode = VariableMode.Local;
+                                        if (_preferredOutParamFieldNames.Contains(inheritedVariable.FieldName)) {
+                                            expectedMode = VariableMode.OutParam;
+                                        }
+                                        if (item.Mode != expectedMode) {
+                                            VariablesByFieldName.Remove(inheritedVariable.FieldName);
+                                        }
+                                    }
+                                    if (!VariablesByFieldName.ContainsKey(inheritedVariable.FieldName)) {
+                                        if (_preferredOutParamFieldNames.Contains(inheritedVariable.FieldName)) {
+                                            VariablesByFieldName.Add(inheritedVariable.FieldName,
+                                                new VariableItem(
+                                                    inheritedVariable.Field,
+                                                    new ParameterDefinition(inheritedVariable.FieldName, ParameterAttributes.Out, inheritedVariable.Field.FieldType.MakeByReferenceType())));
+                                        }
+                                        else {
+                                            VariablesByFieldName.Add(inheritedVariable.FieldName,
+                                                new VariableItem(
+                                                    inheritedVariable.Field,
+                                                    new VariableDefinition(inheritedVariable.Field.FieldType)));
+                                        }
+                                    }
+                                }
+                                else {
+                                    if (!VariablesByFieldName.ContainsKey(inheritedVariable.FieldName)) {
+                                        VariablesByFieldName.Add(inheritedVariable.FieldName,
+                                            new VariableItem(
+                                                inheritedVariable.Field,
+                                                new ParameterDefinition(inheritedVariable.FieldName, ParameterAttributes.None, inheritedVariable.Field.FieldType)));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                var key = Method.GetIdentifier();
+                if (collection.TryGetValue(key, out var m)) {
+                    if (m != this) {
+                        throw new InvalidOperationException();
+                    }
+                }
+                else {
+                    collection.Add(key, this);
+                }
             }
         }
     }

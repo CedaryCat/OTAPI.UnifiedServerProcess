@@ -1,10 +1,9 @@
-﻿using TrProtocol.Interfaces;
-using TrProtocol.Models;
+﻿using TrProtocol.Models;
 
 namespace TrProtocol.NetPackets.Modules;
 
-public partial struct NetCreativePowersModule : INetModulesPacket, IExtraData
+public partial struct NetCreativePowersModule : INetModulesPacket
 {
     public readonly NetModuleType ModuleType => NetModuleType.NetCreativePowersModule;
-    public CreativePowerTypes PowerType;
+    public CreativePower CreativePower;
 }

@@ -1,4 +1,4 @@
-﻿using Mono.Cecil;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
@@ -20,7 +20,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
     {
         public readonly ImmutableDictionary<string, StaticFieldUsageTrack> AnalyzedMethods;
         public sealed override string Name => "StaticFieldReferenceAnalyzer";
+        readonly ParameterFlowAnalyzer parameterFlowAnalyzer;
         readonly TypeInheritanceGraph typeInheritance;
+        readonly TypeFlowSccIndex typeFlowSccIndex;
         readonly DelegateInvocationGraph delegateInvocationGraph;
         readonly MethodInheritanceGraph methodInheritanceGraph;
         public DelegateInvocationGraph DelegateInvocationGraph => delegateInvocationGraph;
@@ -28,14 +30,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
         public StaticFieldReferenceAnalyzer(
             ILogger logger,
             ModuleDefinition module,
+            ParameterFlowAnalyzer parameterFlowAnalyzer,
             TypeInheritanceGraph typeInheritance,
             MethodCallGraph callGraph,
             DelegateInvocationGraph invocationGraph,
             MethodInheritanceGraph methodInherance) : base(logger) {
 
+            this.parameterFlowAnalyzer = parameterFlowAnalyzer;
             this.typeInheritance = typeInheritance;
             this.delegateInvocationGraph = invocationGraph;
             this.methodInheritanceGraph = methodInherance;
+            this.typeFlowSccIndex = TypeFlowSccIndex.Build(module);
 
             var methodStackTraces = new Dictionary<string, StaticFieldTraceCollection<string>>();
             var methodStaticFieldTraces = new Dictionary<string, StaticFieldTraceCollection<string>>();
@@ -287,7 +292,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         // If either condition holds, the stack value references the traced static field
                         // Use TryExtendTracingWithMemberAccess for validation, update stack trace when returns true
 
-                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryExtendTracingWithMemberAccess(fieldRef, out var newTrace)) {
+                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryExtendTracingWithMemberAccess(fieldRef, typeFlowSccIndex, out var newTrace)) {
                             var stackKey = StaticFieldUsageTrack.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(stackKey, newTrace)) {
                                 hasInnerChange = true;
@@ -338,7 +343,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                             filteredValueTrace = valueTrace;
                         }
                         // Create field storage tracing tail
-                        instanceTrace = filteredValueTrace.CreateEncapsulatedInstance(fieldRef);
+                        instanceTrace = filteredValueTrace.CreateEncapsulatedInstance(fieldRef, typeFlowSccIndex);
                     }
 
                     if (instanceTrace is null) continue;
@@ -413,7 +418,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                     var stackKey = StaticFieldUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                     if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                        baseTrace.TryExtendTracingWithArrayAccess((ArrayType)loadInstance.StackTopType, out var newTrace)) {
+                        baseTrace.TryExtendTracingWithArrayAccess((ArrayType)loadInstance.StackTopType, typeFlowSccIndex, out var newTrace)) {
                         var targetKey = StaticFieldUsageTrack.GenerateStackKey(method, loadEleInstruction);
                         if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                             hasInnerChange = true;
@@ -451,7 +456,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                     }
                     instanceSingleParamTrace = new(valueSingleFieldTraceKV.Value.TracingStaticField, []);
                     foreach (var chain in valueSingleFieldTraceKV.Value.PartTracingPaths) {
-                        if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType))) {
+                        if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedArrayInstance((ArrayType)instancePath.StackTopType, typeFlowSccIndex))) {
                             hasInnerChange = true;
                             instanceTraceHasChange = true;
                         }
@@ -463,11 +468,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         valueSingleParamTrace = new(instanceSingleFieldTraceKV.Value.TracingStaticField, []);
                     }
                     foreach (var chain in instanceSingleFieldTraceKV.Value.PartTracingPaths) {
-                        if (chain.TryExtendTracingWithArrayAccess((ArrayType)instancePath.StackTopType, out var newChain)
-                            && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
-                            hasInnerChange = true;
-                            valueTraceHasChange = true;
-                        }
+                            if (chain.TryExtendTracingWithArrayAccess((ArrayType)instancePath.StackTopType, typeFlowSccIndex, out var newChain)
+                                && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
+                                hasInnerChange = true;
+                                valueTraceHasChange = true;
+                            }
                     }
                     valueTrace.TracedStaticFields[instanceSingleFieldTraceKV.Key] = valueSingleParamTrace;
                 }
@@ -516,7 +521,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         var stackKey = StaticFieldUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                         if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                            baseTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, out var newTrace)) {
+                            baseTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, typeFlowSccIndex, out var newTrace)) {
                             var targetKey = StaticFieldUsageTrack.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                                 hasInnerChange = true;
@@ -554,7 +559,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         }
                         instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TracingStaticField, []);
                         foreach (var chain in valueSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType))) {
+                            if (instanceSingleParamTrace.PartTracingPaths.Add(chain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuePath.StackTopType, typeFlowSccIndex))) {
                                 hasInnerChange = true;
                                 instanceTraceHasChange = true;
                             }
@@ -566,7 +571,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                             valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracingStaticField, []);
                         }
                         foreach (var chain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (chain.TryExtendTracingWithCollectionAccess(instancePath.StackTopType, valuePath.StackTopType, out var newChain)
+                            if (chain.TryExtendTracingWithCollectionAccess(instancePath.StackTopType, valuePath.StackTopType, typeFlowSccIndex, out var newChain)
                                 && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
                                 hasInnerChange = true;
                                 valueTraceHasChange = true;
@@ -640,8 +645,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         }
                         instanceSingleSFieldTrace = new(valueSingleSFieldTraceKV.Value.TracingStaticField, []);
                         foreach (var valueChain in valueSingleSFieldTraceKV.Value.PartTracingPaths) {
-                            if (valueChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, out var elementChain) &&
-                                instanceSingleSFieldTrace.PartTracingPaths.Add(valueChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuesPath.StackTopType))) {
+                            if (valueChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, typeFlowSccIndex, out var elementChain) &&
+                                instanceSingleSFieldTrace.PartTracingPaths.Add(valueChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valuesPath.StackTopType, typeFlowSccIndex))) {
                                 hasInnerChange = true;
                                 instanceTraceHasChange = true;
                             }
@@ -653,7 +658,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                             valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracingStaticField, []);
                         }
                         foreach (var chain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (chain.TryExtendTracingWithCollectionAccess(instancePath.StackTopType, valuesPath.StackTopType, out var newChain)
+                            if (chain.TryExtendTracingWithCollectionAccess(instancePath.StackTopType, valuesPath.StackTopType, typeFlowSccIndex, out var newChain)
                                 && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
                                 hasInnerChange = true;
                                 valueTraceHasChange = true;
@@ -764,16 +769,53 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
 
                 foreach (var implCallee in implementations) {
+                    var calleeId = implCallee.GetIdentifier();
+                    parameterFlowAnalyzer.AnalyzedMethods.TryGetValue(calleeId, out var calleeParameterFlowData);
 
                     // Static field directly from the called method
-                    if (returnTraces.TryGetTrace(implCallee.GetIdentifier(), out var calleeReturnTrace)) {
-                        if (stackTrace.TryAddTrace(StaticFieldUsageTrack.GenerateStackKey(method, instruction), calleeReturnTrace)) {
-                            hasExternalChange = true;
-                        }
+                    if (returnTraces.TryGetTrace(calleeId, out var calleeReturnTrace)
+                        && stackTrace.TryAddTrace(StaticFieldUsageTrack.GenerateStackKey(method, instruction), calleeReturnTrace)) {
+                        hasInnerChange = true;
                     }
 
-                    // Static field from the parameters
+                    // --- Interprocedural propagation notes ---
+                    //
+                    // This analyzer tracks how *static fields* flow into objects/locals/parameters.
+                    // Compared to ParameterFlowAnalyzer, we have an extra complexity at call-sites:
+                    //
+                    // - This analyzer can directly propagate static fields *created inside the callee*
+                    //   (e.g. `arg.F = SomeStatic;`). That is available as `calleeStaticFieldValues[targetParam]`.
+                    //
+                    // - But many real-world cases are "parameter-to-parameter" copies inside the callee
+                    //   (e.g. `this.F = other.G;`). The static field(s) that end up in `this.F` are not known
+                    //   inside the callee unless the callee already had those traces on `other` (it doesn't;
+                    //   this analysis is bottom-up).
+                    //
+                    // To handle that, we reuse ParameterFlowAnalyzer's summaries for the callee:
+                    //
+                    // - `calleeParameterFlowData.ReturnValueTrace` tells us which callee parameter parts the
+                    //   return value is derived from.
+                    // - `calleeParameterFlowData.ParameterTraces[target]` tells us which other callee parameters
+                    //   were copied into `target` (including which member paths).
+                    //
+                    // At the call-site, we "collapse" the callee frame by:
+                    // 1) Mapping callee parameter names -> caller arguments (including "" == this).
+                    // 2) Substituting the caller's *static field traces* for the origin parameters through the
+                    //    callee's parameter-flow chains.
+                    // 3) Merging the result into the caller's target argument / return stack slot.
+                    //
+                    // Example:
+                    //   callee:   void Copy(ChatLine other) { this.parsedText = other.parsedText; }
+                    //   summary:  target "" (this) contains origin "other" at path `.parsedText`
+                    //   caller:   when calling Copy(x), we map "other" -> x, "" -> this
+                    //             and propagate any static fields reachable via x.parsedText into this.parsedText.
+
+                    parameterTraces.TryGetValue(calleeId, out StaticFieldTraceCollection<string>? calleeStaticFieldValues);
+
+                    // Static field from the parameters (including side-effects on arguments).
                     foreach (var paramGroup in loadParamsInEveryPaths) {
+                        var callerArgsByCalleeParamName = new Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedStaticFieldProvenance? Trace)>();
+
                         for (int paramIndex = 0; paramIndex < paramGroup.Length; paramIndex++) {
 
                             var paramIndexInImpl = paramIndex;
@@ -798,6 +840,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                             }
 
                             var paramInImpl = paramIndexInImpl == -1 ? implCallee.Body.ThisParameter : implCallee.Parameters[paramIndexInImpl];
+                            var calleeParamName = paramInImpl.Name ?? string.Empty;
 
                             if (paramIndexInImpl != -1 && paramInImpl.ParameterType.IsTruelyValueType()) {
                                 continue;
@@ -822,7 +865,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                                     continue;
                                 }
 
-                                if (!instanceTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, loadParam.StackTopType, out var elementAccess)) {
+                                if (!instanceTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, loadParam.StackTopType, typeFlowSccIndex, out var elementAccess)) {
                                     continue;
                                 }
 
@@ -830,38 +873,117 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                             }
 
                             if (!stackTrace.TryGetTrace(loadParamKey, out var loadingParamStackValue)) {
+                                callerArgsByCalleeParamName[calleeParamName] = (loadParam, null);
                                 continue;
                             }
 
-                            // Return value reference propagation
-                            if (calleeReturnTrace is not null) {
-                                if (!calleeReturnTrace.TracedStaticFields.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                            callerArgsByCalleeParamName[calleeParamName] = (loadParam, loadingParamStackValue);
+
+                        }
+
+                        // Return value derived from parameters:
+                        // Use ParameterFlowAnalyzer's return summary to pull static-field traces from the
+                        // *caller arguments* into the call result stack slot.
+                        if (calleeParameterFlowData?.ReturnValueTrace is not null) {
+
+                            if (methodRef.Name.StartsWith("get_") && method.GetIdentifier() is "Terraria.ObjectData.TileObjectData.GetTileData(System.Int32,System.Int32,System.Int32)") {
+
+                            }
+
+                            foreach (var originGroup in calleeParameterFlowData.ReturnValueTrace.ReferencedParameters) {
+                                if (!callerArgsByCalleeParamName.TryGetValue(originGroup.Key, out var origin)
+                                    || origin.Trace is null) {
                                     continue;
                                 }
 
-                                foreach (var outerPart in loadingParamStackValue.TracedStaticFields.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
-                                    foreach (var innerPart in paramParts.PartTracingPaths) {
-                                        var substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, innerPart);
-                                        if (substitution is not null && stackTrace.TryAddOriginChain(StaticFieldUsageTrack.GenerateStackKey(method, instruction), substitution)) {
-                                            hasExternalChange = true;
+                                foreach (var outerPart in origin.Trace.TracedStaticFields.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
+                                    foreach (var innerPart in originGroup.Value.PartTracingPaths) {
+                                        var selector = new StaticFieldTracingChain(
+                                            outerPart.TracingStaticField,
+                                            innerPart.EncapsulationHierarchy,
+                                            innerPart.ComponentAccessPath);
+
+                                        var substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, selector, typeFlowSccIndex);
+                                        if (substitution is not null
+                                            && stackTrace.TryAddOriginChain(StaticFieldUsageTrack.GenerateStackKey(method, instruction), substitution)) {
+                                            hasInnerChange = true;
                                         }
                                     }
                                 }
                             }
+                        }
 
-                            // Called method reference propagation
-                            if (parameterTraces.TryGetValue(implCallee.GetIdentifier(), out var calleeStaticFieldValues)) {
-                                foreach (var paramValue in calleeStaticFieldValues) {
-                                    if (!paramValue.TracedStaticFields.TryGetValue(paramInImpl.Name, out var paramParts)) {
+                        // Direct callee side-effects on parameters:
+                        // If the callee stores a static field into one of its parameters (including `this`),
+                        // that information is already in `calleeStaticFieldValues[targetParam]` and can be
+                        // merged into the corresponding caller argument.
+                        if (calleeStaticFieldValues is not null) {
+                            foreach (var target in callerArgsByCalleeParamName) {
+                                if (!calleeStaticFieldValues.TryGetTrace(target.Key, out var directTargetEffect)) {
+                                    continue;
+                                }
+
+                                var targetKey = StaticFieldUsageTrack.GenerateStackKey(method, target.Value.LoadParam.RealPushValueInstruction);
+
+                                if (stackTrace.TryAddTrace(targetKey, directTargetEffect)) {
+                                    hasInnerChange = true;
+                                }
+
+                                if (MonoModCommon.IL.TryGetReferencedParameter(method, target.Value.LoadParam.RealPushValueInstruction, out var callerParam)) {
+                                    if (paramTrace.TryAddTrace(callerParam.Name, directTargetEffect)) {
+                                        hasExternalChange = true;
+                                    }
+                                }
+                                else if (method.HasBody && MonoModCommon.IL.TryGetReferencedVariable(method, target.Value.LoadParam.RealPushValueInstruction, out var callerVariable)) {
+                                    if (localTrace.TryAddTrace(callerVariable, directTargetEffect)) {
+                                        hasInnerChange = true;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Parameter-to-parameter callee side-effects:
+                        // Use ParameterFlowAnalyzer's parameter-mutation summary to propagate static-field
+                        // traces through the callee's internal copies (e.g. `this.F = other.G;`).
+                        if (calleeParameterFlowData?.ParameterTraces is not null) {
+                            foreach (var target in callerArgsByCalleeParamName) {
+                                if (!calleeParameterFlowData.ParameterTraces.TryGetTrace(target.Key, out var mutatedTargetTrace)) {
+                                    continue;
+                                }
+
+                                var targetKey = StaticFieldUsageTrack.GenerateStackKey(method, target.Value.LoadParam.RealPushValueInstruction);
+
+                                foreach (var originGroup in mutatedTargetTrace.ReferencedParameters) {
+                                    if (!callerArgsByCalleeParamName.TryGetValue(originGroup.Key, out var origin)
+                                        || origin.Trace is null) {
                                         continue;
                                     }
 
-                                    foreach (var outerPart in loadingParamStackValue.TracedStaticFields.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
-                                        foreach (var innerPart in paramParts.PartTracingPaths) {
+                                    foreach (var outerPart in origin.Trace.TracedStaticFields.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
+                                        foreach (var innerPart in originGroup.Value.PartTracingPaths) {
+                                            var selector = new StaticFieldTracingChain(
+                                                outerPart.TracingStaticField,
+                                                innerPart.EncapsulationHierarchy,
+                                                innerPart.ComponentAccessPath);
 
-                                            var substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, innerPart);
-                                            if (substitution is not null && stackTrace.TryAddOriginChain(loadParamKey, substitution)) {
-                                                hasExternalChange = true;
+                                            var substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, selector, typeFlowSccIndex);
+                                            if (substitution is null) {
+                                                continue;
+                                            }
+
+                                            if (stackTrace.TryAddOriginChain(targetKey, substitution)) {
+                                                hasInnerChange = true;
+                                            }
+
+                                            if (MonoModCommon.IL.TryGetReferencedParameter(method, target.Value.LoadParam.RealPushValueInstruction, out var callerParam)) {
+                                                if (paramTrace.TryAddOriginChain(callerParam.Name, substitution)) {
+                                                    hasExternalChange = true;
+                                                }
+                                            }
+                                            else if (method.HasBody && MonoModCommon.IL.TryGetReferencedVariable(method, target.Value.LoadParam.RealPushValueInstruction, out var callerVariable)) {
+                                                if (localTrace.TryAddOriginChain(callerVariable, substitution)) {
+                                                    hasInnerChange = true;
+                                                }
                                             }
                                         }
                                     }

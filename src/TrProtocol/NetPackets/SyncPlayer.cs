@@ -8,6 +8,8 @@ public partial struct SyncPlayer : INetPacket, IPlayerSlot
     public readonly MessageID Type => MessageID.SyncPlayer;
     public byte PlayerSlot { get; set; }
     public byte SkinVariant;
+    public byte VoiceVariant;
+    public float VoicePitchOffset;
     public byte Hair;
     public string Name;
     public byte HairDye;

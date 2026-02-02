@@ -1,11 +1,11 @@
-﻿using Terraria.DataStructures;
-using TrProtocol.Models.Interfaces;
+using Terraria.DataStructures;
+using TrProtocol.Models;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct Unlock : INetPacket, IPlayerSlot
+public partial struct Unlock : INetPacket
 {
     public readonly MessageID Type => MessageID.Unlock;
-    public byte PlayerSlot { get; set; }
+    public LockAction UnlockType;
     public Point16 Position;
 }

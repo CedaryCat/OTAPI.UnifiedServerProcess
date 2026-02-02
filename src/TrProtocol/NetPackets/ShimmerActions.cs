@@ -1,10 +1,9 @@
-﻿using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework;
 using TrProtocol.Attributes;
-using TrProtocol.Models.Interfaces;
 
 namespace TrProtocol.NetPackets;
 
-public partial struct ShimmerActions : INetPacket, INPCSlot
+public partial struct ShimmerActions : INetPacket
 {
     public readonly MessageID Type => MessageID.ShimmerActions;
     public byte ShimmerType;
@@ -14,8 +13,4 @@ public partial struct ShimmerActions : INetPacket, INPCSlot
     public Vector2 CoinPosition;
     [ConditionEqual(nameof(ShimmerType), 1)]
     public int CoinAmount;
-    [ConditionEqual(nameof(ShimmerType), 2)]
-    public short NPCSlot { get; set; }
-    [ConditionEqual(nameof(ShimmerType), 2)]
-    public short NPCSlotHighBits;
 }

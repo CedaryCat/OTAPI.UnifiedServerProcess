@@ -10,6 +10,8 @@ public partial struct UpdatePlayerLuckFactors : INetPacket, IPlayerSlot
     public float Torch;
     public byte Potion;
     public bool HasGardenGnomeNearby;
+    public bool BrokenMirror;
     public float Equip;
     public float Coin;
+    public byte Kite;
 }

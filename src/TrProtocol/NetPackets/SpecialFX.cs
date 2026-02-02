@@ -9,4 +9,5 @@ public partial struct SpecialFX : INetPacket
     public Point Position;
     public byte Height;
     public short Gore;
+    public bool HitTree;
 }

@@ -13,7 +13,6 @@ namespace OTAPI.UnifiedServerProcess.Core
     public static class PatchingLogic
     {
         public static void Patch(ILogger logger, ModuleDefinition module) {
-
             PatchLogic.PatchCollision(module);
             new NetworkLogicPruner(module).Prune("Terraria.Player");
 

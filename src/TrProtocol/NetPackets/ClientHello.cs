@@ -1,8 +1,7 @@
-﻿namespace TrProtocol.NetPackets
+﻿namespace TrProtocol.NetPackets;
+
+public partial struct ClientHello : INetPacket
 {
-    public partial struct ClientHello : INetPacket
-    {
-        public readonly MessageID Type => MessageID.ClientHello;
-        public string Version;
-    }
+    public readonly MessageID Type => MessageID.ClientHello;
+    public string Version;
 }

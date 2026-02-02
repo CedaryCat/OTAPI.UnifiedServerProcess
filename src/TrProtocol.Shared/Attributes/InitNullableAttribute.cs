@@ -1,13 +1,18 @@
-﻿namespace TrProtocol.Attributes
-{
+﻿namespace TrProtocol.Attributes;
 
-    /// <summary>
-    /// Used on fields or properties that are allowed to remain null after the constructor is executed
-    /// <para>The source generator will ignore the members decorated by this attribute when automatically generating the constructor</para>
-    /// <para></para>
-    /// </summary>
-    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
-    public class InitNullableAttribute : Attribute
-    {
-    }
+/// <summary>
+/// Marks a member as allowed to remain null after source-generated constructors run.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Used by <c>TrProtocol.SerializerGenerator</c> when generating constructors for automatically-serializable types.
+/// Members decorated with this attribute are ignored when computing required constructor parameters.
+/// </para>
+/// <para>
+/// For reference types, you should typically also declare the member as nullable in C# to match the intended contract.
+/// </para>
+/// </remarks>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
+public class InitNullableAttribute : Attribute
+{
 }

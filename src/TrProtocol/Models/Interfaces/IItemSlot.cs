@@ -1,7 +1,6 @@
-﻿namespace TrProtocol.Models.Interfaces
+﻿namespace TrProtocol.Models.Interfaces;
+
+public interface IItemSlot
 {
-    public interface IItemSlot
-    {
-        short ItemSlot { get; set; }
-    }
+    short ItemSlot { get; set; }
 }
