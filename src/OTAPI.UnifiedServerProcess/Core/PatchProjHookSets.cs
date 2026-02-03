@@ -20,8 +20,11 @@ public class PatchProjHookSets(ModuleDefinition module)
             return [.. rules
                 .GroupBy(r => (r.ILOffset, r.AiStyle))
                 .Select(g => {
-                    var td = StyleExtractor.TypeDomain.Universe();
-                    foreach (var r in g) td.UnionWith(r.TypeConstraint);
+                    using var it = g.GetEnumerator();
+                    if (!it.MoveNext()) throw new InvalidOperationException("Unexpected empty rule group.");
+
+                    var td = it.Current.TypeConstraint.Clone();
+                    while (it.MoveNext()) td.UnionWith(it.Current.TypeConstraint);
                     return new StyleExtractor.Rule(td, g.Key.AiStyle, g.Key.ILOffset);
                 })
                 .OrderBy(r => r.ILOffset)];
@@ -103,8 +106,8 @@ public class PatchProjHookSets(ModuleDefinition module)
 
         if (Match(ref inst,
             i => i is Instruction { 
-                OpCode.Code: Code.Ldfld, 
-                Operand: FieldReference { DeclaringType.FullName: "Terraria.ID.ProjectileID", Name: "aiStyle" } },
+                OpCode.Code: Code.Ldsfld, 
+                Operand: FieldReference { DeclaringType.FullName: "Terraria.ID.ProjectileID", Name: "Count" } },
             i => i.OpCode.Code is Code.Blt_S or Code.Blt
         )) {
             il.InsertAfter(inst.Next, Instruction.Create(OpCodes.Call, initProjHookMDef));
@@ -173,26 +176,54 @@ public class PatchProjHookSets(ModuleDefinition module)
             }
 
             // Join as union of possible values (over-approx is fine for rules).
-            public void UnionWith(TypeDomain other) {
-                if (this.Possible == null || other.Possible == null) {
-                    // Universe U X = Universe, but exclusions must be intersected (only excluded on ALL paths stay excluded).
-                    if (this.Possible != null && other.Possible == null) {
-                        // this is finite, other is universe => universe wins
-                        this.Possible = null;
-                        this.Excluded = [.. other.Excluded];
-                    }
-                    else if (this.Possible == null && other.Possible != null) {
-                        // keep universe; exclusions become intersection
-                        this.Excluded.IntersectWith(other.Excluded);
-                    }
-                    else {
-                        // both universe
-                        this.Excluded.IntersectWith(other.Excluded);
-                    }
-                    return;
+            // Returns true iff this domain changed.
+            public bool UnionWith(TypeDomain other) {
+                // Invariants:
+                // - Possible != null => this represents an explicit finite set; Excluded is ignored.
+                // - Possible == null => this represents Universe \ Excluded.
+
+                if (this.Possible != null && other.Possible != null) {
+                    var beforePossibleCount = this.Possible.Count;
+                    this.Possible.UnionWith(other.Possible);
+                    this.Excluded.Clear();
+                    return this.Possible.Count != beforePossibleCount;
                 }
 
-                this.Possible.UnionWith(other.Possible);
+                if (this.Possible == null && other.Possible == null) {
+                    // (U\E1) ∪ (U\E2) = U\(E1 ∩ E2)
+                    var beforeCount = this.Excluded.Count;
+                    this.Excluded.IntersectWith(other.Excluded);
+                    return this.Excluded.Count != beforeCount;
+                }
+
+                if (this.Possible != null && other.Possible == null) {
+                    // P ∪ (U\E) = U\(E \ P)
+                    var finite = this.Possible;
+                    this.Possible = null;
+                    this.Excluded = [.. other.Excluded];
+                    this.Excluded.ExceptWith(finite);
+                    return true;
+                }
+
+                if (this.Possible == null && other.Possible != null) {
+                    // (U\E) ∪ P = U\(E \ P)
+                    var beforeCount = this.Excluded.Count;
+                    this.Excluded.ExceptWith(other.Possible);
+                    return this.Excluded.Count != beforeCount;
+                }
+
+                throw new InvalidOperationException("Unreachable TypeDomain.UnionWith state.");
+            }
+
+            public bool SetEquals(TypeDomain other) {
+                if (ReferenceEquals(this, other)) return true;
+                if ((Possible == null) != (other.Possible == null)) return false;
+
+                if (Possible != null) {
+                    return Possible.SetEquals(other.Possible!);
+                }
+
+                return Excluded.SetEquals(other.Excluded);
             }
 
             public override string ToString() {
@@ -207,7 +238,6 @@ public class PatchProjHookSets(ModuleDefinition module)
 
         private sealed record State(TypeDomain Type, int? AiStyle);
 
-        // --- CFG ---
         private sealed class Block
         {
             public int Id;
@@ -236,11 +266,14 @@ public class PatchProjHookSets(ModuleDefinition module)
                 var list = inStates[b];
                 for (int i = 0; i < list.Count; i++) {
                     if (list[i].AiStyle == s.AiStyle) {
-                        var merged = list[i] with { Type = list[i].Type.Clone() };
-                        merged.Type.UnionWith(s.Type);
+                        var mergedType = list[i].Type.Clone();
+                        if (!mergedType.UnionWith(s.Type)) {
+                            return; // no change => no need to reprocess
+                        }
+
+                        var merged = list[i] with { Type = mergedType };
                         list[i] = merged;
-                        // re-enqueue because state changed
-                        work.Enqueue((b, list[i]));
+                        work.Enqueue((b, merged));
                         return;
                     }
                 }
@@ -253,9 +286,19 @@ public class PatchProjHookSets(ModuleDefinition module)
             Enqueue(cfg[0], new State(TypeDomain.Universe(), null));
 
             var rules = new List<Rule>();
+            const int MaxWorkItems = 2_000_000;
+            var processed = 0;
 
             while (work.Count > 0) {
+                if (++processed > MaxWorkItems) {
+                    throw new InvalidOperationException($"StyleExtractor.Extract exceeded {MaxWorkItems} work items; possible non-converging CFG traversal.");
+                }
+
                 var (b, inS) = work.Dequeue();
+
+                // Skip stale states superseded by later merges.
+                var latest = inStates[b].FirstOrDefault(x => x.AiStyle == inS.AiStyle);
+                if (latest is null || !latest.Type.SetEquals(inS.Type)) continue;
 
                 // interpret block sequentially
                 var cur = new State(inS.Type.Clone(), inS.AiStyle);
