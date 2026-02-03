@@ -112,10 +112,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 delegateCtor.DeclaringType = AdjustDelegateRef(CloneInstance((GenericInstanceType)delegateCtor.DeclaringType));
                             }
                         }
-
-                        if (inst) {
-
-                        }
                     }
                 }
             }

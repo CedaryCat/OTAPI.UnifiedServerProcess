@@ -26,7 +26,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
         public readonly Dictionary<string, MethodDefinition> AllInvocations;
         public DelegateInvocationGraph(ILogger logger, ModuleDefinition module, MethodInheritanceGraph methodInherits) : base(logger) {
 
-            Dictionary<string, DelegateInvocationData> delegateTraces = new();
+            Dictionary<string, DelegateInvocationData> delegateTraces = [];
 
             var workQueue = new Dictionary<string, MethodDefinition>(
                 module.GetAllTypes()
@@ -70,6 +70,29 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
             }
 
             AllInvocations = allInvocations.ToDictionary();
+        }
+
+        public void RemapMethodIdentifiers(IReadOnlyDictionary<string, string> oldToNew) {
+            global::OTAPI.UnifiedServerProcess.Core.Analysis.AnalysisRemap.ValidateMethodIdRemap(oldToNew);
+
+            foreach (var data in TracedDelegates.Values) {
+                data.RemapInvocationMethodIdentifiers(oldToNew);
+            }
+
+            global::OTAPI.UnifiedServerProcess.Core.Analysis.AnalysisRemap.RemapDictionaryKeysInPlace(AllInvocations, oldToNew, nameof(AllInvocations));
+
+            var remappedTraces = new Dictionary<string, DelegateInvocationData>(TracedDelegates.Count, StringComparer.Ordinal);
+            foreach (var (key, value) in TracedDelegates) {
+                var newKey = global::OTAPI.UnifiedServerProcess.Core.Analysis.AnalysisRemap.RemapModeMethodStackKey(key, oldToNew);
+                if (!remappedTraces.TryAdd(newKey, value)) {
+                    throw new InvalidOperationException($"Remapping '{nameof(TracedDelegates)}' produced a duplicate key '{newKey}'.");
+                }
+            }
+
+            TracedDelegates.Clear();
+            foreach (var (key, value) in remappedTraces) {
+                TracedDelegates.Add(key, value);
+            }
         }
 
         private void ProcessMethod(ModuleDefinition module, MethodInheritanceGraph methodInherits, MethodDefinition processingMethod, Dictionary<string, DelegateInvocationData> delegateTraces, out MethodDefinition[] requiredReloads) {
@@ -203,7 +226,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                 }
                                 // Delegate from event add
                                 else if (callingMethod.Name.OrdinalStartsWith("add_") && (callingMethod.DeclaringType.FindField(callingMethod.Name[4..])?.FieldType.IsDelegate() ?? false)) {
-                                    List<DelegateInvocationData> combinedFroms = new();
+                                    List<DelegateInvocationData> combinedFroms = [];
 
                                     var field = callingMethod.DeclaringType.FindField(callingMethod.Name[4..])!;
 
@@ -233,7 +256,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                     }
                                 }
                                 else if (callingMethod.Name.OrdinalStartsWith("remove_") && (callingMethod.DeclaringType.FindField(callingMethod.Name[7..])?.FieldType.IsDelegate() ?? false)) {
-                                    List<DelegateInvocationData> combinedFroms = new();
+                                    List<DelegateInvocationData> combinedFroms = [];
 
                                     var field = callingMethod.DeclaringType.FindField(callingMethod.Name[7..])!;
 
@@ -330,7 +353,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                             continue;
                                         }
 
-                                        List<DelegateInvocationData> combinedFroms = new();
+                                        List<DelegateInvocationData> combinedFroms = [];
 
                                         foreach (var argsPath in paths) {
 

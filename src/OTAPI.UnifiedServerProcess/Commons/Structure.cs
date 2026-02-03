@@ -289,8 +289,8 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 copied.InitLocals = copyFrom.InitLocals;
                 copied.LocalVarToken = copyFrom.LocalVarToken;
 
-                Dictionary<Instruction, Instruction> instMap = new();
-                Dictionary<VariableDefinition, VariableDefinition> varMap = new();
+                Dictionary<Instruction, Instruction> instMap = [];
+                Dictionary<VariableDefinition, VariableDefinition> varMap = [];
 
                 foreach (var local in copyFrom.Variables) {
                     var addLocal = new VariableDefinition(DeepMapTypeReference(local.VariableType, option));

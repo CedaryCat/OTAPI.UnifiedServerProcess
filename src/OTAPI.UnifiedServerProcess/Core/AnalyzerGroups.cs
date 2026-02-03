@@ -1,5 +1,7 @@
 ﻿using ModFramework;
 using Mono.Cecil;
+using System;
+using System.Collections.Generic;
 using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
@@ -7,6 +9,7 @@ using OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
+using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Loggers;
 
 namespace OTAPI.UnifiedServerProcess.Core
@@ -90,6 +93,31 @@ namespace OTAPI.UnifiedServerProcess.Core
                 DelegateInvocationGraph,
                 MethodInheritanceGraph,
                 TypeInheritanceGraph);
+        }
+
+        public void CommitMethodIdentifierRemap(IReadOnlyDictionary<string, string> oldToNew) {
+            AnalysisRemap.ValidateMethodIdRemap(oldToNew);
+
+            if (oldToNew.Count == 0) {
+                return;
+            }
+
+            MethodInheritanceGraph.RemapMethodIdentifiers(oldToNew);
+            DelegateInvocationGraph.RemapMethodIdentifiers(oldToNew);
+            MethodCallGraph.RemapMethodIdentifiers(oldToNew);
+
+            parameterFlowAnalyzer?.RemapMethodIdentifiers(oldToNew);
+            paramModificationAnalyzer?.RemapMethodIdentifiers(oldToNew);
+            staticFieldReferenceAnalyzer?.RemapMethodIdentifiers(oldToNew);
+
+            // Caches keyed by method identifiers
+            MethodCallGraph.ClearJumpSitesCache();
+            staticFieldModificationAnalyzer?.RemapMethodIdentifiers(oldToNew);
+        }
+
+        public void CommitMethodSignatureUpdate(MethodSignatureUpdateSession session) {
+            ArgumentNullException.ThrowIfNull(session);
+            CommitMethodIdentifierRemap(session.BuildOldToNewMethodIdMapAndValidate());
         }
     }
 }

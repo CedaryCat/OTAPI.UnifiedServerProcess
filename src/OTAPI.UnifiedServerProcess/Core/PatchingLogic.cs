@@ -13,7 +13,9 @@ namespace OTAPI.UnifiedServerProcess.Core
     public static class PatchingLogic
     {
         public static void Patch(ILogger logger, ModuleDefinition module) {
-            PatchLogic.PatchCollision(module);
+
+            new PatchProjHookSets(module).Patch();
+            new PatchCollision(module).Patch();
             new NetworkLogicPruner(module).Prune("Terraria.Player");
 
             var analyzers = new AnalyzerGroups(logger, module);
@@ -33,7 +35,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             new PatchChain(logger)
                 .Then(new SimplifyMacrosPatcher(logger, module))
-                .Then(new RemoveUnusedCodePatcherAtBegin(logger, module))
+                .Then(new RemoveUnusedCodePatcherAtBegin(logger, module, analyzers.MethodCallGraph))
                 .Then(new LangManagerPrePatcher(logger, module, analyzers.MethodCallGraph))
                 .Then(new SetThreadStatePatcher(logger, module, analyzers.MethodCallGraph))
 

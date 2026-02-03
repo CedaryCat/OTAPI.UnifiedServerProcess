@@ -34,6 +34,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         ];
         public static readonly List<string> forceStaticFieldFullNames = [
             "Terraria.Localization.LocalizedText.Empty",
+            "Terraria.Main.projHook",
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var modified in source.ModifiedStaticFields.ToArray()) {

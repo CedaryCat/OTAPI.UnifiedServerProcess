@@ -23,6 +23,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
 
         public IReadOnlyDictionary<string, MethodDefinition> Invocations => invocations;
         public bool TryAddInvocation(MethodDefinition method) => invocations.TryAdd(method.GetIdentifier(), method);
+        public void RemapInvocationMethodIdentifiers(IReadOnlyDictionary<string, string> oldToNew) {
+            global::OTAPI.UnifiedServerProcess.Core.Analysis.AnalysisRemap.RemapDictionaryKeysInPlace(invocations, oldToNew, "DelegateInvocationData.Invocations");
+        }
         public bool AddCombinedFrom(DelegateInvocationData other) {
 
             if (other.invocations == invocations) {
@@ -66,17 +69,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
         public static string GenerateStackKey(MethodDefinition method, Instruction loadDelegateInst) {
             if (loadDelegateInst.OpCode == OpCodes.Ldfld || loadDelegateInst.OpCode == OpCodes.Ldsfld) {
                 var field = (FieldReference)loadDelegateInst.Operand;
-                return $"Field:{field.DeclaringType.FullName}:{field.Name}";
+                return $"Field#{field.DeclaringType.FullName}→{field.Name}";
             }
             if (MonoModCommon.IL.TryGetReferencedParameter(method, loadDelegateInst, out var parameter)) {
-                return $"Param:{method.GetIdentifier()}:{parameter.GetDebugName()}";
+                return $"Param#{method.GetIdentifier()}→{parameter.GetDebugName()}";
             }
             if (method.HasBody) {
                 if (MonoModCommon.IL.TryGetReferencedVariable(method, loadDelegateInst, out var variable)) {
-                    return $"Variable:{method.GetIdentifier()}:V_{variable.Index}";
+                    return $"Variable#{method.GetIdentifier()}→V_{variable.Index}";
                 }
             }
-            return $"Others:{method.GetIdentifier()}:IL_{loadDelegateInst.Offset}";
+            return $"Others#{method.GetIdentifier()}→IL_{loadDelegateInst.Offset}";
         }
 
         public override int GetHashCode() => Key.GetHashCode();

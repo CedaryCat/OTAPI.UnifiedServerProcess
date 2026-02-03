@@ -156,9 +156,9 @@ class TileSystemPatchLogic
         Dictionary<string, Dictionary<string, MethodDefinition>> methodsReferences,
         MethodDefinition[] tileOperateMethodsArray) {
 
-        Dictionary<string, FieldDefinition> refTileFields = new();
-        Dictionary<string, MethodDefinition> visited = new();
-        Dictionary<string, MethodDefinition> refTileTransferMethods = new();
+        Dictionary<string, FieldDefinition> refTileFields = [];
+        Dictionary<string, MethodDefinition> visited = [];
+        Dictionary<string, MethodDefinition> refTileTransferMethods = [];
 
         Dictionary<string, (MethodDefinition refVersion, bool applied)> retRefModelMethodMaps = new() {
             { modder.Module.GetType("OTAPI.Hooks/Tile").Methods.First(m => m.Name == "InvokeCreate" && m.Parameters.Count == 0).GetIdentifier(), (refTile_GetTempMDef, true) },
@@ -627,7 +627,7 @@ class TileSystemPatchLogic
                                 }
                             }
                             else {
-                                HashSet<Instruction> visited = new HashSet<Instruction>();
+                                HashSet<Instruction> visited = [];
 
                                 if (paths.Count == 1) {
                                     var path = paths.First();
@@ -646,7 +646,7 @@ class TileSystemPatchLogic
                                         var loadEnd = path.Instructions.Last();
                                         if (visited.Add(loadEnd)) {
 
-                                            List<Instruction> inserts = new List<Instruction>();
+                                            List<Instruction> inserts = [];
 
                                             if (loadEnd.OpCode.OperandType is OperandType.ShortInlineBrTarget or OperandType.InlineSwitch) {
                                                 var loadObj = Instruction.Create(OpCodes.Ldobj, referenceType.ElementType);
@@ -768,8 +768,8 @@ class TileSystemPatchLogic
 
                 foreach (var instruction in method.Body.Instructions.ToArray()) {
 
-                    HashSet<MonoModCommon.Stack.StackTopTypePath> workPaths = new();
-                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = new();
+                    HashSet<MonoModCommon.Stack.StackTopTypePath> workPaths = [];
+                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = [];
 
                     switch (instruction.OpCode.Code) {
                         case Code.Call:
@@ -1003,7 +1003,7 @@ class TileSystemPatchLogic
                                         var setLocal = MonoModCommon.IL.BuildVariableStore(method, method.Body, variable);
                                         var loadLocalAddress = MonoModCommon.IL.BuildVariableLoadAddress(method, method.Body, variable);
 
-                                        List<Instruction> inserts = new List<Instruction>();
+                                        List<Instruction> inserts = [];
 
                                         if (loadEnd.OpCode.OperandType is OperandType.ShortInlineBrTarget or OperandType.InlineSwitch) {
 
@@ -1091,8 +1091,8 @@ class TileSystemPatchLogic
             void EachMethod_Adjust_LoadObjValue() {
                 foreach (var instruction in method.Body.Instructions.ToArray()) {
 
-                    HashSet<MonoModCommon.Stack.StackTopTypePath> workPaths = new();
-                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = new();
+                    HashSet<MonoModCommon.Stack.StackTopTypePath> workPaths = [];
+                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = [];
 
                     int index = -1;
                     switch (instruction.OpCode.Code) {
@@ -1467,8 +1467,8 @@ class TileSystemPatchLogic
         out Dictionary<string, Dictionary<string, MethodDefinition>> fieldReferences,
         out Dictionary<string, Dictionary<string, MethodDefinition>> methodsReferences) {
 
-        fieldReferences = new();
-        methodsReferences = new();
+        fieldReferences = [];
+        methodsReferences = [];
 
         var oldTileFullName = tileTypeOldDef.FullName;
         // relink method calls and thisfieldReference
@@ -1858,7 +1858,7 @@ class TileSystemPatchLogic
                     var retInstructions = method.Body.Instructions.Where(instruction => instruction.OpCode == OpCodes.Ret).ToArray();
 
                     Queue<MonoModCommon.Stack.StackTopTypePath> works = new();
-                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = new();
+                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = [];
                     var paths = retInstructions
                         .SelectMany(ret => MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, ret, cachedJumpTargets))
                         .SelectMany(path => MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), cachedJumpTargets))
@@ -2087,7 +2087,7 @@ class TileSystemPatchLogic
                     var invokeCallPath = invokeCallPaths[0];
                     var mfwhCallPath = mfwhCallPaths[0];
 
-                    List<Instruction> refParameterAssignments = new();
+                    List<Instruction> refParameterAssignments = [];
 
                     foreach (var index in indexes) {
                         var paramIndexExculdeThis = index;
@@ -2498,7 +2498,7 @@ class TileSystemPatchLogic
                     var jumpTargets = MonoModCommon.Stack.BuildJumpSitesMap(method);
 
                     Queue<MonoModCommon.Stack.StackTopTypePath> works = new();
-                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = new();
+                    HashSet<MonoModCommon.Stack.StackTopTypePath> visited = [];
 
                     foreach (var instruction in method.Body.Instructions) {
                         switch (instruction.OpCode.Code) {

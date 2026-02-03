@@ -21,11 +21,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
         public string Name => "StaticGenericPatcher";
 
-        readonly HashSet<string> ignoredStaticGenericFieldDeclaringFullNames = new HashSet<string>() {
+        readonly HashSet<string> ignoredStaticGenericFieldDeclaringFullNames = [
             "ReLogic.Utilities.AttributeUtilities/TypeAttributeCache`2",
             "ReLogic.Content.Asset`1",
             "Terraria.WorldBuilding.WorldGenerationOptions/OptionStorage`1",
-        };
+        ];
 
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
             ProcessTerraria_Net_NetManager(raw);

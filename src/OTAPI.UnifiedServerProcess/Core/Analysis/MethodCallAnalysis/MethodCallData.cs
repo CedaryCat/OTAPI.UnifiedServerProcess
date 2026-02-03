@@ -37,6 +37,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
             return DirectlyCalledMethod.GetIdentifier().GetHashCode();
         }
         public readonly bool Equals(MethodReferenceData other) => DirectlyCalledMethod.GetIdentifier() == other.DirectlyCalledMethod.GetIdentifier();
+        public readonly override string ToString() {
+            return $"{DirectlyCalledMethod.GetDebugName()} ({implicitCallMode}, ImplicitCount: {ImplicitlyCalledMethods.Length})";
+        }
     }
     public enum ImplicitCallMode
     {

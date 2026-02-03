@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
@@ -49,5 +50,38 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
         public IEnumerator<AggregatedParameterProvenance> GetEnumerator() => _traces.Values.GetEnumerator();
         public int Count => _traces.Count;
+
+        public void RemapKeys(Func<TKey, TKey> remapKey) {
+            ArgumentNullException.ThrowIfNull(remapKey);
+
+            if (_traces.Count == 0) {
+                return;
+            }
+
+            var remapped = new Dictionary<TKey, AggregatedParameterProvenance>(_traces.Count);
+
+            foreach (var (key, trace) in _traces) {
+                var newKey = remapKey(key);
+                if (!remapped.TryAdd(newKey, trace)) {
+                    // Merge into existing trace under the remapped key.
+                    var existing = remapped[newKey];
+                    foreach (var originGroup in trace.ReferencedParameters) {
+                        if (!existing.ReferencedParameters.TryGetValue(originGroup.Key, out var existingChains)) {
+                            existing.ReferencedParameters[originGroup.Key] = new ParameterProvenance(originGroup.Value.TracedParameter, originGroup.Value.PartTracingPaths);
+                            continue;
+                        }
+
+                        foreach (var chain in originGroup.Value.PartTracingPaths) {
+                            existingChains.PartTracingPaths.Add(chain);
+                        }
+                    }
+                }
+            }
+
+            _traces.Clear();
+            foreach (var (key, trace) in remapped) {
+                _traces.Add(key, trace);
+            }
+        }
     }
 }

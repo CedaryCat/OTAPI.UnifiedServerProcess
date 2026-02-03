@@ -26,7 +26,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
 
         [MonoMod.MonoModIgnore]
         public static void MakeDirect(this TypeDefinition type, out (MethodDefinition wrapped, MethodDefinition origin)[] wrappedMap, params MethodDefinition[] modifies) {
-            List<(MethodDefinition from, MethodDefinition to)> maps = new();
+            List<(MethodDefinition from, MethodDefinition to)> maps = [];
 
             foreach (var method in modifies.Where(m => !m.IsConstructor && !m.IsStatic && m.DeclaringType.FullName == type.FullName)) {
                 if (method.Name != "cctor" && method.Name != "ctor"/* && !method.IsVirtual*/) {

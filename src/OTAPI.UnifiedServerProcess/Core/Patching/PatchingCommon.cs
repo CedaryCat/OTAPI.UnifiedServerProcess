@@ -107,7 +107,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             Insert,
         }
         public static void InsertParamAt0AndRemapIndices(MethodBody body, InsertParamMode mode, ParameterDefinition? definition = null) {
-            if (body.Method.Name == "GetItemNameValue") {
+            if (body.Method.Name is "DyeInitializer_LoadLegacyHairdyes") {
 
             }
             if (mode is InsertParamMode.Insert) {

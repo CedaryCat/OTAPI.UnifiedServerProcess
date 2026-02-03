@@ -14,7 +14,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 
         public override void Patch() {
 
-            Dictionary<string, string> nameMap = new Dictionary<string, string>();
+            Dictionary<string, string> nameMap = [];
 
             foreach (var type in module.GetAllTypes()) {
                 foreach (var method in type.Methods) {

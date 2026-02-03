@@ -42,18 +42,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             EncapsulationHierarchy = encapsulationHierarchy?.ToImmutableArray() ?? [];
             ComponentAccessPath = componentAccessPath?.ToImmutableArray() ?? [];
             Key = ToString();
-            if (Key is "{ $this.chatLine.{Element}.parsedText.parsedText }") {
-                // BreakPoint
-            }
         }
         private ParameterTracingChain(ParameterTracingChain baseChain, MemberAccessStep encapsulationLayer) {
             TracingParameter = baseChain.TracingParameter;
             EncapsulationHierarchy = baseChain.EncapsulationHierarchy.Insert(0, encapsulationLayer);
             ComponentAccessPath = baseChain.ComponentAccessPath;
             Key = ToString();
-            if (Key is "{ $this.chatLine.{Element}.parsedText.parsedText }") {
-
-            }
         }
         public ParameterTracingChain CreateEncapsulatedArrayInstance(ArrayType arrayType)
             => CreateEncapsulatedInstance(new ArrayElementLayer(arrayType), null);

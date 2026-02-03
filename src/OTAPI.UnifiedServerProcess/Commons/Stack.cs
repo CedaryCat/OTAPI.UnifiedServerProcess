@@ -306,7 +306,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 }
 
                 // Step 2: Traverse all possible predecessors
-                HashSet<Instruction> visited = new();
+                HashSet<Instruction> visited = [];
                 Stack<Instruction> works = new();
                 bool reachUpperBound = false;
                 works.Push(lowerBound);
@@ -407,7 +407,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 cachedJumpSitess ??= BuildJumpSitesMap(method);
 
                 // Step 2: Traverse all possible predecessors
-                HashSet<Instruction> visited = new();
+                HashSet<Instruction> visited = [];
                 Stack<Instruction> works = new();
                 bool reachUpperBound = false;
 
@@ -752,7 +752,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     visited: []
                 ));
 
-                List<FlowPath<ParameterSource>> paths = new();
+                List<FlowPath<ParameterSource>> paths = [];
                 // var visited = new HashSet<(Instruction, int)>(); // Trace visited (offset, stackBalance)
 
                 while (workStack.Count > 0) {
@@ -872,7 +872,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     visited: []
                 ));
 
-                List<FlowPath<InstructionArgsSource>> paths = new();
+                List<FlowPath<InstructionArgsSource>> paths = [];
 
                 while (workStack.Count > 0) {
                     var ctx = workStack.Pop();

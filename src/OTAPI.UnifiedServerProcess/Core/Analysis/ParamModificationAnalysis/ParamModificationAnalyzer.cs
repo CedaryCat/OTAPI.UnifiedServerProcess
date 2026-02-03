@@ -2,6 +2,7 @@
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
@@ -19,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
     public class ParamModificationAnalyzer : Analyzer, IMethodImplementationFeature
     {
         public sealed override string Name => "ParamModificationAnalyzer";
-        public readonly ImmutableDictionary<string, ImmutableDictionary<int, ParameterMutationInfo>> ModifiedParameters;
+        public ImmutableDictionary<string, ImmutableDictionary<int, ParameterMutationInfo>> ModifiedParameters { get; private set; }
         readonly TypeInheritanceGraph typeInheritanceGraph;
 
         readonly DelegateInvocationGraph delegateInvocationGraph;
@@ -81,6 +82,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
             }
 
             ModifiedParameters = BuildResultDictionary(modifiedParameters);
+        }
+
+        public void RemapMethodIdentifiers(IReadOnlyDictionary<string, string> oldToNew) {
+            AnalysisRemap.ValidateMethodIdRemap(oldToNew);
+            ModifiedParameters = AnalysisRemap.RemapImmutableDictionaryKeys(ModifiedParameters, oldToNew, nameof(ModifiedParameters));
         }
         static ImmutableDictionary<string, ImmutableDictionary<int, ParameterMutationInfo>> BuildResultDictionary(Dictionary<string, Dictionary<int, ParameterMutationInfo>> contents) {
             var builder = ImmutableDictionary.CreateBuilder<string, ImmutableDictionary<int, ParameterMutationInfo>>();

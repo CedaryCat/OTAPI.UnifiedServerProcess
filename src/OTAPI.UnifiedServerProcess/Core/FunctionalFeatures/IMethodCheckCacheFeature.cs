@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod.Utils;
+using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -16,6 +17,15 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
     }
     public static class MethodCheckCacheFeatureExtension
     {
+        public static void RemapMethodIdentifiers<TFeature>(this TFeature _, IReadOnlyDictionary<string, string> oldToNew)
+            where TFeature : IMethodCheckCacheFeature {
+            AnalysisRemap.ValidateMethodIdRemap(oldToNew);
+
+            AnalysisRemap.RemapDictionaryKeysInPlace(overwriteContextBoundCheck, oldToNew, nameof(overwriteContextBoundCheck));
+            AnalysisRemap.RemapDictionaryKeysInPlace(checkUsedContextBountFieldCache, oldToNew, nameof(checkUsedContextBountFieldCache));
+            AnalysisRemap.RemapHashSetInPlace(PredefineMethodUsedContext, oldToNew, nameof(PredefineMethodUsedContext));
+        }
+
         public static bool AddPredefineMethodUsedContext<TFeature>(
             this TFeature _,
             MethodDefinition method) {
@@ -101,9 +111,6 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                             return CacheReturn(true, useCache, methodId);
                         }
                         if (instanceConvdFieldOrigMap.ContainsKey(field.GetIdentifier())) {
-                            if (field.Name == "Empty" && field.DeclaringType.Name is "LocalizedText") {
-
-                            }
                             return CacheReturn(true, useCache, methodId);
                         }
                     }
@@ -189,6 +196,14 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 var currentId = currentCheck.GetIdentifier();
 
                 if (callGraph.MediatedCallGraph.TryGetValue(currentId, out var calldata)) {
+                    if (overwriteContextBoundCheck.TryGetValue(currentId, out bool currentIsContextBound)) {
+                        if (!currentIsContextBound) {
+                            continue;
+                        }
+                        else {
+                            return CacheReturn(true, useCache, methodId);
+                        }
+                    }
                     foreach (var useds in calldata.UsedMethods) {
                         if (useds.implicitCallMode is ImplicitCallMode.Delegate) {
                             continue;

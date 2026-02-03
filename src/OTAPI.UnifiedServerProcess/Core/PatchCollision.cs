@@ -14,7 +14,7 @@ using Terraria;
 
 namespace OTAPI.UnifiedServerProcess.Core
 {
-    public partial class PatchLogic
+    public class PatchCollision(ModuleDefinition module)
     {
         static readonly HashSet<string> tlsFields = [
             nameof(Collision._cacheForConveyorBelts),
@@ -27,10 +27,10 @@ namespace OTAPI.UnifiedServerProcess.Core
                 fieldRef.Name != nameof(Collision.Epsilon) &&
                 !tlsFields.Contains(fieldRef.Name);
         }
-        public static void PatchCollision(ModuleDefinition module) {
+        public void Patch() {
 
             // Key: MethodReference identifier. Value: analysis + rewrite plan for that method.
-            Dictionary<string, MethodWithPreparedVariables> collisionStateMethodsById = new();
+            Dictionary<string, MethodWithPreparedVariables> collisionStateMethodsById = [];
 
             // Get the type definition for Terraria.Collision
             var collisionType = module.GetType("Terraria.Collision");
@@ -72,7 +72,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
 
             // Second seed: all methods across the module that *read* Collision static fields.
-            Dictionary<string, MethodWithPreparedVariables> collisionFieldReadersById = new();
+            Dictionary<string, MethodWithPreparedVariables> collisionFieldReadersById = [];
 
             foreach (var type in module.Types) {
                 foreach (var method in type.Methods) {
@@ -106,7 +106,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             // Expand callers via a shallow call graph walk (bounded to keep runtime reasonable).
             Dictionary<string, MethodWithPreparedVariables> previousDepthMethodsById = new(collisionStateMethodsById);
-            Dictionary<string, MethodWithPreparedVariables> currentDepthMethodsById = new();
+            Dictionary<string, MethodWithPreparedVariables> currentDepthMethodsById = [];
 
 
             for (int depthIndex = 0; depthIndex < 6; depthIndex++) {
@@ -163,7 +163,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             foreach (var methodData in collisionStateMethodsById.Values.ToArray()) {
                 // Names of Collision fields whose values are required later in this method body.
-                HashSet<string> pendingRequiredStateNames = new();
+                HashSet<string> pendingRequiredStateNames = [];
 
                 var reverseInstructions = methodData.Method.Body.Instructions.Reverse().ToArray();
                 foreach (var instruction in reverseInstructions) {
@@ -236,7 +236,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             int iteration = 1;
             while (signatureRewriteQueue.Count > 0) {
                 iteration++;
-                Dictionary<string, MethodWithPreparedVariables> processedThisIterationById = new();
+                Dictionary<string, MethodWithPreparedVariables> processedThisIterationById = [];
                 var queueSnapshot = signatureRewriteQueue.ToArray();
                 foreach (var queuedMethod in queueSnapshot) {
                     foreach (var kv in collisionStateMethodsById) {
@@ -768,7 +768,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
                 // First, look for direct field writes, this priority is highest
                 foreach (var instruction in Method.Body.Instructions) {
-                    if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference field && PatchLogic.IsTargetCollisionField(field)) {
+                    if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference field && IsTargetCollisionField(field)) {
                         _preferredOutParamFieldNames.Add(field.Name);
                         VariablesByFieldName.Remove(field.Name);
                         VariablesByFieldName.Add(field.Name, new VariableItem(field.Resolve(), new ParameterDefinition(field.Name, ParameterAttributes.Out, field.FieldType.MakeByReferenceType())));
@@ -776,7 +776,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
                 // Next, look for direct field calls, pre-designed as in param, but can be overridden by the following logic
                 foreach (var instruction in Method.Body.Instructions) {
-                    if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && PatchLogic.IsTargetCollisionField(field)) {
+                    if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && IsTargetCollisionField(field)) {
 
                         if (!VariablesByFieldName.TryGetValue(field.Name, out var _)) {
                             VariablesByFieldName.Add(field.Name, new VariableItem(field.Resolve(), new ParameterDefinition(field.Name, ParameterAttributes.None, field.FieldType)));

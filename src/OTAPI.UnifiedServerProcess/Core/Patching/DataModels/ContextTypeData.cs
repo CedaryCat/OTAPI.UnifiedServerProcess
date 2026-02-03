@@ -87,7 +87,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
         public ContextTypeData(
             TypeDefinition originalType,
             TypeDefinition rootContextDef,
-            ImmutableDictionary<string, MethodCallData> callGraph,
+            IReadOnlyDictionary<string, MethodCallData> callGraph,
             ref Dictionary<string, ContextTypeData> instanceConvdTypeOrigMap) {
 
             if (originalType.Name == "LocalizedText" || originalType.Name == "Lang") {
@@ -153,7 +153,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             TypeDefinition originalType,
             TypeDefinition contextDef,
             ContextTypeData? declaringType,
-            ImmutableDictionary<string, MethodCallData> callGraph,
+            IReadOnlyDictionary<string, MethodCallData> callGraph,
             out bool IsReusedSingleton,
             out FieldDefinition rootContextField,
             out MethodDefinition constructor,
@@ -196,7 +196,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             return reusedType;
         }
 
-        private static bool CheckIsReusableSingleton(TypeDefinition originalType, ImmutableDictionary<string, MethodCallData> callGraph, [NotNullWhen(true)] out MethodDefinition? constructor, out FieldDefinition? vanillaSingletonField) {
+        private static bool CheckIsReusableSingleton(TypeDefinition originalType, IReadOnlyDictionary<string, MethodCallData> callGraph, [NotNullWhen(true)] out MethodDefinition? constructor, out FieldDefinition? vanillaSingletonField) {
 
             vanillaSingletonField = null;
             constructor = null;

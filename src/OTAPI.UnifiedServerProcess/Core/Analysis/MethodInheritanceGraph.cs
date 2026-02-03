@@ -53,8 +53,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             );
         }
 
+        public void RemapMethodIdentifiers(IReadOnlyDictionary<string, string> oldToNew) {
+            AnalysisRemap.RemapDictionaryKeysInPlace(RawMethodImplementationChains, oldToNew, nameof(RawMethodImplementationChains));
+            AnalysisRemap.RemapDictionaryKeysInPlace(CheckedMethodImplementationChains, oldToNew, nameof(CheckedMethodImplementationChains));
+            AnalysisRemap.RemapDictionaryKeysInPlace(ImmediateInheritanceChains, oldToNew, nameof(ImmediateInheritanceChains));
+        }
+
         private static Dictionary<string, Dictionary<string, MethodDefinition>> GenerateInheritanceChains(Dictionary<string, Dictionary<string, MethodDefinition>> chains) {
-            Dictionary<string, Dictionary<string, MethodDefinition>> immediateInheritanceChains = new();
+            Dictionary<string, Dictionary<string, MethodDefinition>> immediateInheritanceChains = [];
 
             foreach (var kv in chains) {
                 var baseMethodId = kv.Key;

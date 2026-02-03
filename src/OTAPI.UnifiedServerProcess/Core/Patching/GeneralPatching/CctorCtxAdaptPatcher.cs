@@ -39,6 +39,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (cctor.DeclaringType.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
+                if (cctor.DeclaringType.Name is "EmergencyStacking") {
+
+                }
                 Progress(progress, cctors.Count, $"Processing .cctor of: {cctor.DeclaringType.FullName}");
 
                 var contextTypeData = arguments.OriginalToContextType[cctor.DeclaringType.FullName];

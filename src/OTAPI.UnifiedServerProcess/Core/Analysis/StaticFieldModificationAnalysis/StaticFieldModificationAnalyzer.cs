@@ -63,7 +63,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
         }
 
         private Dictionary<string, FieldDefinition> FetchModifiedFieldInner(MethodDefinition[] entryPoints, HashSet<string> ignored) {
-            var workQueue = entryPoints.ToDictionary(x => x.GetIdentifier(), x => x);
+            var workQueue = entryPoints.ToDictionary(x => x.GetIdentifier(), method => { var path = method.GetDebugName();  return (method, path); });
 
             var visited = new Dictionary<string, MethodDefinition>();
 
@@ -75,7 +75,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                 var currentWorkBatch = workQueue.Values.ToArray();
 
                 for (int progress = 0; progress < currentWorkBatch.Length; progress++) {
-                    var method = currentWorkBatch[progress];
+                    var (method, path) = currentWorkBatch[progress];
                     Progress(iteration, progress, currentWorkBatch.Length, method.GetDebugName());
                     ProcessMethod(
                         method,
@@ -95,7 +95,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                         if (visited.ContainsKey(calleeID)) {
                             continue;
                         }
-                        if (workQueue.TryAdd(calleeID, callee)) {
+                        if (workQueue.TryAdd(calleeID, (callee, path + "→" + callee.GetDebugName()))) {
                             Progress(iteration, progress, currentWorkBatch.Length, "Add: {0}", indent: 1, callee.GetDebugName());
                         }
                     }
@@ -119,9 +119,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
             }
 
             static void AddField(Dictionary<string, FieldDefinition> dict, FieldDefinition field) {
-                if (field.Name == "Empty" && field.DeclaringType.Name is "LocalizedText") {
-
-                }
                 dict.TryAdd(field.GetIdentifier(), field);
             }
 

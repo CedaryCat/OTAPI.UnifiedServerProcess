@@ -9,13 +9,26 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
     {
         public ModuleDefinition MainModule = module;
         public MethodDefinition[] InitialMethods = initialMethods;
-        public Dictionary<string, FieldDefinition> UnmodifiedStaticFields = [];
-        public Dictionary<string, FieldDefinition> ModifiedStaticFields = [];
-        public Dictionary<string, FieldDefinition> InitialStaticFields = [];
+        public Dict UnmodifiedStaticFields = [];
+        public Dict ModifiedStaticFields = [];
+        public Dict InitialStaticFields = [];
         public FilterArgument Build() => new(
             MainModule,
             [.. UnmodifiedStaticFields.Values],
             [.. ModifiedStaticFields.Values],
             [.. InitialStaticFields.Values]);
+
+        public class Dict : Dictionary<string, FieldDefinition>
+        {
+            public new bool TryAdd(string key, FieldDefinition field) {
+                if (field.Name is "projHook") {
+
+                }
+                return base.TryAdd(key, field);
+            }
+            public new bool Remove(string key) {
+                return base.Remove(key);
+            }
+        }
     }
 }

@@ -2,6 +2,7 @@ using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
@@ -18,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 {
     public sealed class StaticFieldReferenceAnalyzer : Analyzer, IMethodImplementationFeature
     {
-        public readonly ImmutableDictionary<string, StaticFieldUsageTrack> AnalyzedMethods;
+        public ImmutableDictionary<string, StaticFieldUsageTrack> AnalyzedMethods { get; private set; }
         public sealed override string Name => "StaticFieldReferenceAnalyzer";
         readonly ParameterFlowAnalyzer parameterFlowAnalyzer;
         readonly TypeInheritanceGraph typeInheritance;
@@ -82,6 +83,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             AnalyzedMethods = BuildResultDictionary(module, methodStaticFieldTraces, methodLocalVariableTraces, methodReturnTraces, methodStackTraces);
+        }
+
+        public void RemapMethodIdentifiers(IReadOnlyDictionary<string, string> oldToNew) {
+            AnalysisRemap.ValidateMethodIdRemap(oldToNew);
+
+            AnalyzedMethods = AnalysisRemap.RemapImmutableDictionaryKeys(AnalyzedMethods, oldToNew, nameof(AnalyzedMethods));
+
+            foreach (var track in AnalyzedMethods.Values) {
+                track.StaticFieldTraces.RemapKeys(key => AnalysisRemap.RemapModeMethodStackKey(key, oldToNew));
+                track.StackValueTraces.RemapKeys(key => AnalysisRemap.RemapModeMethodStackKey(key, oldToNew));
+            }
         }
 
         private static ImmutableDictionary<string, StaticFieldUsageTrack> BuildResultDictionary(

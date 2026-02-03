@@ -22,18 +22,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
         public static string GenerateStackKey(MethodDefinition method, Instruction instruction) {
             if (instruction.OpCode == OpCodes.Ldfld || instruction.OpCode == OpCodes.Ldsfld) {
                 var fieldRef = (FieldReference)instruction.Operand;
-                return $"Field:{fieldRef.DeclaringType.FullName}:{fieldRef.Name}";
+                return $"Field#{fieldRef.DeclaringType.FullName}→{fieldRef.Name}";
             }
 
             if (MonoModCommon.IL.TryGetReferencedParameter(method, instruction, out var parameter)) {
-                return $"Param:{method.GetIdentifier()}:{parameter.GetDebugName()}";
+                return $"Param#{method.GetIdentifier()}→{parameter.GetDebugName()}";
             }
 
             if (method.HasBody && MonoModCommon.IL.TryGetReferencedVariable(method, instruction, out var variable)) {
-                return $"Variable:{method.GetIdentifier()}:V_{variable.Index}";
+                return $"Variable#{method.GetIdentifier()}→V_{variable.Index}";
             }
 
-            return $"Others:{method.GetIdentifier()}:IL_{instruction.Offset:X4}";
+            return $"Others#{method.GetIdentifier()}→IL_{instruction.Offset:X4}";
         }
     }
 }

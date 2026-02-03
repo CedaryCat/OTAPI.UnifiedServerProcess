@@ -2,6 +2,7 @@
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
@@ -19,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
     public sealed class ParameterFlowAnalyzer : Analyzer, IMethodImplementationFeature
     {
-        public readonly ImmutableDictionary<string, ParameterUsageTrack> AnalyzedMethods;
+        public ImmutableDictionary<string, ParameterUsageTrack> AnalyzedMethods { get; private set; }
         public sealed override string Name => "ParamFlowAnalyzer";
 
         readonly DelegateInvocationGraph delegateInvocationGraph;
@@ -85,6 +86,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             AnalyzedMethods = BuildResultDictionary(module, methodParameterTraces, methodLocalVariableTraces, methodReturnTraces, methodStackTraces);
+        }
+
+        public void RemapMethodIdentifiers(IReadOnlyDictionary<string, string> oldToNew) {
+            AnalysisRemap.ValidateMethodIdRemap(oldToNew);
+
+            AnalyzedMethods = AnalysisRemap.RemapImmutableDictionaryKeys(AnalyzedMethods, oldToNew, nameof(AnalyzedMethods));
+
+            foreach (var track in AnalyzedMethods.Values) {
+                track.ParameterTraces.RemapKeys(key => AnalysisRemap.RemapModeMethodStackKey(key, oldToNew));
+                track.StackValueTraces.RemapKeys(key => AnalysisRemap.RemapModeMethodStackKey(key, oldToNew));
+            }
         }
 
         private static ImmutableDictionary<string, ParameterUsageTrack> BuildResultDictionary(

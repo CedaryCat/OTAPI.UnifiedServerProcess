@@ -2,10 +2,12 @@
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -79,18 +81,48 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                             }
                         }
 
-                        var implementations = this.GetMethodImplementations(method, instruction, jumpSites, out var isDelegateInvocation, true);
+                        IEnumerable<MethodDefinition> methods = [method];
+                        if (calleeRef.HasThis && calleeRef.Name != ".ctor") {
+                            HashSet<MethodDefinition> tempMethods = [];
+                            foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
+                                foreach (var stackTop in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
+                                    var stackType = stackTop.StackTopType?.TryResolve();
+                                    if (stackType is null) {
+                                        continue;
+                                    }
+                                    if (stackType.Scope.Name != module.Name) {
+                                        logger.Warn(this, 1, $"Ignore: [type:{stackType.Name}|callee: {calleeRef.GetDebugName()}] by {method.GetDebugName()}");
+                                        continue;
+                                    }
+                                    var m = stackType?.Methods.FirstOrDefault(m => 
+                                        m.GetIdentifier(false).EndsWith("." + calleeDef.GetIdentifier(false)) || // implict interface impl
+                                        m.GetIdentifier(false) == calleeDef.GetIdentifier(false));
+                                    if (m is not null) {
+                                        tempMethods.Add(m);
+                                    }
+                                }
+                            }
+                            methods = tempMethods;
+                        }
+
+                        HashSet<MethodDefinition> implementations = [];
+                        bool isDelegateInvocation = false;
+                        foreach (var m in methods) {
+                            foreach (var impl in this.GetMethodImplementations(method, instruction, jumpSites, out isDelegateInvocation, true)) {
+                                implementations.Add(impl);
+                            }
+                        }
 
                         var calleeId = calleeDef.GetIdentifier();
 
-                        if (implementations.Length == 0) {
+                        if (implementations.Count == 0) {
                             if (!calleeDef.DeclaringType.IsInterface && !calleeDef.IsAbstract && !calleeDef.DeclaringType.IsDelegate()) {
                                 unexpectedImplMissMethods.TryAdd(calleeId, calleeDef);
                             }
                         }
 
                         if (isDelegateInvocation) {
-                            AddMethod(MethodReferenceData.DelegateCall(calleeDef, implementations));
+                            AddMethod(MethodReferenceData.DelegateCall(calleeDef, [.. implementations]));
                         }
                         else {
                             AddMethod(MethodReferenceData.InheritanceCall(calleeDef, [.. implementations.Where(x => x.GetIdentifier() != calleeId)]));
@@ -159,6 +191,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
             }
 
             MediatedCallGraph = methodCallsBuilder;
+        }
+
+        public void RemapMethodIdentifiers(IReadOnlyDictionary<string, string> oldToNew) {
+            AnalysisRemap.RemapDictionaryKeysInPlace(MediatedCallGraph, oldToNew, nameof(MediatedCallGraph));
         }
     }
 }
