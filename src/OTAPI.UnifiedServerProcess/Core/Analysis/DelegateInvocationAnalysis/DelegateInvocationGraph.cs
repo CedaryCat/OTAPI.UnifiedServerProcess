@@ -19,11 +19,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
         /// <summary>
         /// The delegate traces, use <see cref="DelegateInvocationData.GenerateStackKey(MethodDefinition, Instruction)"/> to generate the key
         /// </summary>
-        public readonly ImmutableDictionary<string, DelegateInvocationData> TracedDelegates;
+        public readonly Dictionary<string, DelegateInvocationData> TracedDelegates;
         /// <summary>
         /// All delegate invocations in the module
         /// </summary>
-        public readonly ImmutableDictionary<string, MethodDefinition> AllInvocations;
+        public readonly Dictionary<string, MethodDefinition> AllInvocations;
         public DelegateInvocationGraph(ILogger logger, ModuleDefinition module, MethodInheritanceGraph methodInherits) : base(logger) {
 
             Dictionary<string, DelegateInvocationData> delegateTraces = new();
@@ -62,14 +62,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                 }
             }
 
-            TracedDelegates = delegateTraces.ToImmutableDictionary();
+            TracedDelegates = delegateTraces.ToDictionary();
 
             Dictionary<string, MethodDefinition> allInvocations = [];
             foreach (var invocation in delegateTraces.Values.SelectMany(x => x.Invocations.Values)) {
                 allInvocations.TryAdd(invocation.GetIdentifier(), invocation);
             }
 
-            AllInvocations = allInvocations.ToImmutableDictionary();
+            AllInvocations = allInvocations.ToDictionary();
         }
 
         private void ProcessMethod(ModuleDefinition module, MethodInheritanceGraph methodInherits, MethodDefinition processingMethod, Dictionary<string, DelegateInvocationData> delegateTraces, out MethodDefinition[] requiredReloads) {

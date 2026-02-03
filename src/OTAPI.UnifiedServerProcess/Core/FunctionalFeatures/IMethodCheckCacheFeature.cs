@@ -1,5 +1,6 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
+using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -100,6 +101,9 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                             return CacheReturn(true, useCache, methodId);
                         }
                         if (instanceConvdFieldOrigMap.ContainsKey(field.GetIdentifier())) {
+                            if (field.Name == "Empty" && field.DeclaringType.Name is "LocalizedText") {
+
+                            }
                             return CacheReturn(true, useCache, methodId);
                         }
                     }
@@ -158,6 +162,15 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                                     return CacheReturn(true, useCache, methodId);
                                 }
                                 worklist.Push(implMethod);
+                            }
+                        }
+                    }
+                    if (inst.OpCode == OpCodes.Newobj) {
+                        var ctor = (MethodReference)inst.Operand;
+                        if (ctor.DeclaringType.Name.OrdinalStartsWith("<")) {
+                            var movenext = ctor.DeclaringType.SafeResolve()?.Methods.FirstOrDefault(m => m.Name == "MoveNext");
+                            if (movenext is not null) {
+                                worklist.Push(movenext);
                             }
                         }
                     }

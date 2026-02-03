@@ -13,7 +13,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 GetInheritancesTypes(type);
             }
         }
-        public ImmutableDictionary<string, TypeDefinition> GetInheritancesTypes(TypeDefinition type) {
+        public Dictionary<string, TypeDefinition> GetInheritancesTypes(TypeDefinition type) {
             if (TypeInheritanceChains.TryGetValue(type.FullName, out var result)) {
                 return result;
             }
@@ -32,12 +32,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 }
                 currentType = currentType.BaseType?.TryResolve();
             }
-            result = types.ToImmutableDictionary();
+            result = types;
             TypeInheritanceChains.Add(type.FullName, result);
             return result;
         }
 
-        readonly Dictionary<string, ImmutableDictionary<string, TypeDefinition>> TypeInheritanceChains;
+        readonly Dictionary<string, Dictionary<string, TypeDefinition>> TypeInheritanceChains;
         private static List<TypeDefinition> GetTypesInInheritanceOrder(ModuleDefinition module) {
             var allTypes = new HashSet<TypeDefinition>();
             var sorted = new List<TypeDefinition>();

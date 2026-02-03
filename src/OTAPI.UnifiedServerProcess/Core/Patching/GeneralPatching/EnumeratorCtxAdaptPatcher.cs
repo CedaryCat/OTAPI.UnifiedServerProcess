@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
@@ -85,6 +86,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     continue;
                 }
 
+                if (caller.DeclaringType.FullName == ctor.DeclaringType.FullName && caller.Name.OrdinalEndsWith(".GetEnumerator")) {
+                    continue; // Skip the create method inside the GetEnumerator itself
+                }
+
                 if (caller.DeclaringType.FullName != enumeratorDef.DeclaringType.FullName) {
                     var option = new MonoModCommon.Structure.MapOption(typeReplace: new() { { enumeratorDef.DeclaringType, caller.DeclaringType } });
                     var oldEnumeratorDef = enumeratorDef;
@@ -163,6 +168,32 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ]);
 
                 ProcessEnumeratorMethod(arguments, mappedMethod, enumeratorDef, contextFieldDef, caller);
+
+                foreach (var enumerMethod in enumeratorDef.Methods) {
+                    if (!enumerMethod.Name.OrdinalEndsWith(".GetEnumerator") || !enumerMethod.HasBody) {
+                        continue;
+                    }
+                    var body = enumerMethod.Body.Instructions;
+                    var createSelf = body.FirstOrDefault(
+                        x =>
+                        x is Instruction { OpCode.Code: Code.Newobj, Operand: MethodReference mr } &&
+                        mr.DeclaringType.FullName == enumeratorDef.FullName);
+                    if (createSelf is null) {
+                        continue;
+                    }
+                    if (!MonoModCommon.IL.TryGetReferencedVariable(enumerMethod, createSelf.Next, out var local)) {
+                        throw new Exception($"Failed to get created enumerator variable in {enumerMethod.GetDebugName()}");
+                    }
+                    body.InsertRange(
+                        body.IndexOf(createSelf) + 2,
+                        [
+                            MonoModCommon.IL.BuildVariableLoad(enumerMethod, enumerMethod.Body, local),
+                            Instruction.Create(OpCodes.Ldarg_0),
+                            Instruction.Create(OpCodes.Ldfld, contextFieldRef),
+                            Instruction.Create(OpCodes.Stfld, contextFieldRef),
+                        ]
+                    );
+                }
             }
         }
 

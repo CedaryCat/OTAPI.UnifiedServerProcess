@@ -731,7 +731,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
 
                 HashSet<Instruction> tmp = [];
-                ExtractSources(this, method, tmp, inst);
+                // ExtractSources(this, method, tmp, inst);
+                ExtractSources(this, method, tmp, localMap, [inst], ignoreExtractLocalModifications);
 
                 if (IsExtractableStaticPart(source, tmp)) {
                     foreach (var staticInst in tmp) {
@@ -834,6 +835,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
 
                 var generated = methodCallChain[^1];
+                EnsureMethodHasLocals(generated, localMap);
                 var returnInst = generated.Body.Instructions.Last();
                 var ilProcessor = generated.Body.GetILProcessor();
 
@@ -1376,6 +1378,106 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 foreach (var usage in usages) {
                     if (MonoModCommon.Stack.GetPushCount(caller.Body, usage) > 0) {
                         works.Push(usage);
+                    }
+                }
+            }
+        }
+
+        static void EnsureMethodHasLocals(
+            MethodDefinition method,
+            Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap) {
+
+            foreach (var (local, _) in localMap.Values) {
+                if (!method.Body.Variables.Contains(local)) {
+                    method.Body.Variables.Add(local);
+                }
+            }
+        }
+
+        static void ExtractSources(IJumpSitesCacheFeature feature,
+            MethodDefinition caller,
+            HashSet<Instruction> transformInsts,
+            Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap,
+            IEnumerable<Instruction> extractSources,
+            HashSet<VariableDefinition>? ignoreExtractLocalModifications = null) {
+
+            const string NonFieldLocalMapKey = "<non-field>";
+
+            var jumpSite = feature.GetMethodJumpSites(caller);
+
+            Stack<Instruction> stack = [];
+            foreach (var checkSource in extractSources) {
+                stack.Push(checkSource);
+            }
+            while (stack.Count > 0) {
+                var check = stack.Pop();
+                if (!transformInsts.Add(check)) {
+                    continue;
+                }
+
+                if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
+                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(caller, check, jumpSite)) {
+                        foreach (var source in path.ParametersSources) {
+                            foreach (var inst in source.Instructions) {
+                                stack.Push(inst);
+                            }
+                        }
+                    }
+                }
+                else if (MonoModCommon.Stack.GetPopCount(caller.Body, check) > 0) {
+                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, check, jumpSite)) {
+                        foreach (var source in path.ParametersSources) {
+                            foreach (var inst in source.Instructions) {
+                                stack.Push(inst);
+                            }
+                        }
+                    }
+                }
+
+                if (MonoModCommon.IL.TryGetReferencedVariable(caller, check, out var local)) {
+                    if (ignoreExtractLocalModifications is not null && ignoreExtractLocalModifications.Contains(local)) {
+                        continue;
+                    }
+
+                    if (!localMap.TryGetValue(local, out var tuple)) {
+                        localMap.Add(local, tuple = (new VariableDefinition(local.VariableType), []));
+                    }
+                    if (!tuple.fields.TryAdd(NonFieldLocalMapKey, null!)) {
+                        continue;
+                    }
+
+                    foreach (var inst in caller.Body.Instructions) {
+                        if (!MonoModCommon.IL.TryGetReferencedVariable(caller, inst, out var otherLocal) || otherLocal.Index != local.Index) {
+                            continue;
+                        }
+                        switch (inst.OpCode.Code) {
+                            case Code.Stloc_0:
+                            case Code.Stloc_1:
+                            case Code.Stloc_2:
+                            case Code.Stloc_3:
+                            case Code.Stloc_S:
+                            case Code.Stloc:
+                                stack.Push(inst);
+                                break;
+                            case Code.Ldloc_0:
+                            case Code.Ldloc_1:
+                            case Code.Ldloc_2:
+                            case Code.Ldloc_3:
+                            case Code.Ldloc_S:
+                            case Code.Ldloc:
+                                if (!local.VariableType.IsTruelyValueType()) {
+                                    foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
+                                        stack.Push(usage);
+                                    }
+                                }
+                                break;
+                            case Code.Ldloca_S:
+                            case Code.Ldloca:
+                                foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
+                                    stack.Push(usage);
+                                }
+                                break;
+                        }
                     }
                 }
             }

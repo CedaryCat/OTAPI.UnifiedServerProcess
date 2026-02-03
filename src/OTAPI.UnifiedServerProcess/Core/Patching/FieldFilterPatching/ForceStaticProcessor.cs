@@ -32,6 +32,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             // ignore UIElement._idCounter and UniqueId, it is unused
             "Terraria.UI.UIElement",
         ];
+        public static readonly List<string> forceStaticFieldFullNames = [
+            "Terraria.Localization.LocalizedText.Empty",
+        ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var modified in source.ModifiedStaticFields.ToArray()) {
                 // thread static field will not be shared across threads
@@ -41,6 +44,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 if (forceStaticTypeFullNames.Contains(modified.Value.DeclaringType.FullName)) {
                     source.ModifiedStaticFields.Remove(modified.Key);
                 }
+            }
+            foreach (var field in forceStaticFieldFullNames) {
+                source.ModifiedStaticFields.Remove(field);
             }
         }
     }

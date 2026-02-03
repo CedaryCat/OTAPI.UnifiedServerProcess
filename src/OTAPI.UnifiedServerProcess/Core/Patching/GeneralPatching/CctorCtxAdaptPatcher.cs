@@ -172,8 +172,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                                 break;
                         }
                     }
-                    newCtorBody.Instructions.Add(copiedInst);
-                    cctor.Body.RemoveInstructionSeamlessly(this.GetMethodJumpSites(cctor), inst);
+                    if (copiedInst.Operand is Instruction jumpTarget && !transformInsts.Contains(jumpTarget)) {
+                        copiedMap.TryAdd(jumpTarget, Instruction.Create(OpCodes.Nop));
+                    }
+                }
+
+                foreach (var inst in cctor.Body.Instructions.ToArray()) {
+                    if (copiedMap.TryGetValue(inst, out var copiedInst)) {
+                        newCtorBody.Instructions.Add(copiedInst);
+                        cctor.Body.RemoveInstructionSeamlessly(this.GetMethodJumpSites(cctor), inst);
+                    }
                 }
 
                 foreach (var inst in newCtor.Body.Instructions) {

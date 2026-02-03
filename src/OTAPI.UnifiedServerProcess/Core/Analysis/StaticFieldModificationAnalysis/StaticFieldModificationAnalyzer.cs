@@ -119,7 +119,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
             }
 
             static void AddField(Dictionary<string, FieldDefinition> dict, FieldDefinition field) {
-                if (field.Name == "scutlixEyePositions") {
+                if (field.Name == "Empty" && field.DeclaringType.Name is "LocalizedText") {
 
                 }
                 dict.TryAdd(field.GetIdentifier(), field);
@@ -278,7 +278,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                                                 continue;
                                                             }
                                                             bool isLeadingChain = true;
-                                                            for (int i = 0; i < part.ComponentAccessPath.Length; i++) {
+                                                            for (int i = 0; i < part.EncapsulationHierarchy.Length; i++) {
                                                                 if (modification.ModificationAccessPath[i] != part.EncapsulationHierarchy[i]) {
                                                                     isLeadingChain = false;
                                                                     break;

@@ -7,7 +7,6 @@ using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,8 +16,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
     public class MethodCallGraph : Analyzer, IMethodImplementationFeature
     {
         public override string Name => "MethodCallGraph";
-
-        public readonly ImmutableDictionary<string, MethodCallData> MediatedCallGraph;
+        
+        public readonly Dictionary<string, MethodCallData> MediatedCallGraph;
 
         readonly DelegateInvocationGraph delegateInvocationGraph;
         readonly MethodInheritanceGraph methodInheritanceGraph;
@@ -144,7 +143,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                 }
             }
 
-            var methodCallsBuilder = ImmutableDictionary.CreateBuilder<string, MethodCallData>();
+            var methodCallsBuilder = new Dictionary<string, MethodCallData>();
             foreach (var method in allMethods.Values) {
 
                 var methodId = method.GetIdentifier();
@@ -159,7 +158,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                 methodCallsBuilder.Add(method.GetIdentifier(), new MethodCallData(method, usedMethods, usedByMethods));
             }
 
-            MediatedCallGraph = methodCallsBuilder.ToImmutable();
+            MediatedCallGraph = methodCallsBuilder;
         }
     }
 }

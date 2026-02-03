@@ -11,9 +11,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
     public class MethodInheritanceGraph
     {
-        public readonly ImmutableDictionary<string, MethodDefinition[]> RawMethodImplementationChains;
-        public readonly ImmutableDictionary<string, MethodDefinition[]> CheckedMethodImplementationChains;
-        public readonly ImmutableDictionary<string, MethodDefinition[]> ImmediateInheritanceChains;
+        public readonly Dictionary<string, MethodDefinition[]> RawMethodImplementationChains;
+        public readonly Dictionary<string, MethodDefinition[]> CheckedMethodImplementationChains;
+        public readonly Dictionary<string, MethodDefinition[]> ImmediateInheritanceChains;
 
         public MethodInheritanceGraph(params ModuleDefinition[] modules) {
             var typedMethods = new Dictionary<string, Dictionary<string, MethodDefinition>>();
@@ -38,16 +38,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 }
             }
 
-            RawMethodImplementationChains = chains.ToImmutableDictionary(
+            RawMethodImplementationChains = chains.ToDictionary(
                 kv => kv.Key,
                 kv => kv.Value.Values.ToArray()
             );
-            CheckedMethodImplementationChains = chains.ToImmutableDictionary(
+            CheckedMethodImplementationChains = chains.ToDictionary(
                 kv => kv.Key,
                 kv => kv.Value.Values.Where(m => m.Body != null).ToArray()
             );
 
-            ImmediateInheritanceChains = GenerateInheritanceChains(chains).ToImmutableDictionary(
+            ImmediateInheritanceChains = GenerateInheritanceChains(chains).ToDictionary(
                 kv => kv.Key,
                 kv => kv.Value.Values.ToArray()
             );

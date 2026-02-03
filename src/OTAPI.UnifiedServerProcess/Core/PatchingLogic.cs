@@ -79,6 +79,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .Then(new LangManagerPostPatcher(logger, module))
                 .Then(new RemoveUnusedCodePatcherAtEnd(logger, rootContextDef, module))
                 .Then(new OptimizeMacrosPatcher(logger, module))
+                .Then(new InitLocalsFixPatcher(logger, module))
 
                 .Execute();
         }

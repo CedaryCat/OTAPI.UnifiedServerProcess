@@ -107,6 +107,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             Insert,
         }
         public static void InsertParamAt0AndRemapIndices(MethodBody body, InsertParamMode mode, ParameterDefinition? definition = null) {
+            if (body.Method.Name == "GetItemNameValue") {
+
+            }
             if (mode is InsertParamMode.Insert) {
                 if (definition is null) {
                     throw new ArgumentNullException($"The {nameof(definition)} is required when {nameof(mode)} is {InsertParamMode.Insert}");
