@@ -29,6 +29,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
             }
             ClearMethodBody(module.GetType("Terraria.Lang").Method("InitGlobalSubstitutions"));
             ClearMethodBody(module.GetType("Terraria.Graphics.FinalFractalHelper/FinalFractalProfile").Method("StripDust"));
+            ClearMethodBody(module.GetType("Microsoft.Xna.Framework.GameWindow").Method("get_Title"));
 
             foreach (var method in module.GetType("Terraria.DelegateMethods/Minecart").Methods) {
                 if (method.IsConstructor || method.ReturnType.FullName != module.TypeSystem.Void.FullName) {
@@ -52,6 +53,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
             if (method.ReturnType.FullName != method.Module.TypeSystem.Void.FullName) {
                 if (method.ReturnType.IsValueType) {
                     method.Body.Instructions.Add(Instruction.Create(OpCodes.Newobj, new MethodReference(".ctor", method.Module.TypeSystem.Void, method.ReturnType)));
+                }
+                else if (method.ReturnType.FullName == module.TypeSystem.String.FullName) {
+                    method.Body.Instructions.Add(Instruction.Create(OpCodes.Ldstr, ""));
                 }
                 else {
                     method.Body.Instructions.Add(Instruction.Create(OpCodes.Ldnull));

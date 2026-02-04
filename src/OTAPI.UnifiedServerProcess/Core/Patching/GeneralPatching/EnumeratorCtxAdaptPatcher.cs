@@ -95,6 +95,26 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var oldEnumeratorDef = enumeratorDef;
                     enumeratorDef = PatchingCommon.MemberClonedType(enumeratorDef, enumeratorDef.Name, option.TypeReplaceMap);
 
+                    static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
+                        yield return (oldTypeDef, newTypeDef);
+                        foreach (var newNestedType in newTypeDef.NestedTypes) {
+                            var oldNestedType = oldTypeDef.NestedTypes.Single(ont => ont.Name == newNestedType.Name);
+                            foreach (var pair in GetTypeReplacePairs(oldNestedType, newNestedType)) {
+                                yield return pair;
+                            }
+                        }
+                    }
+                    foreach (var (otype, ntype) in GetTypeReplacePairs(oldEnumeratorDef, enumeratorDef)) {
+                        foreach (var method in ntype.Methods) {
+                            if (method.IsConstructor) {
+                                continue;
+                            }
+                            var omethod = otype.Methods.Single(m => m.GetIdentifier(withTypeName: false) == method.GetIdentifier(withTypeName: false));
+                            mappedMethod.contextBoundMethods.Add(method.GetIdentifier(), method);
+                            mappedMethod.originalToContextBound.Add(omethod.GetIdentifier(), method);
+                        }
+                    }
+
                     foreach (var redirectInst in caller.Body.Instructions) {
                         if (redirectInst.Operand is TypeReference typeRef) {
                             redirectInst.Operand = MonoModCommon.Structure.DeepMapTypeReference(typeRef, option);

@@ -326,6 +326,9 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 || ctor.Parameters[0].ParameterType.FullName != rootContextDef.FullName) {
                 return;
             }
+            if (ctor.DeclaringType.Name is "UIWorldLoad") {
+
+            }
 
             Instruction? baseCtorCall = null;
             Instruction? firstLoadRoot_shouldMoveCtorCallWhenNotNull = null;
@@ -378,6 +381,13 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             var jumpSite = point.GetMethodJumpSites(ctor);
 
             var loadPaths = MonoModCommon.Stack.AnalyzeParametersSources(ctor, baseCtorCall, jumpSite);
+
+            if (loadPaths
+                .SelectMany(p => p.ParametersSources.Skip(1)) // ignore 'this' parameter
+                .SelectMany(s => s.Instructions)
+                .Any(x => MonoModCommon.IL.TryGetReferencedVariable(ctor, x, out _))) {
+                return; 
+            }
 
             List<Instruction> movedInstructions = [];
             if (loadPaths.Length != 0 && loadPaths[0].ParametersSources.Length != 0) {

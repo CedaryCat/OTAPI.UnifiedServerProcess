@@ -30,6 +30,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
             ProcessTerraria_Net_NetManager(raw);
             ProcessTerraria_GameContent_Creative_CreativePowerManager(raw);
+            ProcessTerraria_WorldBuilding_WorldGenerationOptions(raw);
 
             foreach (var fieldKV in raw.ModifiedStaticFields.ToArray()) {
                 if (fieldKV.Value.DeclaringType.HasGenericParameters) {
@@ -91,9 +92,30 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Id.GetIdentifier());
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Name.GetIdentifier());
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Power.GetIdentifier());
-            var powersCountField = creativePowerManager.GetField("PowerTypeStorageInstance");
-            argument.ModifiedStaticFields.TryAdd(powersCountField.GetIdentifier(), powersCountField);
+
+            var powerStorageInstanceField = creativePowerManager.GetField("PowerTypeStorageInstance");
+            argument.ModifiedStaticFields.TryAdd(powerStorageInstanceField.GetIdentifier(), powerStorageInstanceField);
         }
+
+        void ProcessTerraria_WorldBuilding_WorldGenerationOptions(FilterArgumentSource argument) {
+            var worldGenerationOptions = argument.MainModule.GetType("Terraria.WorldBuilding.WorldGenerationOptions");
+            var optionStorage = argument.MainModule.GetType("Terraria.WorldBuilding.WorldGenerationOptions/OptionStorage`1");
+
+            var optionStorage_Instance = optionStorage.GetField(nameof(Terraria.WorldBuilding.WorldGenerationOptions.OptionStorage<Terraria.WorldBuilding.AWorldGenerationOption>.Instance))
+                ?? throw new Exception("Terraria.WorldBuilding.WorldGenerationOptions.OptionStorage<Terraria.WorldBuilding.AWorldGenerationOption>.Instance not found");
+
+            RefactorFieldOperate_DictionaryStorage(worldGenerationOptions, optionStorage);
+
+            argument.ModifiedStaticFields.Remove(optionStorage_Instance.GetIdentifier());
+
+            var optionsField = worldGenerationOptions.GetField("_options");
+            argument.ModifiedStaticFields.TryAdd(optionsField.GetIdentifier(), optionsField);
+
+            var optionStorageInstanceField = worldGenerationOptions.GetField("OptionStorageInstance");
+            argument.ModifiedStaticFields.TryAdd(optionStorageInstanceField.GetIdentifier(), optionStorageInstanceField);
+        }
+
+        #region
 
         public readonly struct TypeInitializationParams
         {
@@ -398,11 +420,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 genericInstancedDeclaringType.GenericArguments.Add(genericInstance.GenericArguments[0]);
                                 var genericInstancedFieldRef = new FieldReference(field.Name, field.FieldType, genericInstancedDeclaringType);
 
-                                Instruction[] insertBefores = [
-                                    Instruction.Create(OpCodes.Ldarg_0),
-                                    Instruction.Create(OpCodes.Ldfld, containerField),
-                                    Instruction.Create(OpCodes.Callvirt, genericInstancedGetMethod),
+                                Instruction[] insertBefores;
+                                if (method.IsStatic) {
+                                    insertBefores = [
+                                        Instruction.Create(OpCodes.Ldsfld, containerField),
+                                        Instruction.Create(OpCodes.Callvirt, genericInstancedGetMethod),
                                     ];
+                                }
+                                else {
+                                    insertBefores = [
+                                        Instruction.Create(OpCodes.Ldarg_0),
+                                        Instruction.Create(OpCodes.Ldfld, containerField),
+                                        Instruction.Create(OpCodes.Callvirt, genericInstancedGetMethod),
+                                    ];
+                                }
+
                                 var insertTarget = instruction;
                                 ilProcessor.InsertBeforeSeamlessly(ref insertTarget, insertBefores);
                                 insertTarget.Operand = genericInstancedFieldRef;
@@ -429,11 +461,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                     genericInstancedDeclaringType.GenericArguments.Add(genericInstance.GenericArguments[0]);
                                     var genericInstancedFieldRef = new FieldReference(field.Name, field.FieldType, genericInstancedDeclaringType);
 
-                                    Instruction[] insertBefores = [
-                                        Instruction.Create(OpCodes.Ldarg_0),
-                                        Instruction.Create(OpCodes.Ldfld, containerField),
-                                        Instruction.Create(OpCodes.Callvirt, genericInstancedGetMethod),
+                                    Instruction[] insertBefores;
+                                    if (method.IsStatic) {
+                                        insertBefores = [
+                                            Instruction.Create(OpCodes.Ldsfld, containerField),
+                                            Instruction.Create(OpCodes.Callvirt, genericInstancedGetMethod),
                                         ];
+                                    }
+                                    else {
+                                        insertBefores = [
+                                            Instruction.Create(OpCodes.Ldarg_0),
+                                            Instruction.Create(OpCodes.Ldfld, containerField),
+                                            Instruction.Create(OpCodes.Callvirt, genericInstancedGetMethod),
+                                        ];
+                                    }
+
                                     ilProcessor.InsertBeforeSeamlessly(ref loadValue, insertBefores);
                                     instruction.Operand = genericInstancedFieldRef;
                                     instruction.OpCode = OpCodes.Stfld;
@@ -447,5 +489,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
             }
         }
+        #endregion
     }
 }

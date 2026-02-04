@@ -64,7 +64,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         }
 
         public void ProcessMethod(PatcherArguments arguments, ContextBoundMethodMap mappedMethods, Dictionary<string, ClosureData> cachedClosureObjs, MethodDefinition method) {
+            if (method.Name is ".ctor" && method.DeclaringType.Name is "FreeCakeDialogue") {
 
+            }
             Dictionary<Instruction, int> instructionIndexes = [];
             Instruction[] copiedInstructions = [.. method.Body.Instructions];
             for (var i = 0; i < method.Body.Instructions.Count; i++) {
@@ -222,10 +224,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var oldClosureType = closureType;
                     closureType = PatchingCommon.MemberClonedType(closureType, closureType.Name, typeMap);
 
+                    static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
+                        yield return (oldTypeDef, newTypeDef);
+                        foreach (var newNestedType in newTypeDef.NestedTypes) {
+                            var oldNestedType = oldTypeDef.NestedTypes.Single(ont => ont.Name == newNestedType.Name);
+                            foreach (var pair in GetTypeReplacePairs(oldNestedType, newNestedType)) {
+                                yield return pair;
+                            }
+                        }
+                    }
+                    foreach (var (otype, ntype) in GetTypeReplacePairs(oldClosureType, closureType)) {
+                        foreach (var method in ntype.Methods) {
+                            if (method.IsConstructor) {
+                                continue;
+                            }
+                            var omethod = otype.Methods.Single(m => m.GetIdentifier(withTypeName: false) == method.GetIdentifier(withTypeName: false));
+                            mappedMethods.contextBoundMethods.Add(method.GetIdentifier(), method);
+                            mappedMethods.originalToContextBound.Add(omethod.GetIdentifier(), method);
+                        }
+                    }
+
                     foreach (var oldMethod in oldClosureType.Methods) {
                         var newMethod = closureType.Methods.Single(m => m.Name == oldMethod.Name);
-                        mappedMethods.originalToContextBound.Add(oldMethod.GetIdentifier(), newMethod);
-                        mappedMethods.contextBoundMethods.Add(newMethod.GetIdentifier(), newMethod);
                         ProcessMethod(arguments, mappedMethods, cachedClosureObjs, newMethod);
                     }
 
@@ -775,12 +795,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 generatedBaseCall.Body.Instructions.Add(Instruction.Create(OpCodes.Call, generatedMethodImpl));
                 generatedBaseCall.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
 
-                var compilerGeneratedAttribute = new TypeReference("System.Runtime.CompilerServices", "CompilerGeneratedAttribute", module, module.TypeSystem.CoreLibrary);
-                generatedBaseCall.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, compilerGeneratedAttribute) { HasThis = true }));
-
-                var debuggerHiddenAttribute = new TypeReference("System.Diagnostics", "DebuggerHiddenAttribute", module, module.TypeSystem.CoreLibrary);
-                generatedBaseCall.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, debuggerHiddenAttribute) { HasThis = true }));
-
+                if (!generatedBaseCall.CustomAttributes.Any(x => x.AttributeType.Name is "CompilerGeneratedAttribute")) {
+                    var compilerGeneratedAttribute = new TypeReference("System.Runtime.CompilerServices", "CompilerGeneratedAttribute", module, module.TypeSystem.CoreLibrary);
+                    generatedBaseCall.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, compilerGeneratedAttribute) { HasThis = true }));
+                }
+                if (!generatedBaseCall.CustomAttributes.Any(x => x.AttributeType.Name is "DebuggerHiddenAttribute")) {
+                    var debuggerHiddenAttribute = new TypeReference("System.Diagnostics", "DebuggerHiddenAttribute", module, module.TypeSystem.CoreLibrary);
+                    generatedBaseCall.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, debuggerHiddenAttribute) { HasThis = true }));
+                }
 
                 generatedMethodImpl = PatchingCommon.CreateMethodReference(generatedMethodImpl, generatedBaseCall);
             }

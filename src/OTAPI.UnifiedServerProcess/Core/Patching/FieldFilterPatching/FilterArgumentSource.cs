@@ -21,9 +21,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         public class Dict : Dictionary<string, FieldDefinition>
         {
             public new bool TryAdd(string key, FieldDefinition field) {
-                if (field.Name is "projHook") {
-
-                }
                 return base.TryAdd(key, field);
             }
             public new bool Remove(string key) {

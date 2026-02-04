@@ -159,10 +159,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 localVariableTraces[methodKey] = localTrace;
             }
 
-            if (method.Name == "AddVariant") {
-
-            }
-
             // build jump source mapping
             var jumpSites = this.GetMethodJumpSites(method);
             bool hasInnerChange;
@@ -897,10 +893,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         // Use ParameterFlowAnalyzer's return summary to pull static-field traces from the
                         // *caller arguments* into the call result stack slot.
                         if (calleeParameterFlowData?.ReturnValueTrace is not null) {
-
-                            if (methodRef.Name.StartsWith("get_") && method.GetIdentifier() is "Terraria.ObjectData.TileObjectData.GetTileData(System.Int32,System.Int32,System.Int32)") {
-
-                            }
 
                             foreach (var originGroup in calleeParameterFlowData.ReturnValueTrace.ReferencedParameters) {
                                 if (!callerArgsByCalleeParamName.TryGetValue(originGroup.Key, out var origin)

@@ -262,10 +262,6 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 result.IsPreserveSig = method.IsPreserveSig;
                 result.IsPInvokeImpl = method.IsPInvokeImpl;
 
-                foreach (var attrib in method.CustomAttributes) {
-                    result.CustomAttributes.Add(attrib.Clone());
-                }
-
                 foreach (var @override in method.Overrides) {
                     // TODO: implement
                     result.Overrides.Add(@override);

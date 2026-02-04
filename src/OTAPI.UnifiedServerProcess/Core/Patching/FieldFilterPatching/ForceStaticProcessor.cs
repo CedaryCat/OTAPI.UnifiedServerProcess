@@ -33,8 +33,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.UI.UIElement",
         ];
         public static readonly List<string> forceStaticFieldFullNames = [
+            // global singleton
             "Terraria.Localization.LocalizedText.Empty",
-            "Terraria.Main.projHook",
+            // lazy loading cache, should be global
+            "Terraria.Localization.LocalizedText._propertyLookupCache", 
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (var modified in source.ModifiedStaticFields.ToArray()) {
