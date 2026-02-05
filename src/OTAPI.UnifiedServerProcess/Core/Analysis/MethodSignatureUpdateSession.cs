@@ -38,9 +38,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
         private readonly Dictionary<MethodDefinition, MethodSnapshot> _before = [];
         private readonly Dictionary<MethodDefinition, Dictionary<int, (string OldType, string NewType)>> _paramTypeChanges = [];
+        private readonly Dictionary<MethodDefinition, (string OldType, string NewType)> _returnTypeChanges = [];
 
         public IReadOnlyDictionary<MethodDefinition, IReadOnlyDictionary<int, (string OldType, string NewType)>> PlannedParameterTypeChanges =>
             _paramTypeChanges.ToDictionary(kv => kv.Key, kv => (IReadOnlyDictionary<int, (string, string)>)kv.Value);
+
+        public IReadOnlyDictionary<MethodDefinition, (string OldType, string NewType)> PlannedReturnTypeChanges => _returnTypeChanges;
 
         public void PlanParameterTypeChange(MethodDefinition method, int parameterIndex, TypeReference newParameterType) {
             ArgumentNullException.ThrowIfNull(method);
@@ -75,6 +78,38 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             perMethod.Add(parameterIndex, (oldType, newType));
         }
 
+        public void PlanReturnTypeChange(MethodDefinition method, TypeReference newReturnType) {
+            ArgumentNullException.ThrowIfNull(method);
+            ArgumentNullException.ThrowIfNull(newReturnType);
+
+            var oldType = method.ReturnType.FullName;
+            var newType = newReturnType.FullName;
+
+            if (string.Equals(oldType, newType, StringComparison.Ordinal)) {
+                return;
+            }
+
+            if (!_before.ContainsKey(method)) {
+                _before.Add(method, MethodSnapshot.Capture(method));
+            }
+
+            if (_returnTypeChanges.TryGetValue(method, out var existing)) {
+                if (string.Equals(oldType, existing.NewType, StringComparison.Ordinal)
+                    && string.Equals(newType, existing.NewType, StringComparison.Ordinal)) {
+                    return;
+                }
+                if (!string.Equals(existing.OldType, oldType, StringComparison.Ordinal)) {
+                    throw new InvalidOperationException($"Method '{method.GetIdentifier()}' return old type mismatch. Expected '{existing.OldType}', found '{oldType}'.");
+                }
+                if (!string.Equals(existing.NewType, newType, StringComparison.Ordinal)) {
+                    throw new InvalidOperationException($"Method '{method.GetIdentifier()}' return new type conflict. '{existing.NewType}' vs '{newType}'.");
+                }
+                return;
+            }
+
+            _returnTypeChanges.Add(method, (oldType, newType));
+        }
+
         public Dictionary<string, string> BuildOldToNewMethodIdMapAndValidate() {
             var result = new Dictionary<string, string>(StringComparer.Ordinal);
             var newIds = new HashSet<string>(StringComparer.Ordinal);
@@ -84,11 +119,24 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
                 ValidateCompatible(beforeSnapshot, afterSnapshot);
 
-                if (!_paramTypeChanges.TryGetValue(method, out var expectedChanges) || expectedChanges.Count == 0) {
-                    throw new InvalidOperationException($"Method '{beforeSnapshot.Identifier}' is in the session but has no planned parameter type changes.");
+                var hasPlannedParamChanges = _paramTypeChanges.TryGetValue(method, out var expectedParamChanges) && expectedParamChanges.Count > 0;
+                var hasPlannedReturnChange = _returnTypeChanges.ContainsKey(method);
+
+                if (!hasPlannedParamChanges && !hasPlannedReturnChange) {
+                    throw new InvalidOperationException($"Method '{beforeSnapshot.Identifier}' is in the session but has no planned signature changes.");
                 }
 
-                ValidateOnlyExpectedParameterTypeChanges(beforeSnapshot, afterSnapshot, expectedChanges);
+                ValidateOnlyExpectedParameterTypeChanges(
+                    beforeSnapshot,
+                    afterSnapshot,
+                    expectedParamChanges ?? new Dictionary<int, (string OldType, string NewType)>()
+                );
+
+                (string OldType, string NewType)? expectedReturnChange = null;
+                if (_returnTypeChanges.TryGetValue(method, out var expectedReturn)) {
+                    expectedReturnChange = expectedReturn;
+                }
+                ValidateOnlyExpectedReturnTypeChanges(beforeSnapshot, afterSnapshot, expectedReturnChange);
 
                 var oldId = beforeSnapshot.Identifier;
                 var newId = afterSnapshot.Identifier;
@@ -117,9 +165,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             }
             if (before.GenericParameterCount != after.GenericParameterCount) {
                 throw new InvalidOperationException($"Generic parameter count changed for '{before.Identifier}': {before.GenericParameterCount} -> {after.GenericParameterCount}.");
-            }
-            if (!string.Equals(before.ReturnTypeFullName, after.ReturnTypeFullName, StringComparison.Ordinal)) {
-                throw new InvalidOperationException($"Return type changed for '{before.Identifier}': '{before.ReturnTypeFullName}' -> '{after.ReturnTypeFullName}'.");
             }
             if (before.ParameterCount != after.ParameterCount) {
                 throw new InvalidOperationException($"Parameter count changed for '{before.Identifier}': {before.ParameterCount} -> {after.ParameterCount}.");
@@ -150,6 +195,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 }
             }
         }
+
+        private static void ValidateOnlyExpectedReturnTypeChanges(
+            MethodSnapshot before,
+            MethodSnapshot after,
+            (string OldType, string NewType)? expectedChange) {
+
+            var oldType = before.ReturnTypeFullName;
+            var newType = after.ReturnTypeFullName;
+
+            if (expectedChange is { } expected) {
+                if (!string.Equals(expected.OldType, oldType, StringComparison.Ordinal)) {
+                    throw new InvalidOperationException($"Planned old return type mismatch for '{before.Identifier}'. Expected '{expected.OldType}', found '{oldType}'.");
+                }
+                if (!string.Equals(expected.NewType, newType, StringComparison.Ordinal)) {
+                    throw new InvalidOperationException($"Planned new return type mismatch for '{before.Identifier}'. Expected '{expected.NewType}', found '{newType}'.");
+                }
+            }
+            else {
+                if (!string.Equals(oldType, newType, StringComparison.Ordinal)) {
+                    throw new InvalidOperationException($"Unexpected return type change for '{before.Identifier}': '{oldType}' -> '{newType}'.");
+                }
+            }
+        }
     }
 }
-

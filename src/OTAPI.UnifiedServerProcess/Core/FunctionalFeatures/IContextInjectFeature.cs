@@ -123,7 +123,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             }
             // Create context-aware version for vanilla method references
             else {
-                methodRefToAdjust = PatchingCommon.CreateMethodReference(methodRefToAdjust, contextBoundMethod);
+                methodRefToAdjust = MonoModCommon.Structure.CreateMethodReference(methodRefToAdjust, contextBoundMethod);
             }
 
             arguments.ContextTypes.TryGetValue(contextBoundMethod.DeclaringType.FullName, out contextProvider);
@@ -325,9 +325,6 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 || ctor.Parameters.Count == 0
                 || ctor.Parameters[0].ParameterType.FullName != rootContextDef.FullName) {
                 return;
-            }
-            if (ctor.DeclaringType.Name is "UIWorldLoad") {
-
             }
 
             Instruction? baseCtorCall = null;

@@ -1,5 +1,4 @@
-﻿using Microsoft.VisualBasic.FileIO;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
@@ -7,7 +6,6 @@ using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching

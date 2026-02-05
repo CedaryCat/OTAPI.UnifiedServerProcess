@@ -1,16 +1,13 @@
 ﻿using ModFramework;
 using Mono.Cecil;
 using MonoMod.Utils;
-using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
+using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 {
@@ -21,7 +18,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public override void Patch() {
-            var runGame = module.GetType("Terraria.Program").Method("mfwh_orig_RunGame");
+            var runGame = module.GetType("Terraria.Program").GetMethod("mfwh_orig_RunGame");
             var callSetLanguage = runGame.Body.Instructions
                 .First(inst => inst.Operand is MethodReference { DeclaringType.Name: "LanguageManager", Name: "SetLanguage" });
             var getDefaultCulture = callSetLanguage.Previous;
@@ -33,7 +30,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 
             var globalInitialize = module
                 .GetType(Constants.GlobalInitializerTypeName)
-                .Method(Constants.GlobalInitializerEntryPointName);
+                .GetMethod(Constants.GlobalInitializerEntryPointName);
             globalInitialize.Body.Instructions.InsertRange(0, [
                 loadLangManagerInstance,
                 getDefaultCulture,
@@ -42,7 +39,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 
 
             var langManager = module.GetType("Terraria.Localization.LanguageManager");
-            var loadFilesForCulture = langManager.Method("LoadFilesForCulture");
+            var loadFilesForCulture = langManager.GetMethod("LoadFilesForCulture");
 
             foreach (var inst in loadFilesForCulture.Body.Instructions) {
                 if (inst.Operand is MethodReference { DeclaringType.Name: "Console" } methodRef) {
@@ -64,7 +61,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 
         public override void Patch() {
             var langManager = module.GetType("Terraria.Localization.LanguageManager");
-            var loadFilesForCulture = langManager.Method("LoadFilesForCulture");
+            var loadFilesForCulture = langManager.GetMethod("LoadFilesForCulture");
 
             foreach (var inst in loadFilesForCulture.Body.Instructions) {
                 if (inst.Operand is MethodReference { DeclaringType.Name: "Console_Placeholder_DontRedirect" } methodRef) {

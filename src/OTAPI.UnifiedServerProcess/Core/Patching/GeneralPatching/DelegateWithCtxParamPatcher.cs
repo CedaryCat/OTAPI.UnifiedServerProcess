@@ -49,7 +49,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             continue;
                         }
 
-                        targetRef.Parameters.Insert(0, new ParameterDefinition("root", ParameterAttributes.None, arguments.RootContextDef));
+                        targetRef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                         targetDef = targetRef.TryResolve();
                         if (targetDef is not null) { 
                             continue; // already created
@@ -64,7 +64,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             att |= MethodAttributes.Static;
                             var methodWithRootParam = new MethodDefinition(transfieredMethod.Name, att, transfieredMethod.ReturnType);
 
-                            methodWithRootParam.Parameters.Add(new ParameterDefinition("root", ParameterAttributes.None, arguments.RootContextDef));
+                            methodWithRootParam.Parameters.Add(new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                             foreach (var p in transfieredMethod.Parameters) {
                                 methodWithRootParam.Parameters.Add(p.Clone());
                             }

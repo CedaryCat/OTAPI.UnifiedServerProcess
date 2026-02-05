@@ -3,7 +3,6 @@ using Mono.Cecil;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis
@@ -86,7 +85,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 var interfaceDef = interfaceImpl.InterfaceType.Resolve();
 
                 foreach (var interfaceMethod in interfaceDef.Methods) {
-                    var typed = MonoModCommon.Structure.CreateTypedMethod(interfaceMethod, interfaceImpl.InterfaceType);
+                    var typed = MonoModCommon.Structure.CreateInstantiatedMethod(interfaceMethod, interfaceImpl.InterfaceType);
                     var currentType = type;
                     while (currentType is not null) {
                         var methods = typedMethods[currentType.FullName];
@@ -147,7 +146,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                     break;
                 }
                 foreach (var currentMethod in resolved.Methods) {
-                    var typed = MonoModCommon.Structure.CreateTypedMethod(currentMethod, currentType);
+                    var typed = MonoModCommon.Structure.CreateInstantiatedMethod(currentMethod, currentType);
 
                     if (typed.GetIdentifier(false) != method.GetIdentifier(false)) {
                         continue;

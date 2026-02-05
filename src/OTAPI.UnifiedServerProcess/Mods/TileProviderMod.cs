@@ -74,13 +74,13 @@ class TileSystemPatchLogic
         tileCreate = tileTypeDef.Methods.Single(x => x.Name == nameof(TileData.New) && x.Parameters.Count == 0);
         tileCreateWithExistingTile = tileTypeDef.Methods.Single(x => x.Name == nameof(TileData.New) && x.Parameters.Count == 1);
 
-        refTile_GetTempMDef = refTileTypeDef.Method("get_" + nameof(RefTileData.Temporary));
-        refTile_GetDataMDef = refTileTypeDef.Method("get_" + nameof(RefTileData.Data));
+        refTile_GetTempMDef = refTileTypeDef.GetMethod("get_" + nameof(RefTileData.Temporary));
+        refTile_GetDataMDef = refTileTypeDef.GetMethod("get_" + nameof(RefTileData.Data));
 
         tileCollectionDef = modder.Module.GetDefinition<Terraria.TileCollection>();
-        tileCollection_CreateMDef = tileCollectionDef.Method(nameof(TileCollection.Create));
-        tileCollection_getItemMDef = tileCollectionDef.Method("get_Item");
-        tileCollection_GetRefTileMDef = tileCollectionDef.Method(nameof(TileCollection.GetRefTile));
+        tileCollection_CreateMDef = tileCollectionDef.GetMethod(nameof(TileCollection.Create));
+        tileCollection_getItemMDef = tileCollectionDef.GetMethod("get_Item");
+        tileCollection_GetRefTileMDef = tileCollectionDef.GetMethod(nameof(TileCollection.GetRefTile));
 
         tileCollectionFieldDefInMain = modder.Module.GetType(typeof(Terraria.Main).FullName).FindField(nameof(Main.tile))!;
         tileCollectionDefOld = tileCollectionFieldDefInMain.FieldType;
@@ -163,7 +163,7 @@ class TileSystemPatchLogic
         Dictionary<string, (MethodDefinition refVersion, bool applied)> retRefModelMethodMaps = new() {
             { modder.Module.GetType("OTAPI.Hooks/Tile").Methods.First(m => m.Name == "InvokeCreate" && m.Parameters.Count == 0).GetIdentifier(), (refTile_GetTempMDef, true) },
             { tileCreate.GetIdentifier(), (refTile_GetTempMDef, true) },
-            { tileCollectionDef.Method("get_Item").GetIdentifier(), (tileCollection_GetRefTileMDef, true) }
+            { tileCollectionDef.GetMethod("get_Item").GetIdentifier(), (tileCollection_GetRefTileMDef, true) }
         };
 
         foreach (var method in tileOperateMethodsArray) {
@@ -577,7 +577,7 @@ class TileSystemPatchLogic
                                     switch (topInstruction.OpCode.Code) {
                                         case Code.Ldnull:
                                             topInstruction.OpCode = OpCodes.Call;
-                                            topInstruction.Operand = tileTypeDef.Method("get_" + nameof(TileData.NULLREF));
+                                            topInstruction.Operand = tileTypeDef.GetMethod("get_" + nameof(TileData.NULLREF));
                                             break;
                                         case Code.Ldarg_0:
                                         case Code.Ldarg_1:
@@ -613,7 +613,7 @@ class TileSystemPatchLogic
                                                 topInstruction.OpCode = OpCodes.Call;
                                                 if (calleeRef.Parameters.Count == 0) {
                                                     topInstruction.OpCode = OpCodes.Call;
-                                                    topInstruction.Operand = tileTypeDef.Method("get_" + nameof(TileData.EMPTYREF));
+                                                    topInstruction.Operand = tileTypeDef.GetMethod("get_" + nameof(TileData.EMPTYREF));
                                                 }
                                                 else {
                                                     topInstruction.OpCode = OpCodes.Call;
@@ -633,7 +633,7 @@ class TileSystemPatchLogic
                                     var path = paths.First();
                                     if (path.Instructions.Length == 1 && path.Instructions[0].OpCode == OpCodes.Call) {
                                         var call = (MethodReference)path.Instructions[0].Operand!;
-                                        if (call.GetIdentifier() == tileTypeDef.Method("get_" + nameof(TileData.NULLREF)).GetIdentifier()) {
+                                        if (call.GetIdentifier() == tileTypeDef.GetMethod("get_" + nameof(TileData.NULLREF)).GetIdentifier()) {
                                             path.Instructions[0].OpCode = OpCodes.Ldsfld;
                                             path.Instructions[0].Operand = tileTypeDef.Fields.Single(f => f.Name == nameof(TileData.NULL));
                                             break;
@@ -971,7 +971,7 @@ class TileSystemPatchLogic
                             switch (loadBegin.OpCode.Code) {
                                 case Code.Ldnull:
                                     loadBegin.OpCode = OpCodes.Call;
-                                    loadBegin.Operand = tileTypeDef.Method("get_" + nameof(TileData.NULLREF));
+                                    loadBegin.Operand = tileTypeDef.GetMethod("get_" + nameof(TileData.NULLREF));
                                     break;
                                 case Code.Call:
                                 case Code.Callvirt:
@@ -987,7 +987,7 @@ class TileSystemPatchLogic
 
                                     if (loadField is not null && loadField.DeclaringType.FullName == tileTypeDef.FullName && loadField.Name == nameof(TileData.NULL)) {
                                         loadBegin.OpCode = OpCodes.Call;
-                                        loadBegin.Operand = tileTypeDef.Method("get_" + nameof(TileData.NULLREF));
+                                        loadBegin.Operand = tileTypeDef.GetMethod("get_" + nameof(TileData.NULLREF));
                                     }
                                     else if (loadField is not null && !loadField.Resolve().IsInitOnly) {
                                         if (loadBegin.OpCode == OpCodes.Ldfld) {
@@ -1334,7 +1334,7 @@ class TileSystemPatchLogic
                         }
                         iLProcessor.InsertAfter(instructionEnterSet, [
                             MonoModCommon.IL.BuildVariableLoadAddress(method, method.Body, variable_tile),
-                            Instruction.Create(OpCodes.Call, tileTypeDef.Method(nameof(TileData.GetLock))),
+                            Instruction.Create(OpCodes.Call, tileTypeDef.GetMethod(nameof(TileData.GetLock))),
                             MonoModCommon.IL.BuildVariableStore(method, method.Body, variable_lock),
                         ]);
                     }
@@ -1947,7 +1947,7 @@ class TileSystemPatchLogic
                             switch (topInstruction.OpCode.Code) {
                                 case Code.Ldnull:
                                     topInstruction.OpCode = OpCodes.Call;
-                                    topInstruction.Operand = tileTypeDef.Method("get_" + nameof(TileData.NULLREF));
+                                    topInstruction.Operand = tileTypeDef.GetMethod("get_" + nameof(TileData.NULLREF));
                                     break;
                                 case Code.Ldarg_0:
                                 case Code.Ldarg_1:
@@ -1983,7 +1983,7 @@ class TileSystemPatchLogic
                                         topInstruction.OpCode = OpCodes.Call;
                                         if (calleeRef.Parameters.Count == 0) {
                                             topInstruction.OpCode = OpCodes.Call;
-                                            topInstruction.Operand = tileTypeDef.Method("get_" + nameof(TileData.EMPTYREF));
+                                            topInstruction.Operand = tileTypeDef.GetMethod("get_" + nameof(TileData.EMPTYREF));
                                         }
                                         else {
                                             topInstruction.OpCode = OpCodes.Call;
@@ -2046,8 +2046,8 @@ class TileSystemPatchLogic
                     if (!delegateDef.IsDelegate()) {
                         continue;
                     }
-                    var beginInvoke = delegateDef.Method("BeginInvoke");
-                    var invoke = delegateDef.Method("Invoke");
+                    var beginInvoke = delegateDef.GetMethod("BeginInvoke");
+                    var invoke = delegateDef.GetMethod("Invoke");
                     for (int i = 0; i < method.Parameters.Count; i++) {
                         beginInvoke.Parameters[i] = method.Parameters[i].Clone();
                         invoke.Parameters[i] = method.Parameters[i].Clone();
@@ -2545,11 +2545,11 @@ class TileSystemPatchLogic
                                                         newIndexes = [.. indexes.Select(index => index + 1)];
                                                     }
 
-                                                    var delegateInvoke = declaringType.Method("Invoke");
+                                                    var delegateInvoke = declaringType.GetMethod("Invoke");
                                                     if (!database.TryAdd(delegateInvoke.GetIdentifier(), newIndexes)) {
                                                         database[delegateInvoke.GetIdentifier()] = indexes;
                                                     }
-                                                    delegateInvoke = declaringType.Method("BeginInvoke");
+                                                    delegateInvoke = declaringType.GetMethod("BeginInvoke");
                                                     if (!database.TryAdd(delegateInvoke.GetIdentifier(), newIndexes)) {
                                                         database[delegateInvoke.GetIdentifier()] = indexes;
                                                     }

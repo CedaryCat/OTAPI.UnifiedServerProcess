@@ -1,7 +1,6 @@
-﻿using ModFramework;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
-using MonoMod.Cil;
+using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,7 +13,7 @@ public class PatchProjHookSets(ModuleDefinition module)
 {
     public void Patch() {
 
-        var setDefaultsMDef = module.GetType("Terraria.Projectile").Method(nameof(Projectile.mfwh_SetDefaults));
+        var setDefaultsMDef = module.GetType("Terraria.Projectile").GetMethod(nameof(Projectile.mfwh_SetDefaults));
 
         static List<StyleExtractor.Rule> CoalesceByAssignmentSite(IEnumerable<StyleExtractor.Rule> rules) {
             return [.. rules
@@ -43,9 +42,9 @@ public class PatchProjHookSets(ModuleDefinition module)
 
         mainTDef.Methods.Add(initProjHookMDef);
 
-        var mfwh_Initialize_AlmostEverything = mainTDef.Method(nameof(Main.mfwh_Initialize_AlmostEverything));
+        var mfwh_Initialize_AlmostEverything = mainTDef.GetMethod(nameof(Main.mfwh_Initialize_AlmostEverything));
 
-        var field = mainTDef.Field("projHook");
+        var field = mainTDef.GetField("projHook");
 
         //for (int i = 0; i < ProjectileID.Count; i++) {
         //    var proj = new Projectile();

@@ -44,6 +44,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var convertedMethodOrigMap = mappedMethods.originalToContextBound;
             var contextBoundMethods = mappedMethods.contextBoundMethods;
 
+            
+            foreach (var dele in module.GetType($"{Constants.DelegatesNameSpace}.{Constants.CtxDelegatesContainerName}").NestedTypes) {
+                var md = dele.GetMethod(nameof(Action.Invoke));
+                var oldkey = md.GetIdentifier();
+                md.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
+                convertedMethodOrigMap.Add(oldkey, md);
+                contextBoundMethods.Add(md.GetIdentifier(), md);
+
+                md = dele.GetMethod(nameof(Action.BeginInvoke));
+                oldkey = md.GetIdentifier();
+                md.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
+                convertedMethodOrigMap.Add(oldkey, md);
+                contextBoundMethods.Add(md.GetIdentifier(), md);
+            }
+
             foreach (var predefined in arguments.ContextTypes.Values.Where(t => t.IsPredefined)) {
                 foreach (var kv in predefined.PredefinedMethodMap) {
                     var method = kv.Value;
@@ -263,7 +278,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         if (m.Name != vanillaMethod.Name) {
                             continue;
                         }
-                        var typed = MonoModCommon.Structure.CreateTypedMethod(m, baseType);
+                        var typed = MonoModCommon.Structure.CreateInstantiatedMethod(m, baseType);
                         if (typed.GetIdentifier(false) != vanillaMethod.GetIdentifier(false)) {
                             continue;
                         }

@@ -451,34 +451,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 
             return [.. result];
         }
-        public static MethodReference CreateMethodReference(MethodReference origiReference, MethodDefinition definition) {
-            TypeReference declaringType = definition.DeclaringType;
-            if (origiReference.DeclaringType is GenericInstanceType origiGenericType) {
-                var genericType = new GenericInstanceType(declaringType);
-                foreach (var genArg in origiGenericType.GenericArguments) {
-                    genericType.GenericArguments.Add(genArg);
-                }
-                declaringType = genericType;
-            }
-            var callee = new MethodReference(definition.Name, definition.ReturnType, declaringType) {
-                HasThis = definition.HasThis
-            };
-            foreach (var genParam in definition.GenericParameters) {
-                callee.GenericParameters.Add(genParam.Clone());
-            }
-            foreach (var param in definition.Parameters) {
-                callee.Parameters.Add(param.Clone());
-            }
-            if (origiReference is GenericInstanceMethod genericMethod) {
-                var gerericCallee = new GenericInstanceMethod(callee);
-                foreach (var genArg in genericMethod.GenericArguments) {
-                    gerericCallee.GenericArguments.Add(genArg);
-                }
-                callee = gerericCallee;
-            }
-
-            return callee;
-        }
         public static MethodReference GetVanillaMethodRef(TypeDefinition rootContextType, ImmutableDictionary<string, ContextTypeData> instanceConvdTypes, MethodReference method) {
             TypeReference declaringType = method.DeclaringType;
             bool hasThis = method.HasThis;
@@ -532,94 +504,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             }
 
             return vanilla;
-        }
-        public static TypeDefinition MemberClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition>? mappedTypes = null, Dictionary<MethodDefinition, MethodDefinition>? mappedMethods = null) {
-            mappedTypes ??= [];
-            mappedMethods ??= [];
-            var inputTypes = mappedTypes.ToDictionary();
-            var mapCondition = new MonoModCommon.Structure.MapOption(mappedTypes, mappedMethods, [], []);
-
-            static TypeDefinition ClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition> mappedTypes) {
-
-                var copied = new TypeDefinition(type.Namespace, newName, type.Attributes, type.BaseType);
-                mappedTypes.Add(type, copied);
-
-                foreach (var nested in type.NestedTypes) {
-                    ClonedType(nested, nested.Name, mappedTypes);
-                }
-
-                copied.GenericParameters.AddRange(type.GenericParameters.Select(p => p.Clone()));
-                copied.CustomAttributes.AddRange(type.CustomAttributes);
-
-                if (type.DeclaringType is not null) {
-                    var declaringType = type.DeclaringType;
-                    if (mappedTypes.TryGetValue(declaringType, out var copiedDeclaringType)) {
-                        declaringType = copiedDeclaringType;
-                    }
-                    declaringType.NestedTypes.Add(copied);
-                }
-                else {
-                    type.Module.Types.Add(copied);
-                }
-
-                return copied;
-            }
-            static void ClonedMember(TypeDefinition from,
-                MonoModCommon.Structure.MapOption mapContext) {
-                var copied = mapContext.TypeReplaceMap[from];
-
-                foreach (var interfaceImpl in from.Interfaces) {
-                    copied.Interfaces.Add(new InterfaceImplementation(MonoModCommon.Structure.DeepMapTypeReference(interfaceImpl.InterfaceType, mapContext)));
-                }
-
-                foreach (var field in from.Fields) {
-                    var copiedField = new FieldDefinition(field.Name, field.Attributes, MonoModCommon.Structure.DeepMapTypeReference(field.FieldType, mapContext));
-                    copied.Fields.Add(copiedField);
-                }
-
-                foreach (var method in from.Methods) {
-                    var copiedMethod = MonoModCommon.Structure.DeepMapMethodDef(method, mapContext, false);
-                    copied.Methods.Add(copiedMethod);
-                }
-
-                foreach (var property in from.Properties) {
-                    copied.Properties.Add(new PropertyDefinition(property.Name, property.Attributes, property.PropertyType) {
-                        GetMethod = property.GetMethod is null ? null : mapContext.MethodReplaceMap[property.GetMethod],
-                        SetMethod = property.SetMethod is null ? null : mapContext.MethodReplaceMap[property.SetMethod]
-                    });
-                }
-
-                foreach (var _event in from.Events) {
-                    copied.Events.Add(new EventDefinition(_event.Name, _event.Attributes, _event.EventType) {
-                        AddMethod = _event.AddMethod is null ? null : mapContext.MethodReplaceMap[_event.AddMethod],
-                        RemoveMethod = _event.RemoveMethod is null ? null : mapContext.MethodReplaceMap[_event.RemoveMethod]
-                    });
-                }
-            }
-
-            var copied = ClonedType(type, newName, mappedTypes);
-            foreach (var to in mappedTypes.Keys) {
-                foreach (var gp in to.GenericParameters) {
-                    for (int i = 0; i < gp.Constraints.Count; i++) {
-                        var constraint = gp.Constraints[i];
-                        var copiedConstraint = MonoModCommon.Structure.DeepMapTypeReference(constraint.ConstraintType, mapCondition);
-                        gp.Constraints[i] = new GenericParameterConstraint(copiedConstraint);
-                    }
-                }
-            }
-
-            foreach (var from in mappedTypes.Keys) {
-                if (inputTypes.ContainsKey(from)) {
-                    continue;
-                }
-                ClonedMember(from, mapCondition);
-            }
-
-            foreach (var kv in mappedMethods) {
-                kv.Value.Body = MonoModCommon.Structure.DeepMapMethodBody(kv.Key, kv.Value, mapCondition);
-            }
-
-            return copied;
         }
     }
 }

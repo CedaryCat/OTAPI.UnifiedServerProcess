@@ -1,10 +1,10 @@
-﻿using ModFramework;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
+using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
@@ -27,9 +27,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
                     ClearMethodBody(method);
                 }
             }
-            ClearMethodBody(module.GetType("Terraria.Lang").Method("InitGlobalSubstitutions"));
-            ClearMethodBody(module.GetType("Terraria.Graphics.FinalFractalHelper/FinalFractalProfile").Method("StripDust"));
-            ClearMethodBody(module.GetType("Microsoft.Xna.Framework.GameWindow").Method("get_Title"));
+            ClearMethodBody(module.GetType("Terraria.Lang").GetMethod("InitGlobalSubstitutions"));
+            ClearMethodBody(module.GetType("Terraria.Graphics.FinalFractalHelper/FinalFractalProfile").GetMethod("StripDust"));
+            ClearMethodBody(module.GetType("Microsoft.Xna.Framework.GameWindow").GetMethod("get_Title"));
 
             foreach (var method in module.GetType("Terraria.DelegateMethods/Minecart").Methods) {
                 if (method.IsConstructor || method.ReturnType.FullName != module.TypeSystem.Void.FullName) {
@@ -39,10 +39,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
             }
 
             var mountTypeDef = module.GetType("Terraria.Mount");
-            ClearMethodBody(mountTypeDef.Method("MeowcartLandingSound"));
-            ClearMethodBody(mountTypeDef.Method("MeowcartBumperSound"));
+            ClearMethodBody(mountTypeDef.GetMethod("MeowcartLandingSound"));
+            ClearMethodBody(mountTypeDef.GetMethod("MeowcartBumperSound"));
 
-            ClearExHandler(module.GetType("Terraria.Localization.LanguageManager").Method("LoadFromContentSources")); 
+            ClearExHandler(module.GetType("Terraria.Localization.LanguageManager").GetMethod("LoadFromContentSources")); 
         }
 
         private void ClearMethodBody(MethodDefinition method) {

@@ -93,7 +93,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (caller.DeclaringType.FullName != enumeratorDef.DeclaringType.FullName) {
                     var option = new MonoModCommon.Structure.MapOption(typeReplace: new() { { enumeratorDef.DeclaringType, caller.DeclaringType } });
                     var oldEnumeratorDef = enumeratorDef;
-                    enumeratorDef = PatchingCommon.MemberClonedType(enumeratorDef, enumeratorDef.Name, option.TypeReplaceMap);
+                    enumeratorDef = MonoModCommon.Structure.MemberClonedType(enumeratorDef, enumeratorDef.Name, option.TypeReplaceMap);
 
                     static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
                         yield return (oldTypeDef, newTypeDef);

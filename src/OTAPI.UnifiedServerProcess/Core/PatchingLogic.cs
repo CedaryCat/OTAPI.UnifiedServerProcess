@@ -1,10 +1,10 @@
-﻿using ModFramework;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching;
+using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 
@@ -23,8 +23,8 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             var main = module.GetType("Terraria.Main");
 
-            MethodDefinition[] entryPoints = [main.Method("DedServ")];
-            MethodDefinition[] initialMethods = [main.Method("Initialize"), main.Method("Initialize_AlmostEverything"), main.Method("PostContentLoadInitialize")];
+            MethodDefinition[] entryPoints = [main.GetMethod("DedServ")];
+            MethodDefinition[] initialMethods = [main.GetMethod("Initialize"), main.GetMethod("Initialize_AlmostEverything"), main.GetMethod("PostContentLoadInitialize")];
 
             analyzers.StaticFieldModificationAnalyzer.FetchModifiedFields(
                 entryPoints, initialMethods,
@@ -44,7 +44,8 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .RegisterProcessor(new AddEventsProcessor())
                 .RegisterProcessor(new AddHooksProcessor())
                 .RegisterProcessor(new ServerNetmodeProcessor())
-                .RegisterProcessor(new DelegateWithCtxParamProcessor(rootContextDef))
+                // .RegisterProcessor(new DelegateWithCtxParamProcessor(rootContextDef))
+                .RegisterProcessor(new DelegatePlaceholderProcessor(rootContextDef, analyzers))
                 .RegisterProcessor(new ForceStaticProcessor())
                 .RegisterProcessor(new ForceInstanceProcessor())
                 .RegisterProcessor(new StaticGenericProcessor())

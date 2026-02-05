@@ -5,8 +5,6 @@ using ModFramework;
 using System;
 using System.Buffers;
 using System.Net.Sockets;
-using Terraria.Net;
-using Terraria.Net.Sockets;
 using Terraria.Social;
 
 [Modification(ModType.PreWrite, "Add Method to ISocket", ModPriority.Early)]

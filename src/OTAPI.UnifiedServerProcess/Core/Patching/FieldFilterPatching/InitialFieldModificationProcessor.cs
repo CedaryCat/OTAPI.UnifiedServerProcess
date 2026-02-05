@@ -39,8 +39,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             var globalInitializer = source.MainModule.GetType(Constants.GlobalInitializerTypeName);
             var initializerAttribute = source.MainModule.GetType(Constants.InitializerAttributeTypeName);
 
-            var main_PostContentLoadInitialize = source.MainModule.GetType("Terraria.Main").Method("PostContentLoadInitialize");
-            var main_LoadPlayers = source.MainModule.GetType("Terraria.Main").Method("LoadPlayers");
+            var main_PostContentLoadInitialize = source.MainModule.GetType("Terraria.Main").GetMethod("PostContentLoadInitialize");
+            var main_LoadPlayers = source.MainModule.GetType("Terraria.Main").GetMethod("LoadPlayers");
 
             var workQueue = new Stack<MethodDefinition>(source.InitialMethods);
             var visited = new Dictionary<string, MethodDefinition>() {
@@ -789,7 +789,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             if (patch && canExtractStaticPart && extractedStaticInsts.Count > 0) {
 
-                MethodDefinition[] origMethodCallChain = [globalInitializer.Method(Constants.GlobalInitializerEntryPointName), .. callStack];
+                MethodDefinition[] origMethodCallChain = [globalInitializer.GetMethod(Constants.GlobalInitializerEntryPointName), .. callStack];
                 MethodDefinition[] methodCallChain = new MethodDefinition[origMethodCallChain.Length];
                 for (int i = 0; i < origMethodCallChain.Length; i++) {
                     MethodDefinition chainedMethod = origMethodCallChain[i];

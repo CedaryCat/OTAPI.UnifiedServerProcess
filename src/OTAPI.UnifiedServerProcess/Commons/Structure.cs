@@ -37,6 +37,34 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     throw new InvalidOperationException("Unknown generic TracingParameter");
                 }
             }
+            public static MethodReference CreateMethodReference(MethodReference origiReference, MethodDefinition definition) {
+                TypeReference declaringType = definition.DeclaringType;
+                if (origiReference.DeclaringType is GenericInstanceType origiGenericType) {
+                    var genericType = new GenericInstanceType(declaringType);
+                    foreach (var genArg in origiGenericType.GenericArguments) {
+                        genericType.GenericArguments.Add(genArg);
+                    }
+                    declaringType = genericType;
+                }
+                var callee = new MethodReference(definition.Name, definition.ReturnType, declaringType) {
+                    HasThis = definition.HasThis
+                };
+                foreach (var genParam in definition.GenericParameters) {
+                    callee.GenericParameters.Add(genParam.Clone());
+                }
+                foreach (var param in definition.Parameters) {
+                    callee.Parameters.Add(param.Clone());
+                }
+                if (origiReference is GenericInstanceMethod genericMethod) {
+                    var gerericCallee = new GenericInstanceMethod(callee);
+                    foreach (var genArg in genericMethod.GenericArguments) {
+                        gerericCallee.GenericArguments.Add(genArg);
+                    }
+                    callee = gerericCallee;
+                }
+
+                return callee;
+            }
             public readonly struct MapOption
             {
                 public MapOption() {
@@ -396,8 +424,109 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                 return copied;
             }
+            public static TypeDefinition MemberClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition>? mappedTypes = null, Dictionary<MethodDefinition, MethodDefinition>? mappedMethods = null) {
+                mappedTypes ??= [];
+                mappedMethods ??= [];
+                var inputTypes = mappedTypes.ToDictionary();
+                var mapCondition = new MonoModCommon.Structure.MapOption(mappedTypes, mappedMethods, [], []);
 
-            public static MethodReference CreateTypedMethod(MethodReference impl) {
+                static TypeDefinition ClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition> mappedTypes) {
+
+                    var copied = new TypeDefinition(type.Namespace, newName, type.Attributes, type.BaseType);
+                    mappedTypes.Add(type, copied);
+
+                    foreach (var nested in type.NestedTypes) {
+                        ClonedType(nested, nested.Name, mappedTypes);
+                    }
+
+                    copied.GenericParameters.AddRange(type.GenericParameters.Select(p => p.Clone()));
+                    copied.CustomAttributes.AddRange(type.CustomAttributes);
+
+                    if (type.DeclaringType is not null) {
+                        var declaringType = type.DeclaringType;
+                        if (mappedTypes.TryGetValue(declaringType, out var copiedDeclaringType)) {
+                            declaringType = copiedDeclaringType;
+                        }
+                        declaringType.NestedTypes.Add(copied);
+                    }
+                    else {
+                        type.Module.Types.Add(copied);
+                    }
+
+                    return copied;
+                }
+                static void ClonedMember(TypeDefinition from,
+                    MonoModCommon.Structure.MapOption mapContext) {
+                    var copied = mapContext.TypeReplaceMap[from];
+
+                    foreach (var interfaceImpl in from.Interfaces) {
+                        copied.Interfaces.Add(new InterfaceImplementation(MonoModCommon.Structure.DeepMapTypeReference(interfaceImpl.InterfaceType, mapContext)));
+                    }
+
+                    foreach (var field in from.Fields) {
+                        var copiedField = new FieldDefinition(field.Name, field.Attributes, MonoModCommon.Structure.DeepMapTypeReference(field.FieldType, mapContext));
+                        copied.Fields.Add(copiedField);
+                    }
+
+                    foreach (var method in from.Methods) {
+                        var copiedMethod = MonoModCommon.Structure.DeepMapMethodDef(method, mapContext, false);
+                        copied.Methods.Add(copiedMethod);
+                    }
+
+                    foreach (var property in from.Properties) {
+                        copied.Properties.Add(new PropertyDefinition(property.Name, property.Attributes, property.PropertyType) {
+                            GetMethod = property.GetMethod is null ? null : mapContext.MethodReplaceMap[property.GetMethod],
+                            SetMethod = property.SetMethod is null ? null : mapContext.MethodReplaceMap[property.SetMethod]
+                        });
+                    }
+
+                    foreach (var _event in from.Events) {
+                        copied.Events.Add(new EventDefinition(_event.Name, _event.Attributes, _event.EventType) {
+                            AddMethod = _event.AddMethod is null ? null : mapContext.MethodReplaceMap[_event.AddMethod],
+                            RemoveMethod = _event.RemoveMethod is null ? null : mapContext.MethodReplaceMap[_event.RemoveMethod]
+                        });
+                    }
+                }
+
+                var copied = ClonedType(type, newName, mappedTypes);
+                foreach (var to in mappedTypes.Keys) {
+                    foreach (var gp in to.GenericParameters) {
+                        for (int i = 0; i < gp.Constraints.Count; i++) {
+                            var constraint = gp.Constraints[i];
+                            var copiedConstraint = MonoModCommon.Structure.DeepMapTypeReference(constraint.ConstraintType, mapCondition);
+                            gp.Constraints[i] = new GenericParameterConstraint(copiedConstraint);
+                        }
+                    }
+                }
+
+                foreach (var from in mappedTypes.Keys) {
+                    if (inputTypes.ContainsKey(from)) {
+                        continue;
+                    }
+                    ClonedMember(from, mapCondition);
+                }
+
+                foreach (var kv in mappedMethods) {
+                    kv.Value.Body = MonoModCommon.Structure.DeepMapMethodBody(kv.Key, kv.Value, mapCondition);
+                }
+
+                return copied;
+            }
+
+            /// <summary>
+            /// Creates an analysis-only instantiated <see cref="MethodReference"/> by substituting a single layer of generic parameters
+            /// from <paramref name="impl"/> (method MVAR or declaring-type VAR) with their concrete generic arguments.
+            /// </summary>
+            /// <remarks>
+            /// If <paramref name="impl"/> is a <see cref="GenericInstanceMethod"/>, binds the method generic parameters (MVAR);
+            /// otherwise, if its declaring type is a <see cref="GenericInstanceType"/>, binds the declaring type generic parameters (VAR).
+            /// The result is a flattened view for analysis and must not be emitted into IL/metadata.
+            /// </remarks>
+            /// <param name="impl">The method reference that may carry generic instantiation.</param>
+            /// <returns>
+            /// An instantiated method reference with no exposed parameters for the bound layer; or <paramref name="impl"/> if not applicable.
+            /// </returns>
+            public static MethodReference CreateInstantiatedMethod(MethodReference impl) {
                 Dictionary<GenericParameter, TypeReference> map = [];
 
                 MethodReference patten;
@@ -422,7 +551,18 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 var option = new MapOption(genericParameterMap: map);
                 return DeepMapMethodReference(patten, option);
             }
-            public static MethodReference CreateTypedMethod(MethodDefinition methodDef, TypeReference declaringType) {
+            /// <summary>
+            /// Creates an analysis-only <see cref="MethodReference"/> by instantiating <paramref name="methodDef"/>
+            /// with the generic arguments of a constructed <paramref name="declaringType"/>.
+            /// </summary>
+            /// <remarks>
+            /// Only binds the declaring type's generic parameters (VAR). This is a flattened view for analysis and must not be emitted
+            /// into IL/metadata, as it may not represent a valid metadata construct.
+            /// </remarks>
+            /// <param name="methodDef">The method definition declared on the generic type.</param>
+            /// <param name="declaringType">The constructed declaring type (typically <see cref="GenericInstanceType"/>).</param>
+            /// <returns>The instantiated method reference; or <paramref name="methodDef"/> if no instantiation is applicable.</returns>
+            public static MethodReference CreateInstantiatedMethod(MethodDefinition methodDef, TypeReference declaringType) {
                 Dictionary<GenericParameter, TypeReference> map = [];
 
                 if (declaringType is GenericInstanceType genericInstanceType) {

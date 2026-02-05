@@ -4,6 +4,7 @@ using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.IO;
 using System.Linq;
@@ -18,7 +19,7 @@ void PatchMessageBuffer(ModFwModder modder) {
 
 
     var messageBufferTypeDef = modder.Module.GetType("Terraria.MessageBuffer");
-    var origMethod = messageBufferTypeDef.Method("GetData");
+    var origMethod = messageBufferTypeDef.GetMethod("GetData");
     var overload = origMethod.Clone();
     var param_readbuffer = new ParameterDefinition("readbuffer", ParameterAttributes.None, byteRef.MakeArrayType());
     overload.Parameters.Add(param_readbuffer);

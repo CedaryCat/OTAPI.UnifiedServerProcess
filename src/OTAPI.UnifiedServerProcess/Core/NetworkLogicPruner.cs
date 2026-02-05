@@ -1,8 +1,8 @@
-﻿using ModFramework;
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using MonoMod.Cil;
+using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -10,7 +10,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 {
     public class NetworkLogicPruner(ModuleDefinition module)
     {
-        readonly FieldDefinition dedServ = module.GetType("Terraria.Main").Field("dedServ");
+        readonly FieldDefinition dedServ = module.GetType("Terraria.Main").GetField("dedServ");
 
         // TODO: support more cases
         // readonly FieldDefinition netMode = module.GetType("Terraria.Main").Field("netMode");

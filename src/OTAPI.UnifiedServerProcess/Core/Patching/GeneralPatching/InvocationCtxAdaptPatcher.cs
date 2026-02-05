@@ -64,9 +64,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         }
 
         public void ProcessMethod(PatcherArguments arguments, ContextBoundMethodMap mappedMethods, Dictionary<string, ClosureData> cachedClosureObjs, MethodDefinition method) {
-            if (method.Name is ".ctor" && method.DeclaringType.Name is "FreeCakeDialogue") {
-
-            }
             Dictionary<Instruction, int> instructionIndexes = [];
             Instruction[] copiedInstructions = [.. method.Body.Instructions];
             for (var i = 0; i < method.Body.Instructions.Count; i++) {
@@ -222,7 +219,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var option = new MonoModCommon.Structure.MapOption(typeMap);
 
                     var oldClosureType = closureType;
-                    closureType = PatchingCommon.MemberClonedType(closureType, closureType.Name, typeMap);
+                    closureType = MonoModCommon.Structure.MemberClonedType(closureType, closureType.Name, typeMap);
 
                     static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
                         yield return (oldTypeDef, newTypeDef);
@@ -431,7 +428,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             if (invocationContextBoundImplicit && rootFieldChain is not null) {
                 ldnull.OpCode = OpCodes.Ldarg_0;
                 ldnull.Operand = null;
-                ldftn.Operand = PatchingCommon.CreateMethodReference(invocationRef, contextBoundInvocation);
+                ldftn.Operand = MonoModCommon.Structure.CreateMethodReference(invocationRef, contextBoundInvocation);
 
                 if (invocationDeclaringType.FullName != declaringType.FullName) {
                     var ilProcessor = userMethod.Body.GetILProcessor();
@@ -501,7 +498,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 generatedMethodBody.Add(MonoModCommon.IL.BuildParameterLoad(generatedMethod, generatedMethod.Body, param));
             }
             invocationRef = MonoModCommon.Structure.DeepMapMethodReference(invocationRef, mapOption);
-            generatedMethodBody.Add(Instruction.Create(OpCodes.Call, PatchingCommon.CreateMethodReference(invocationRef, contextBoundInvocation)));
+            generatedMethodBody.Add(Instruction.Create(OpCodes.Call, MonoModCommon.Structure.CreateMethodReference(invocationRef, contextBoundInvocation)));
             generatedMethodBody.Add(Instruction.Create(OpCodes.Ret));
 
             closureObjData.ApplyMethod(declaringType, userMethod, generatedMethod, jumpSites);
@@ -510,7 +507,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             ldnull.OpCode = loadClosure.OpCode;
             ldnull.Operand = loadClosure.Operand;
 
-            ldftn.Operand = PatchingCommon.CreateMethodReference(invocationRef, generatedMethod);
+            ldftn.Operand = MonoModCommon.Structure.CreateMethodReference(invocationRef, generatedMethod);
 
             return createDelegate.Next;
         }
@@ -766,7 +763,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // map the generic relationship in the method def (if exists)
             var generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
             bool addedRootParam = generatedMethod.Parameters.Count > 0 && generatedMethod.Parameters[0].ParameterType.FullName == arguments.RootContextDef.FullName;
-            var typedGeneratedMethod = MonoModCommon.Structure.CreateTypedMethod(invocationRef);
+            var typedGeneratedMethod = MonoModCommon.Structure.CreateInstantiatedMethod(invocationRef);
             for (int i = 0; i < typedGeneratedMethod.Parameters.Count; i++) {
                 generatedMethod.Parameters[i + (addedRootParam ? 1 : 0)].ParameterType = typedGeneratedMethod.Parameters[i].ParameterType;
             }
@@ -780,7 +777,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 generatedMethod.Parameters.Remove(generatedMethodRootParam);
             }
 
-            MethodReference generatedMethodImpl = PatchingCommon.CreateMethodReference(invocationRef, contextBoundInvocation);
+            MethodReference generatedMethodImpl = MonoModCommon.Structure.CreateMethodReference(invocationRef, contextBoundInvocation);
             if (isLoadingBaseMethod) {
                 var generatedBaseCall = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
 
@@ -804,7 +801,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     generatedBaseCall.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, debuggerHiddenAttribute) { HasThis = true }));
                 }
 
-                generatedMethodImpl = PatchingCommon.CreateMethodReference(generatedMethodImpl, generatedBaseCall);
+                generatedMethodImpl = MonoModCommon.Structure.CreateMethodReference(generatedMethodImpl, generatedBaseCall);
             }
 
             generatedMethod.Body = new MethodBody(generatedMethod);
@@ -856,7 +853,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             generatedMethodBody.Add(Instruction.Create(OpCodes.Ret));
             closureObjData.ApplyMethod(userMethodDeclaringType, userMethod, generatedMethod, jumpSites);
 
-            loadMethodPointerInst.Operand = PatchingCommon.CreateMethodReference(invocationRef, generatedMethod);
+            loadMethodPointerInst.Operand = MonoModCommon.Structure.CreateMethodReference(invocationRef, generatedMethod);
 
             return createDelegate.Next;
         }
@@ -1097,7 +1094,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 Instruction[] replaceInstructions = [
                     MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure),
-                    Instruction.Create(OpCodes.Ldftn, PatchingCommon.CreateMethodReference(compilerGeneratedMethodOrig, generatedMethod)),
+                    Instruction.Create(OpCodes.Ldftn, MonoModCommon.Structure.CreateMethodReference(compilerGeneratedMethodOrig, generatedMethod)),
                     Instruction.Create(OpCodes.Newobj, delegateCtor),
                 ];
 

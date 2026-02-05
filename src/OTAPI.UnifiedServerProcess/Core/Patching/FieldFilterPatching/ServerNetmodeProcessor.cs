@@ -1,11 +1,9 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
-using MonoMod.Cil;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching

@@ -8,6 +8,8 @@ namespace OTAPI.UnifiedServerProcess
         public const string RootContextLocalName = "root";
         public const string RootContextFieldName = "root";
 
+        public const string DelegatesNameSpace = "UnifiedServerProcess.Delegates";
+        public const string CtxDelegatesContainerName = "CtxDelegateTypes";
         public const string ContextSuffix = "SystemContext";
         public const string RootContextName = "RootContext";
         public const string RootContextFullName = "UnifiedServerProcess.RootContext";

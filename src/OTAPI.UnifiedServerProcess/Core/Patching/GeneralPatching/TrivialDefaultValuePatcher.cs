@@ -5,6 +5,7 @@ using MonoMod.Cil;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
+using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Linq;
@@ -30,7 +31,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // Such as Main.dedServ is only set to true in Program.RunGame,
             // so setting MainSystenContext.dedServ to true in the initialization is very necessary, otherwise some servers that should not run will be executed incorrectly.
             var mainCtor = main.constructor;
-            var dedServ = main.ContextTypeDef.Field("dedServ");
+            var dedServ = main.ContextTypeDef.GetField("dedServ");
 
             var baseCtorCall = MonoModCommon.IL.GetBaseConstructorCall(mainCtor.Body) ?? throw new Exception("Failed to find base constructor call");
             var il = mainCtor.Body.GetILProcessor();
@@ -57,15 +58,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             loadBottomWorldConst.Operand = 16f;
 
             var worldGen = arguments.ContextTypes["Terraria.WorldGen" + Constants.ContextSuffix];
-            var clearWorld = worldGen.ContextTypeDef.Method("mfwh_clearWorld");
+            var clearWorld = worldGen.ContextTypeDef.GetMethod("mfwh_clearWorld");
             var resetWorldSize = new MethodDefinition("ResetWorldSize", MethodAttributes.Public | MethodAttributes.HideBySig, arguments.MainModule.TypeSystem.Void);
             worldGen.ContextTypeDef.Methods.Add(resetWorldSize);
             var body = resetWorldSize.Body = new MethodBody(resetWorldSize);
             var local_main = new VariableDefinition(main.ContextTypeDef);
             body.Variables.Add(local_main);
-            var tileField = main.ContextTypeDef.Field("tile");
-            var maxTilesX = main.ContextTypeDef.Field("maxTilesX");
-            var maxTilesY = main.ContextTypeDef.Field("maxTilesY");
+            var tileField = main.ContextTypeDef.GetField("tile");
+            var maxTilesX = main.ContextTypeDef.GetField("maxTilesX");
+            var maxTilesY = main.ContextTypeDef.GetField("maxTilesY");
             var tileProviderCreate = new MethodReference("Create", tileField.FieldType, tileField.FieldType);
             tileProviderCreate.Parameters.AddRange([
                 new(arguments.MainModule.TypeSystem.Int32),
@@ -78,7 +79,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             body.Instructions.AddRange([
                 Instruction.Create(OpCodes.Ldarg_0),
                 Instruction.Create(OpCodes.Ldfld, worldGen.rootContextField),
-                Instruction.Create(OpCodes.Ldfld, arguments.RootContextDef.Field("Main")),
+                Instruction.Create(OpCodes.Ldfld, arguments.RootContextDef.GetField("Main")),
                 Instruction.Create(OpCodes.Stloc_0),
 
                 Instruction.Create(OpCodes.Ldloc_0),
