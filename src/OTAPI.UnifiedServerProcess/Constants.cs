@@ -31,7 +31,7 @@ namespace OTAPI.UnifiedServerProcess
         }
         public static class Patching
         {
-            public const string ConvertedFieldInSingletonSuffix = "_ReusedField";
+            public const string ConvertedFieldInSingletonSuffix = "_ReusedField_Placeholder";
         }
     }
 }

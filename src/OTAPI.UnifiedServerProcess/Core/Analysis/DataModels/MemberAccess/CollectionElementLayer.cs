@@ -75,7 +75,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             }
 
             LazyInit(caller.Module);
-            var inheritancesTypes = graph.GetInheritancesTypes(resolvedStoreMethod.DeclaringType);
+            var inheritancesTypes = graph.GetInheritanceTypes(resolvedStoreMethod.DeclaringType);
 
             if (inheritancesTypes.ContainsKey(IDictionaryType.FullName) && (resolvedStoreMethod.Name is "Add" || resolvedStoreMethod.Name is "TryAddModifications")) {
                 // 0: key, 1: value
@@ -133,7 +133,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             }
 
             LazyInit(caller.Module);
-            var inheritancesTypes = graph.GetInheritancesTypes(resolvedLoadMethod.DeclaringType);
+            var inheritancesTypes = graph.GetInheritanceTypes(resolvedLoadMethod.DeclaringType);
 
             if (inheritancesTypes.ContainsKey(IDictionaryType.FullName) && resolvedLoadMethod.Name is "TryGetValue") {
                 // 0: key, 1: out value
@@ -177,7 +177,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             var resolvedModifyMethod = modifyMethod.Resolve();
             LazyInit(caller.Module);
 
-            var inheritancesTypes = graph.GetInheritancesTypes(resolvedModifyMethod.DeclaringType);
+            var inheritancesTypes = graph.GetInheritanceTypes(resolvedModifyMethod.DeclaringType);
 
             if (resolvedModifyMethod.Name is "set_Item" && resolvedModifyMethod.IsSpecialName) {
                 return true;

@@ -7,6 +7,7 @@ using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using MonoMod.Cil;
 using MonoMod.Utils;
+using OTAPI.UnifiedServerProcess;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
@@ -2267,7 +2268,7 @@ class TileSystemPatchLogic
                 if (!byRefDelegateDefs.TryGetValue(key, out var delegateDef)) {
                     #region Create DelegateDef
                     delegateDef = new TypeDefinition(
-                        "OTAPI.Delegates",
+                        Constants.DelegatesNameSpace,
                         key,
                         TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class,
                         new TypeReference("System", nameof(MulticastDelegate), module, module.TypeSystem.CoreLibrary)

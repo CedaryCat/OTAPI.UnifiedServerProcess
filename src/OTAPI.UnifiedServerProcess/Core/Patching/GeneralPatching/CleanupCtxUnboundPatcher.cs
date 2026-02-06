@@ -1,4 +1,5 @@
-﻿using Mono.Cecil.Rocks;
+﻿using Mono.Cecil;
+using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -19,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
             foreach (var type in arguments.MainModule.GetAllTypes()) {
 
-                foreach (var field in type.Fields.Where(f => !f.Name.EndsWith(Constants.Patching.ConvertedFieldInSingletonSuffix)).ToArray()) {
+                foreach (var field in type.Fields.Where(f => !f.Name.OrdinalEndsWith(Constants.Patching.ConvertedFieldInSingletonSuffix)).ToArray()) {
                     if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out var newField)) {
                         type.Fields.Remove(field);
                         // keep the original declaring type, because it might be used later
@@ -40,13 +41,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
 
                 foreach (var method in type.Methods.ToArray()) {
-                    if (method.IsConstructor) {
-                        continue;
+                    if (!method.IsConstructor) {
+                        if (mappedMethods.originalToContextBound.ContainsKey(method.GetIdentifier())) {
+                            type.Methods.Remove(method);
+                            // keep the original declaring type, because it might be used later
+                            method.DeclaringType = type;
+                        }
                     }
-                    if (mappedMethods.originalToContextBound.ContainsKey(method.GetIdentifier())) {
-                        type.Methods.Remove(method);
-                        // keep the original declaring type, because it might be used later
-                        method.DeclaringType = type;
+                    if (method.HasBody) {
+                        foreach (var inst in method.Body.Instructions) {
+                            if (inst.Operand is FieldReference fr && fr.Name.OrdinalEndsWith(Constants.Patching.ConvertedFieldInSingletonSuffix)) {
+                                fr.Name = fr.Name[..^Constants.Patching.ConvertedFieldInSingletonSuffix.Length];
+                            }
+                        }
                     }
                 }
             }

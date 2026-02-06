@@ -12,27 +12,24 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
+namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 {
-    public sealed class DelegatePlaceholderProcessor(TypeDefinition rootContextDef, AnalyzerGroups analyzers) : IFieldFilterArgProcessor, IJumpSitesCacheFeature
+    public sealed class DelegatePlaceholderProcessor(AnalyzerGroups analyzers) : IGeneralArgProcessor, IJumpSitesCacheFeature
     {
         public string Name => nameof(DelegatePlaceholderProcessor);
-
-        readonly TypeDefinition rootContextDef = rootContextDef ?? throw new ArgumentNullException(nameof(rootContextDef));
         readonly AnalyzerGroups analyzers = analyzers ?? throw new ArgumentNullException(nameof(analyzers));
 
-        public FieldReference[] FieldTasks() {
-            var module = rootContextDef.Module;
+        public FieldReference[] FieldTasks(ModuleDefinition module) {
             return [
                 module.GetType("Terraria.DataStructures.PlacementHook").GetField("hook"),
                 module.GetType("Terraria.WorldBuilding.AWorldGenerationOption").GetField("OnOptionStateChanged"),
             ];
         }
 
-        public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
+        public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {
             var module = source.MainModule;
 
-            var taskFields = FieldTasks()
+            var taskFields = FieldTasks(source.MainModule)
                 .Select(fr => fr.TryResolve() ?? throw new InvalidOperationException($"Failed to resolve field task '{fr.FullName}'."))
                 .Distinct()
                 .ToArray();

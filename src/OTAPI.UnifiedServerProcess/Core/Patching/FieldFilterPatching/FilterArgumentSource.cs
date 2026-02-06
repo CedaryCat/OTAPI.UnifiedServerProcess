@@ -9,16 +9,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
     {
         public ModuleDefinition MainModule = module;
         public MethodDefinition[] InitialMethods = initialMethods;
-        public Dict UnmodifiedStaticFields = [];
-        public Dict ModifiedStaticFields = [];
-        public Dict InitialStaticFields = [];
+        public DebugMap UnmodifiedStaticFields = [];
+        public DebugMap ModifiedStaticFields = [];
+        public DebugMap InitialStaticFields = [];
         public FilterArgument Build() => new(
             MainModule,
             [.. UnmodifiedStaticFields.Values],
             [.. ModifiedStaticFields.Values],
             [.. InitialStaticFields.Values]);
 
-        public class Dict : Dictionary<string, FieldDefinition>
+        public class DebugMap : Dictionary<string, FieldDefinition>
         {
             public new bool TryAdd(string key, FieldDefinition field) {
                 return base.TryAdd(key, field);

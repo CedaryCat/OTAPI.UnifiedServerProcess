@@ -8,7 +8,6 @@ using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching
@@ -43,7 +42,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                     ?.ParameterType.FullName is Constants.RootContextFullName;
             }
         }
-        public static MethodDefinition CreateInstanceConvdMethod(MethodDefinition staticMethod, ContextTypeData instanceConvdType, ImmutableDictionary<string, FieldDefinition> instanceConvdFieldOrgiMap) {
+        public static MethodDefinition CreateInstanceConvdMethod(MethodDefinition staticMethod, ContextTypeData instanceConvdType, IDictionary<string, FieldDefinition> instanceConvdFieldOrgiMap) {
             if (!staticMethod.IsStatic) {
                 throw new ArgumentException("Method must be static", nameof(staticMethod));
             }
@@ -451,7 +450,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 
             return [.. result];
         }
-        public static MethodReference GetVanillaMethodRef(TypeDefinition rootContextType, ImmutableDictionary<string, ContextTypeData> instanceConvdTypes, MethodReference method) {
+        public static MethodReference GetVanillaMethodRef(TypeDefinition rootContextType, IDictionary<string, ContextTypeData> instanceConvdTypes, MethodReference method) {
             TypeReference declaringType = method.DeclaringType;
             bool hasThis = method.HasThis;
 

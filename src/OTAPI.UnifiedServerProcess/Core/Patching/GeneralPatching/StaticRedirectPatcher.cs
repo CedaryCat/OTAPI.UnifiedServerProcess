@@ -1,7 +1,9 @@
 ﻿using Microsoft.CodeAnalysis;
+using ModFramework;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
@@ -14,6 +16,7 @@ using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices.JavaScript;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 {
@@ -75,15 +78,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 convertedMethodOrigMap.Add(originalCtorId, reused.constructor);
                 contextBoundMethods.Add(reused.constructor.GetIdentifier(), reused.constructor);
             }
-            foreach (var interfAdapt in arguments.RootContextFieldToAdaptExternalInterface.Values) {
-                foreach (var ctor in interfAdapt.DeclaringType.Methods.Where(m => m.IsConstructor && !m.IsStatic)) {
+            foreach (var interfAdapt in arguments.RootContextFieldToAdaptExternalInterface) {
+                foreach (var ctor in module.GetType(interfAdapt.Key).Methods.Where(m => m.IsConstructor && !m.IsStatic)) {
                     var originalCtorId = ctor.GetIdentifier(true, arguments.RootContextDef);
                     convertedMethodOrigMap.Add(originalCtorId, ctor);
                     contextBoundMethods.Add(ctor.GetIdentifier(), ctor);
                 }
             }
 
-            // HashSet<string> delegateTargetWithCtxParam = [];
             Dictionary<string, MethodDefinition> workQueue = [];
 
             foreach (var type in arguments.MainModule.GetAllTypes()) {
@@ -145,7 +147,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         originalToContextMethod: convertedMethodOrigMap,
                         contextBoundMethods: contextBoundMethods,
                         modifiedMethod,
-                        //delegateTargetWithCtxParam.Contains(removeKey),
                         out var modifyMode
                     );
                     workQueue.Remove(removeKey);
@@ -587,12 +588,53 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 var calleeRefToAdjust = (MethodReference)methodCallInstruction.Operand;
 
-                if (!this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out _, out var vanillaCallee, out var contextType)) {
+                if (this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out _, out var vanillaCallee, out var contextType)) {
+                    var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
+                    this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
                     return;
                 }
-                var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
 
-                this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
+                if (methodCallInstruction.Operand is GenericInstanceMethod { ElementMethod.DeclaringType.FullName: $"{nameof(System)}.{nameof(Activator)}" } gim) {
+                    if (gim.GenericArguments.Single() is not GenericParameter gp) {
+                        return;
+                    }
+                    var typeConstr = gp.Constraints
+                        .Select(c => c.ConstraintType?.Resolve())
+                        .FirstOrDefault(x => x is not null && !x.IsInterface && !x.IsValueType);
+                    if (typeConstr is null || !arguments.NewConstraintInjectedCtx.ContainsKey(typeConstr.FullName)) {
+                        return;
+                    }
+
+                    var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
+
+                    methodCallInstruction.OpCode = OpCodes.Ldtoken;
+                    methodCallInstruction.Operand = gp;
+
+                    var il = caller.Body.GetILProcessor();
+
+                    var sysType = new TypeReference(nameof(System), nameof(Type), module, module.TypeSystem.CoreLibrary);
+                    var rtHandleType = new TypeReference(nameof(System), nameof(RuntimeTypeHandle), module, module.TypeSystem.CoreLibrary);
+                    var activatorType = new TypeReference(nameof(System), nameof(Activator), module, module.TypeSystem.CoreLibrary);
+                    var typeOfT = module.ImportReference(sysType.Resolve().Methods.Single(m => m.Name == nameof(Type.GetTypeFromHandle)));
+
+                    var createInstance = new MethodReference(nameof(Activator.CreateInstance), module.TypeSystem.Object, activatorType);
+                    createInstance.Parameters.AddRange([
+                        new ParameterDefinition(sysType),
+                        new ParameterDefinition(module.TypeSystem.Object.MakeArrayType())]);
+
+
+                    il.InsertAfter(methodCallInstruction, [
+                        Instruction.Create(OpCodes.Call, typeOfT),
+                        Instruction.Create(OpCodes.Ldc_I4_1),
+                        Instruction.Create(OpCodes.Newarr, module.TypeSystem.Object),
+                        Instruction.Create(OpCodes.Dup),
+                        Instruction.Create(OpCodes.Ldc_I4_0),
+                        .. loadInstanceInsts,
+                        Instruction.Create(OpCodes.Stelem_Ref),
+                        Instruction.Create(OpCodes.Call, createInstance),
+                        Instruction.Create(OpCodes.Unbox_Any, gp),
+                    ]);
+                }
             }
         }
     }

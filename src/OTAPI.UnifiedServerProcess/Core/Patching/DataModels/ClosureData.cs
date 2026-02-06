@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
         public Instruction? CaptureFieldAssignment;
         public MethodDefinition? ContainingMethod;
         public VariableDefinition Closure;
-        public readonly Dictionary<string, MethodDefinition> SupportMethods = [];
+        public readonly Dictionary<string, MethodDefinition> ProcessedMethods = [];
         public bool IsReusedClosure { get; private set; }
 
         private ClosureData(TypeDefinition type, MethodDefinition constructor, VariableDefinition closure, ClosureCaptureData[] captures) {
@@ -61,6 +61,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                     .Single(i => i.OpCode == OpCodes.Newobj && ((MethodReference)i.Operand).DeclaringType.TryResolve()?.FullName == ClosureType.FullName)
                     .Next
                     .Next;
+                closureInitInsertBeforetarget = containingMethod.Body.Instructions
+                    .FirstOrDefault(i => 
+                        i is Instruction { OpCode.Code: Code.Stfld, Operand: FieldReference { Name: "<>4__this" } fr } &&
+                        fr.DeclaringType.Resolve()?.FullName == ClosureType.FullName)
+                    ?.Next
+                    ?? closureInitInsertBeforetarget;
             }
 
             foreach (var capture in Captures) {
@@ -133,8 +139,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             if (!IsReusedClosure || !ClosureType.Methods.Any(m => m.GetIdentifier(false) == generatedMethod.GetIdentifier(false))) {
                 ClosureType.Methods.Add(generatedMethod);
             }
-            SupportMethods.Add(generatedMethod.GetIdentifier(), generatedMethod);
+            ProcessedMethods.Add(generatedMethod.GetIdentifier(), generatedMethod);
             if (!Applied) {
+                if(Closure.VariableType.FullName == containingMethod.DeclaringType.FullName) {
+                    Applied = true;
+                    return;
+                }
                 Apply(declaringType, containingMethod, jumpSites);
             }
         }

@@ -24,10 +24,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         /// </summary>
         public Dictionary<string, FieldDefinition> RootContextFieldToAdaptExternalInterface = [];
 
+        public Dictionary<string, TypeDefinition> NewConstraintInjectedCtx = [];
+
         public PatcherArguments Build() =>
             new(MainModule, RootContextDef,
-                OriginalToContextType.ToImmutableDictionary(),
-                OriginalToInstanceConvdField.ToImmutableDictionary(),
-                RootContextFieldToAdaptExternalInterface.ToImmutableDictionary());
+                OriginalToContextType,
+                OriginalToInstanceConvdField,
+                RootContextFieldToAdaptExternalInterface,
+                NewConstraintInjectedCtx);
     }
 }
