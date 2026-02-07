@@ -1,4 +1,5 @@
 ﻿using Mono.Cecil;
+using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections;
@@ -18,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 GetInheritanceTypes(type);
 
             // Build a "base -> direct derived types" index (classes only) for descendant tree queries.
-            foreach (var type in module.GetTypes())
+            foreach (var type in module.GetAllTypes())
                 IndexDerivedType(type);
 
             // Stabilize output order.
@@ -105,7 +106,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             var visited = new HashSet<TypeDefinition>();
             var sorted = new List<TypeDefinition>();
 
-            foreach (var type in module.GetTypes())
+            foreach (var type in module.GetAllTypes())
                 VisitType(type, visited, sorted);
 
             return sorted;

@@ -34,15 +34,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
             var unexpectedImplMissMethods = new Dictionary<string, MethodDefinition>();
 
             foreach (var type in module.GetAllTypes()) {
-                foreach (var method in type.Methods) {
-                    if (!method.HasBody)
+                foreach (var caller in type.Methods) {
+                    if (!caller.HasBody)
                         continue;
 
-                    var methodId = method.GetIdentifier();
+                    var methodId = caller.GetIdentifier();
 
-                    var body = method.Body;
+                    var body = caller.Body;
 
-                    var jumpSites = this.GetMethodJumpSites(method);
+                    var jumpSites = this.GetMethodJumpSites(caller);
 
                     foreach (var instruction in body.Instructions) {
                         if (instruction.OpCode != OpCodes.Call && instruction.OpCode != OpCodes.Callvirt && instruction.OpCode != OpCodes.Newobj)
@@ -69,30 +69,30 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                             taskRunDeleIndex = 0;
                         }
                         if (taskRunDeleIndex != -1) {
-                            foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
-                                var loadDelegate = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[taskRunDeleIndex].Instructions.Last(), jumpSites)
+                            foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(caller, instruction, jumpSites)) {
+                                var loadDelegate = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[taskRunDeleIndex].Instructions.Last(), jumpSites)
                                     .Single();
-                                if (!invocationGraph.TracedDelegates.TryGetValue(DelegateInvocationData.GenerateStackKey(method, loadDelegate.RealPushValueInstruction), out var data)) {
+                                if (!invocationGraph.TracedDelegates.TryGetValue(DelegateInvocationData.GenerateStackKey(caller, loadDelegate.RealPushValueInstruction), out var data)) {
                                     continue;
                                 }
                                 AddMethod(MethodReferenceData.DelegateCall(calleeDef, [.. data.Invocations.Values]));
                             }
                         }
 
-                        IEnumerable<MethodDefinition> methods = [method];
+                        IEnumerable<MethodDefinition> methods = [caller];
                         if (calleeRef.HasThis && calleeRef.Name != ".ctor") {
                             HashSet<MethodDefinition> tempMethods = [];
-                            foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
-                                foreach (var stackTop in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
+                            foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(caller, instruction, jumpSites)) {
+                                foreach (var stackTop in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
                                     var stackType = stackTop.StackTopType?.TryResolve();
                                     if (stackType is null) {
                                         continue;
                                     }
                                     if (stackType.Scope.Name != module.Name) {
-                                        logger.Warn(this, 1, $"Ignore: [type:{stackType.Name}|callee: {calleeRef.GetDebugName()}] by {method.GetDebugName()}");
+                                        logger.Warn(this, 1, $"Ignore: [type:{stackType.Name}|callee: {calleeRef.GetDebugName()}] by {caller.GetDebugName()}");
                                         continue;
                                     }
-                                    var m = stackType?.Methods.FirstOrDefault(m => 
+                                    var m = stackType?.GetRuntimeMethods(true).FirstOrDefault(m => 
                                         m.GetIdentifier(false).EndsWith("." + calleeDef.GetIdentifier(false)) || // implict interface impl
                                         m.GetIdentifier(false) == calleeDef.GetIdentifier(false));
                                     if (m is not null) {
@@ -106,7 +106,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                         HashSet<MethodDefinition> implementations = [];
                         bool isDelegateInvocation = false;
                         foreach (var m in methods) {
-                            foreach (var impl in this.GetMethodImplementations(method, instruction, jumpSites, out isDelegateInvocation, true)) {
+                            foreach (var impl in this.GetMethodImplementations(caller, instruction, jumpSites, out isDelegateInvocation, true)) {
                                 implementations.Add(impl);
                             }
                         }
@@ -130,10 +130,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                             usedByMethods = [];
                             usedByMethodsDict[calleeId] = usedByMethods;
                         }
-                        usedByMethods.Add(method);
+                        usedByMethods.Add(caller);
 
                         void AddMethod(MethodReferenceData add) {
-                            // Update usedMethodsDict for the tail method
+                            // Update usedMethodsDict for the tail caller
                             if (!usedMethodsDict.TryGetValue(methodId, out var usedMethods)) {
                                 usedMethods = [];
                                 usedMethodsDict[methodId] = usedMethods;
@@ -142,12 +142,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
 
                             var implId = add.DirectlyCalledMethod.GetIdentifier();
 
-                            // Update usedByMethodsDict for the implementation method
+                            // Update usedByMethodsDict for the implementation caller
                             if (!usedByMethodsDict.TryGetValue(implId, out var usedByMethods)) {
                                 usedByMethods = [];
                                 usedByMethodsDict[implId] = usedByMethods;
                             }
-                            usedByMethods.Add(method);
+                            usedByMethods.Add(caller);
                         }
                     }
                 }
@@ -184,8 +184,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                 MethodDefinition[] usedByMethods = usedByMethodsDict.TryGetValue(methodId, out var ubm)
                     ? [.. ubm]
                     : [];
-
-                methodCallsBuilder.Add(method.GetIdentifier(), new MethodCallData(method, usedMethods, usedByMethods));
+                methodCallsBuilder.Add(methodId, new MethodCallData(method, usedMethods, usedByMethods));
             }
 
             MediatedCallGraph = methodCallsBuilder;

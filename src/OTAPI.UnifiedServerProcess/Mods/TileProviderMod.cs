@@ -2312,6 +2312,9 @@ class TileSystemPatchLogic
 
                         invoke.Parameters.Add(new ParameterDefinition($"arg{i + 1}", ParameterAttributes.None, pType));
                         beginInvoke.Parameters.Add(new ParameterDefinition($"arg{i + 1}", ParameterAttributes.None, pType));
+                        if (pType is ByReferenceType) {
+                            endInvoke.Parameters.Add(new ParameterDefinition($"arg{i + 1}", ParameterAttributes.None, pType));
+                        }
                     }
 
                     // BeginInvoke( ... , AsyncCallback, object)

@@ -443,6 +443,42 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         public static MethodDefinition GetMethod(this TypeDefinition type, string name) {
             return type.Methods.Single((MethodDefinition x) => x.Name == name);
         }
+        public static IEnumerable<MethodDefinition> GetRuntimeMethods(this TypeDefinition type, bool includeInterf = false) {
+            foreach (var md in type.Methods) {
+                yield return md;
+            }
+            var baseType = type.BaseType?.TryResolve();
+            if (baseType is not null) {
+                foreach (var md in baseType.GetRuntimeMethods()) {
+                    yield return md;
+                }
+            }
+            static IEnumerable<MethodDefinition> GetInterfaceMethods(TypeDefinition type) {
+                HashSet<MethodDefinition> visited = [];
+                if (type.IsInterface)
+                    foreach (var md in type.Methods)
+                        if (visited.Add(md))
+                            yield return md;
+                foreach (var interf in type.Interfaces) {
+                    var interfDef = interf.InterfaceType.TryResolve();
+                    if (interfDef is not null)
+                        foreach (var md in interfDef.Methods)
+                            if (visited.Add(md))
+                                yield return md;
+                }
+                var baseType = type.BaseType?.TryResolve();
+                if (baseType is not null) {
+                    foreach (var md in GetInterfaceMethods(baseType))
+                        if (visited.Add(md))
+                            yield return md;
+                }
+            }
+            if (includeInterf) {
+                foreach (var md in GetInterfaceMethods(type)) {
+                    yield return md;
+                }
+            }
+        }
 
         public static EventDefinition GetEvent(this TypeDefinition type, string name) {
             return type.Events.Single((EventDefinition x) => x.Name == name);

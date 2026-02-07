@@ -139,7 +139,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         }
                         bool isLeadingChain = true;
                         for (int i = 0; i < part.ComponentAccessPath.Length; i++) {
-                            if (modification.ModificationAccessPath[i].IsSameLayer(part.EncapsulationHierarchy[i])) {
+                            if (!modification.ModificationAccessPath[i].IsSameLayer(part.EncapsulationHierarchy[i])) {
                                 isLeadingChain = false;
                                 break;
                             }

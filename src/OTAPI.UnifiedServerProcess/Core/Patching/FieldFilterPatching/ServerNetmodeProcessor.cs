@@ -36,6 +36,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             source.ModifiedStaticFields.Remove(hasPendingNetmodeChange.GetIdentifier());
             source.ModifiedStaticFields.Remove(myPlayer.GetIdentifier());
 
+            var doUpdateMethodJumpSites = this.GetMethodJumpSites(doUpdateMethodDef);
+
             bool removing = false;
             for (int i = 0; i < doUpdateMethodDef.Body.Instructions.Count; i++) {
                 var inst = doUpdateMethodDef.Body.Instructions[i];
@@ -43,12 +45,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     removing = true;
                 }
 
+                Instruction check = inst;
+
                 if (removing) {
-                    doUpdateMethodDef.Body.Instructions.Remove(inst);
-                    i--;
+                    if (doUpdateMethodJumpSites.ContainsKey(inst)) {
+                        check = inst.Clone();
+
+                        inst.OpCode = OpCodes.Nop;
+                        inst.Operand = null;
+                    }
+                    else {
+                        doUpdateMethodDef.Body.Instructions.Remove(inst);
+                        i--;
+                    }
                 }
 
-                if (inst is { OpCode.Code: Code.Stsfld, Operand: FieldReference { Name: "_hasPendingNetmodeChange" } }) {
+                if (check is { OpCode.Code: Code.Stsfld, Operand: FieldReference { Name: "_hasPendingNetmodeChange" } }) {
                     break;
                 }
             }

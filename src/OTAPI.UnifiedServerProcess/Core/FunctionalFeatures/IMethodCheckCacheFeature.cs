@@ -147,6 +147,12 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         }
                     }
                     if (inst.OpCode == OpCodes.Ldftn || inst.OpCode == OpCodes.Ldvirtftn) {
+                        // Concept split:
+                        // 1) Invocation-time context dependency: context is supplied by the caller at Invoke(...).
+                        // 2) Construction-time context capture: delegate creation closes over current execution context.
+                        //
+                        // This branch is about (2). If the target delegate type already has injected context
+                        // parameters, creating the delegate does not need to capture context from "here".
                         if (inst.Next is { OpCode.Code: Code.Newobj, Operand: MethodReference deleCtor }) {
                             if (PatchingCommon.IsDelegateInjectedCtxParam(deleCtor.DeclaringType)) {
                                 continue;
@@ -155,6 +161,8 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
                         var methodRef = (MethodReference)inst.Operand;
                         if (methodRef.DeclaringType.Name == "<>c") {
+                            // <>c methods are compiler-generated non-capturing lambda bodies.
+                            // We analyze the resolved method directly; inheritance expansion is unnecessary here.
                             var mDef = methodRef.Resolve();
                             if (mDef is not null) {
                                 worklist.Push(mDef);
@@ -164,6 +172,9 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                             }
                         }
                         else if (inheritanceGraph.CheckedMethodImplementationChains.TryGetValue(methodRef.GetIdentifier(), out var implMethods)) {
+                            // For normal method-group conversions, the implementation chain already includes
+                            // the method itself and related polymorphic implementations, so they should all
+                            // be checked for context use.
                             foreach (var implMethod in implMethods) {
                                 if (implMethod.Parameters.Count != 0 && implMethod.Parameters[0].ParameterType.FullName == Constants.RootContextFullName) {
                                     return CacheReturn(true, useCache, methodId);
@@ -208,8 +219,26 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                         if (useds.implicitCallMode is ImplicitCallMode.Delegate) {
                             continue;
                         }
-                        foreach (var callee in useds.ImplementedMethods()) {
 
+                        var callees = useds.ImplementedMethods().ToHashSet();
+
+                        var directCall = useds.DirectlyCalledMethod;
+
+                        if (callGraph.MethodInheritanceGraph.ImmediateInheritanceGraphs.TryGetValue(directCall.GetIdentifier(), out var bases)) {
+                            var leafVertices = bases.GetLeafVertices();
+                            leafVertices = leafVertices.Length == 0 ? [directCall] : leafVertices;
+                            if (!leafVertices.Any(d => d.Module.Name != checkMethod.Module.Name)) {
+                                foreach (var leaf in leafVertices) {
+                                    if (callGraph.MethodInheritanceGraph.CheckedMethodImplementationGraphs.TryGetValue(leaf.GetIdentifier(), out var impls)) {
+                                        foreach (var impl in impls) {
+                                            callees.Add(impl);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        foreach (var callee in callees) {
                             if (overwriteContextBoundCheck.TryGetValue(callee.GetIdentifier(), out bool isCalleeContextBound)) {
                                 if (isCalleeContextBound) {
                                     return CacheReturn(true, useCache, methodId);

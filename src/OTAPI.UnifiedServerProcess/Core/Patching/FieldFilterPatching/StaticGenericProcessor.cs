@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -103,6 +104,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             var optionStorage_Instance = optionStorage.GetField(nameof(Terraria.WorldBuilding.WorldGenerationOptions.OptionStorage<Terraria.WorldBuilding.AWorldGenerationOption>.Instance))
                 ?? throw new Exception("Terraria.WorldBuilding.WorldGenerationOptions.OptionStorage<Terraria.WorldBuilding.AWorldGenerationOption>.Instance not found");
+
+            worldGenerationOptions.Attributes |= TypeAttributes.Abstract;
+            worldGenerationOptions.Attributes |= TypeAttributes.Sealed;
+            foreach (var ctor in worldGenerationOptions.Methods.Where(x => !x.IsStatic && x.IsConstructor).ToList()) {
+                worldGenerationOptions.Methods.Remove(ctor);
+            }
 
             RefactorFieldOperate_DictionaryStorage(worldGenerationOptions, optionStorage);
 
@@ -326,15 +333,24 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             var containerField = new FieldDefinition(typeParams.Prefix + "Instance", FieldAttributes.Public | FieldAttributes.Static, containerType);
             containingType.Fields.Add(containerField);
 
-            var containingTypeCtorDef = containingType.Methods.Single(m => m.Name == ".ctor" && !m.IsStatic);
-            var callBaseCtor = containingTypeCtorDef.Body.Instructions.Single(i => i.OpCode == OpCodes.Call && ((MethodReference)i.Operand).Name == ".ctor");
-            var loadThisBeforeCallBaseCtor = callBaseCtor.Previous;
-            containingTypeCtorDef.Body.GetILProcessor()
-                .InsertBeforeSeamlessly(ref loadThisBeforeCallBaseCtor, [
-                    Instruction.Create(OpCodes.Ldarg_0),
+            if (containingType.Attributes.HasFlag(TypeAttributes.Abstract | TypeAttributes.Sealed)) {
+                var containingTypeCtorDef = containingType.Methods.Single(m => m.Name == ".cctor" && m.IsStatic);
+                containingTypeCtorDef.Body.Instructions.InsertRange(0, [
                     Instruction.Create(OpCodes.Newobj, containerCtor),
-                    Instruction.Create(OpCodes.Stfld, containerField)
+                    Instruction.Create(OpCodes.Stsfld, containerField)
                 ]);
+            }
+            else {
+                var containingTypeCtorDef = containingType.Methods.Single(m => m.Name == ".ctor" && !m.IsStatic);
+                var callBaseCtor = containingTypeCtorDef.Body.Instructions.Single(i => i.OpCode == OpCodes.Call && ((MethodReference)i.Operand).Name == ".ctor");
+                var loadThisBeforeCallBaseCtor = callBaseCtor.Previous;
+                containingTypeCtorDef.Body.GetILProcessor()
+                    .InsertBeforeSeamlessly(ref loadThisBeforeCallBaseCtor, [
+                        Instruction.Create(OpCodes.Ldarg_0),
+                        Instruction.Create(OpCodes.Newobj, containerCtor),
+                        Instruction.Create(OpCodes.Stfld, containerField)
+                    ]);
+            }
 
             containerParams = new ContainerParams(containerField, containerType, innerContainerField, innerContainerType);
         }

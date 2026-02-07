@@ -1,13 +1,17 @@
-﻿using Mono.Cecil;
+﻿using Microsoft.CodeAnalysis;
+using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using MonoMod.Utils;
 using NuGet.Packaging;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -18,9 +22,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
     /// <para>and merges the processed logic into constructors of corresponding contextualized entity classes.</para>
     /// </summary>
     /// <param name="logger"></param>
-    public sealed class CctorCtxAdaptPatcher(ILogger logger) : GeneralPatcher(logger), IContextInjectFeature, IJumpSitesCacheFeature
+    public sealed class CctorCtxAdaptPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger), IContextInjectFeature, IJumpSitesCacheFeature, IMethodCheckCacheFeature
     {
         public sealed override string Name => nameof(CctorCtxAdaptPatcher);
+
+        public MethodCallGraph MethodCallGraph => callGraph;
+
         public sealed override void Patch(PatcherArguments arguments) {
             var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
             List<MethodDefinition> cctors = [];
@@ -85,6 +92,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     case Code.Callvirt:
                     case Code.Newobj:
                         HandleMethodCall(this, arguments, mappedMethods, cctor, transformInsts, localMap, inst);
+                        break;
+                    case Code.Ldftn:
+                    case Code.Ldvirtftn:
+                        HandleLoadFunctionHandle(this, arguments, mappedMethods, cctor, transformInsts, localMap, inst);
                         break;
                 }
             }
@@ -270,7 +281,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 ExtractSources(feature, cctor, transformInsts, localMap, inst);
             }
-            static void HandleMethodCall(IJumpSitesCacheFeature feature, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
+            void HandleMethodCall(IJumpSitesCacheFeature feature, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
                 var callee = (MethodReference)inst.Operand;
                 if (CheckedNewContextInstance(arguments, transformInsts, inst)) { }
                 else if (CheckContextBoundMethod(feature, mappedMethods, cctor, transformInsts, inst)
@@ -287,11 +298,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 TraceUsage(feature, cctor, transformInsts, localMap, inst);
                 return;
 
-
-
-                static bool CheckContextBoundMethod(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Instruction inst) {
+                bool CheckContextBoundMethod(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Instruction inst) {
                     if (mappedMethods.originalToContextBound.TryGetValue(((MethodReference)inst.Operand).GetIdentifier(), out var convertedMethod)) {
                         return true;
+                    }
+                    var mr = (MethodReference)inst.Operand;
+                    var md = mr.TryResolve();
+                    if (md is not null && this.CheckUsedContextBoundField(arguments.InstanceConvdFields, md)) {
+                        return true;
+                    }
+                    if (inst.OpCode == OpCodes.Newobj) {
+                        var ctor = (MethodReference)inst.Operand;
+                        if (ctor.DeclaringType.Name.OrdinalStartsWith("<")) {
+                            var movenext = ctor.DeclaringType.SafeResolve()?.Methods.FirstOrDefault(m => m.Name == "MoveNext");
+                            if (movenext is not null && this.CheckUsedContextBoundField(arguments.InstanceConvdFields, movenext)) {
+                                return true;
+                            }
+                        }
                     }
                     return false;
                 }
@@ -301,6 +324,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         return true;
                     }
                     return false;
+                }
+            }
+            void HandleLoadFunctionHandle(IJumpSitesCacheFeature feature, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
+                if (inst.Next is { OpCode.Code: Code.Newobj, Operand: MethodReference deleCtor }) {
+                    if (PatchingCommon.IsDelegateInjectedCtxParam(deleCtor.DeclaringType)) {
+                        return;
+                    }
+                }
+
+                var mr = (MethodReference)inst.Operand;
+                var md = mr.TryResolve();
+                if (md is not null && this.CheckUsedContextBoundField(arguments.InstanceConvdFields, md)) {
+                    ExtractSources(feature, cctor, transformInsts, localMap, inst);
+                    TraceUsage(feature, cctor, transformInsts, localMap, inst);
                 }
             }
             static bool CheckMethodUsedTransformInst(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Instruction inst) {

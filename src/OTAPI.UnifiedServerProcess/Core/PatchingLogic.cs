@@ -66,7 +66,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .Then(new AdjustHooksPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new StaticRedirectPatcher(logger, analyzers.DelegateInvocationGraph, analyzers.MethodInheritanceGraph, analyzers.MethodCallGraph))
                 .Then(new DelegateWithCtxParamPatcher(logger))
-                .Then(new CctorCtxAdaptPatcher(logger))
+                .Then(new CctorCtxAdaptPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new HooksCtxAdaptPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new InvocationCtxAdaptPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new EnumeratorCtxAdaptPatcher(logger, analyzers.MethodCallGraph))

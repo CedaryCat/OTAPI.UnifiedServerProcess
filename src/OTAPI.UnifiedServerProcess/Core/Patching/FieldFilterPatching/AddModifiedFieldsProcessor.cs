@@ -1,4 +1,5 @@
 ﻿using Mono.Cecil;
+using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
@@ -16,7 +17,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             var modifiedStaticFieldIds = new HashSet<string>(modifiedFields.Select(x => x.GetIdentifier()));
             var initialStaticFieldIds = new HashSet<string>(initModifiedFields.Select(x => x.GetIdentifier()));
 
-            foreach (var type in raw.MainModule.GetTypes()) {
+            foreach (var type in raw.MainModule.GetAllTypes()) {
                 if (type.Name.OrdinalStartsWith('<')) {
                     continue;
                 }

@@ -591,8 +591,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         HasThis = true,
                         ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
                     };
-                    ctor.Parameters.Add(new ParameterDefinition(module.TypeSystem.Object));
-                    ctor.Parameters.Add(new ParameterDefinition(module.TypeSystem.IntPtr));
+                    ctor.Parameters.Add(new ParameterDefinition("@object", ParameterAttributes.None, module.TypeSystem.Object));
+                    ctor.Parameters.Add(new ParameterDefinition("method", ParameterAttributes.None, module.TypeSystem.IntPtr));
                     del.Methods.Add(ctor);
                 }
 
@@ -603,8 +603,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         HasThis = true,
                         ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
                     };
-                    foreach (var p in signature.ParameterTypes) {
-                        invoke.Parameters.Add(new ParameterDefinition(p));
+                    if (signature.ParameterTypes.Length is 1) {
+                        invoke.Parameters.Add(new ParameterDefinition("obj", ParameterAttributes.None, signature.ParameterTypes[0]));
+                    }
+                    else {
+                        for (int i = 0; i < signature.ParameterTypes.Length; i++) {
+                            var p = signature.ParameterTypes[i];
+                            invoke.Parameters.Add(new ParameterDefinition("arg" + (i + 1), ParameterAttributes.None, p));
+                        }
                     }
                     del.Methods.Add(invoke);
                 }
@@ -620,11 +626,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
                     };
 
-                    foreach (var p in signature.ParameterTypes) {
-                        beginInvoke.Parameters.Add(new ParameterDefinition(p));
+                    if (signature.ParameterTypes.Length is 1) {
+                        beginInvoke.Parameters.Add(new ParameterDefinition("obj", ParameterAttributes.None, signature.ParameterTypes[0]));
                     }
-                    beginInvoke.Parameters.Add(new ParameterDefinition(asyncCallback));
-                    beginInvoke.Parameters.Add(new ParameterDefinition(module.TypeSystem.Object));
+                    else {
+                        for (int i = 0; i < signature.ParameterTypes.Length; i++) {
+                            var p = signature.ParameterTypes[i];
+                            beginInvoke.Parameters.Add(new ParameterDefinition("arg" + (i + 1), ParameterAttributes.None, p));
+                        }
+                    }
+                    beginInvoke.Parameters.Add(new ParameterDefinition("callback", ParameterAttributes.None, asyncCallback));
+                    beginInvoke.Parameters.Add(new ParameterDefinition("@object", ParameterAttributes.None, module.TypeSystem.Object));
                     del.Methods.Add(beginInvoke);
                 }
 
@@ -638,12 +650,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         ImplAttributes = MethodImplAttributes.Runtime | MethodImplAttributes.Managed,
                     };
 
-                    foreach (var p in signature.ParameterTypes) {
+                    for (int i = 0; i < signature.ParameterTypes.Length; i++) {
+                        var p = signature.ParameterTypes[i];
                         if (p is ByReferenceType) {
-                            endInvoke.Parameters.Add(new ParameterDefinition(p));
+                            endInvoke.Parameters.Add(new ParameterDefinition("arg" + (i + 1), ParameterAttributes.None, p));
                         }
                     }
-                    endInvoke.Parameters.Add(new ParameterDefinition(iasyncResult));
+                    endInvoke.Parameters.Add(new ParameterDefinition("result", ParameterAttributes.None, iasyncResult));
                     del.Methods.Add(endInvoke);
                 }
 

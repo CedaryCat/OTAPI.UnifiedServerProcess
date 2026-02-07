@@ -117,6 +117,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         if (!PatchingCommon.IsDelegateInjectedCtxParam(ctorRef.DeclaringType)) {
                             continue;
                         }
+                        // If the delegate takes an injected context, the target must be context-aware.
                         var targetDef = targetRef.TryResolve();
                         if (targetDef is null) {
                             continue;
