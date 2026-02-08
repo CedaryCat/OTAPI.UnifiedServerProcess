@@ -46,7 +46,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             var convertedMethodOrigMap = mappedMethods.originalToContextBound;
             var contextBoundMethods = mappedMethods.contextBoundMethods;
-
             
             foreach (var dele in module.GetType($"{Constants.DelegatesNameSpace}.{Constants.CtxDelegatesContainerName}").NestedTypes) {
                 var md = dele.GetMethod(nameof(Action.Invoke));
@@ -584,11 +583,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             void HandleMethodCall(Instruction methodCallInstruction, MethodDefinition caller, out bool addedParam) {
-
                 addedParam = false;
 
                 var calleeRefToAdjust = (MethodReference)methodCallInstruction.Operand;
-
                 if (this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out _, out var vanillaCallee, out var contextType)) {
                     var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
                     this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);

@@ -8,6 +8,8 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
+using Terraria;
+using Terraria.Localization;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 {
@@ -20,21 +22,24 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
         public override void Patch() {
             var runGame = module.GetType("Terraria.Program").GetMethod("mfwh_orig_RunGame");
             var callSetLanguage = runGame.Body.Instructions
-                .First(inst => inst.Operand is MethodReference { DeclaringType.Name: "LanguageManager", Name: "SetLanguage" });
+                .First(inst => inst.Operand is MethodReference { DeclaringType.Name: nameof(LanguageManager), Name: nameof(LanguageManager.SetLanguage) });
             var getDefaultCulture = callSetLanguage.Previous;
             var loadLangManagerInstance = callSetLanguage.Previous.Previous;
 
-            runGame.Body.Instructions.Remove(loadLangManagerInstance);
-            runGame.Body.Instructions.Remove(getDefaultCulture);
-            runGame.Body.Instructions.Remove(callSetLanguage);
+
+            var callInitializeLegacyLocalization = runGame.Body.Instructions
+                .First(inst => inst.Operand is MethodReference { DeclaringType.Name: nameof(Lang), Name: nameof(Lang.InitializeLegacyLocalization) });
 
             var globalInitialize = module
                 .GetType(Constants.GlobalInitializerTypeName)
                 .GetMethod(Constants.GlobalInitializerEntryPointName);
+
             globalInitialize.Body.Instructions.InsertRange(0, [
-                loadLangManagerInstance,
-                getDefaultCulture,
-                callSetLanguage,
+                loadLangManagerInstance.CloneAndClear(),
+                getDefaultCulture.CloneAndClear(),
+                callSetLanguage.CloneAndClear(),
+
+                callInitializeLegacyLocalization.CloneAndClear(),
             ]);
 
 

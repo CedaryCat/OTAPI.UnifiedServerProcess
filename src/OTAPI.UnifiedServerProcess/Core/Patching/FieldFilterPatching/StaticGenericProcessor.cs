@@ -58,7 +58,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             var packetTypeStorage_Module = packetTypeStorage.GetField(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module))
                 ?? throw new Exception("Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module not found");
 
-            RefactorFieldOperate_DictionaryStorage(netManager, packetTypeStorage);
+            RefactorFieldOperate_DictionaryStorage(netManager, packetTypeStorage, true);
 
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Id.GetIdentifier());
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Module.GetIdentifier());
@@ -88,7 +88,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             var powerTypeStorage_Power = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power not found");
 
-            RefactorFieldOperate_DictionaryStorage(creativePowerManager, powerTypeStorage);
+            RefactorFieldOperate_DictionaryStorage(creativePowerManager, powerTypeStorage, true);
 
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Id.GetIdentifier());
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Name.GetIdentifier());
@@ -111,7 +111,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 worldGenerationOptions.Methods.Remove(ctor);
             }
 
-            RefactorFieldOperate_DictionaryStorage(worldGenerationOptions, optionStorage);
+            RefactorFieldOperate_DictionaryStorage(worldGenerationOptions, optionStorage, false);
 
             argument.ModifiedStaticFields.Remove(optionStorage_Instance.GetIdentifier());
 
@@ -179,6 +179,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         {
             public readonly MethodReference TypeOfT;
             public readonly MethodReference CreateInstancePatten;
+            public readonly MethodReference CreateInstanceWithParamsPatten;
             readonly TypeInitializationParams typeParams;
             public MethodReference CreateDictTryGet(TypeReference genericInstancedDictType) {
 
@@ -210,7 +211,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                 return dictSetItem;
             }
-            public readonly MethodReference CreateActivatorCreateInstance(TypeReference T) {
+            public readonly MethodReference ActivatorCreateInstanceWithGA(TypeReference T) {
                 GenericInstanceMethod genericInstanceMethod = new GenericInstanceMethod(CreateInstancePatten);
                 genericInstanceMethod.GenericArguments.Add(T);
                 return genericInstanceMethod;
@@ -226,12 +227,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                 TypeOfT = module.ImportReference(sysType.Resolve().Methods.Single(m => m.Name == nameof(Type.GetTypeFromHandle)));
 
-                CreateInstancePatten = new MethodReference(nameof(Activator.CreateInstance), module.TypeSystem.Object, activatorType) {
-                    HasThis = false,
-                };
+                CreateInstancePatten = new MethodReference(nameof(Activator.CreateInstance), module.TypeSystem.Object, activatorType);
                 var createInstanceGenericParam = new GenericParameter(CreateInstancePatten);
                 CreateInstancePatten.GenericParameters.Add(createInstanceGenericParam);
                 CreateInstancePatten.ReturnType = createInstanceGenericParam;
+
+
+                CreateInstanceWithParamsPatten = new MethodReference(nameof(Activator.CreateInstance), module.TypeSystem.Object, activatorType);
+                CreateInstanceWithParamsPatten.Parameters.AddRange([
+                    new ParameterDefinition(sysType),
+                    new ParameterDefinition(module.TypeSystem.Object.MakeArrayType())
+                ]);
             }
         }
         public readonly struct ItemParams(TypeDefinition itemType, MethodDefinition itemCtor, Dictionary<FieldDefinition, FieldDefinition> fieldMap)
@@ -354,7 +360,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             containerParams = new ContainerParams(containerField, containerType, innerContainerField, innerContainerType);
         }
-        static void CreateTypedDataGetMethod(TypeDefinition containingType, TypeDefinition staticGenericType, out FieldDefinition containerField, out MethodDefinition typedDataGetMethod, out Dictionary<FieldDefinition, FieldDefinition> fieldMap) {
+        static void CreateTypedDataGetMethod(TypeDefinition containingType, TypeDefinition staticGenericType, bool paramless, out FieldDefinition containerField, out MethodDefinition typedDataGetMethod, out Dictionary<FieldDefinition, FieldDefinition> fieldMap) {
             // init type and method params
             var typeParams = new TypeInitializationParams(containingType, staticGenericType);
             var methodParams = new MethodReferenceParams(typeParams);
@@ -368,6 +374,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             typedDataGetMethod = new MethodDefinition("Get", MethodAttributes.Public | MethodAttributes.HideBySig, itemParams.ItemType);
             var getMethodGenericParam = new GenericParameter(typeParams.origGenericParam.Name, typedDataGetMethod);
+            var constraint = new GenericParameterConstraint(staticGenericType.GenericParameters.Single().Constraints.Single().ConstraintType);
+            if (paramless) {
+                // getMethodGenericParam.Attributes |= GenericParameterAttributes.DefaultConstructorConstraint;
+            }
+            getMethodGenericParam.Constraints.Add(constraint);
             typedDataGetMethod.GenericParameters.Add(getMethodGenericParam);
 
             var itemCtorRef = itemParams.CreateGenericInstancedCtor(getMethodGenericParam, out var returnType);
@@ -393,7 +404,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             getValueBody.Add(Instruction.Create(OpCodes.Ldtoken, getMethodGenericParam));
             getValueBody.Add(Instruction.Create(OpCodes.Call, methodParams.TypeOfT));
 
-            getValueBody.Add(Instruction.Create(OpCodes.Call, methodParams.CreateActivatorCreateInstance(getMethodGenericParam)));
+            if (paramless) {
+                getValueBody.Add(Instruction.Create(OpCodes.Call, methodParams.ActivatorCreateInstanceWithGA(getMethodGenericParam)));
+            }
+            else {
+                getValueBody.Add(Instruction.Create(OpCodes.Ldnull));
+            }
 
             getValueBody.Add(Instruction.Create(OpCodes.Newobj, itemCtorRef));
             getValueBody.Add(Instruction.Create(OpCodes.Dup));
@@ -409,9 +425,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             containerField = containerParams.containerField;
         }
-        void RefactorFieldOperate_DictionaryStorage(TypeDefinition containingType, TypeDefinition staticGenericType) {
+        void RefactorFieldOperate_DictionaryStorage(TypeDefinition containingType, TypeDefinition staticGenericType, bool paramless) {
 
-            CreateTypedDataGetMethod(containingType, staticGenericType, out var containerField, out var typedDataGetMethod, out var fieldMap);
+            CreateTypedDataGetMethod(containingType, staticGenericType, paramless, out var containerField, out var typedDataGetMethod, out var fieldMap);
             foreach (var method in containingType.Methods) {
                 var jumpSites = this.GetMethodJumpSites(method);
                 var ilProcessor = method.Body.GetILProcessor();

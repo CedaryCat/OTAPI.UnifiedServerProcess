@@ -74,10 +74,11 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .Then(new AdjustPropertiesPatcher(logger, analyzers.MethodCallGraph))
                 .Then(new AdjustEventsPatcher(logger))
                 .Then(new AdjustAccessModifiersPatcher(logger))
-                .Then(new ContextInstantiationOrderPatcher(logger, analyzers.MethodCallGraph))
+                .Then(new ContextInstantiationOrderPatcher(logger, analyzers.MethodCallGraph, analyzers.TypeInheritanceGraph))
                 .Then(new TrivialDefaultValuePatcher(logger))
                 .Finalize()
 
+                .Then(new ThreadLocalInitPatcher(logger, module))
                 .Then(new AdjustAutoPropertiesPatcher(logger, module))
                 .Then(new LangManagerPostPatcher(logger, module))
                 .Then(new RemoveUnusedCodePatcherAtEnd(logger, rootContextDef, module))

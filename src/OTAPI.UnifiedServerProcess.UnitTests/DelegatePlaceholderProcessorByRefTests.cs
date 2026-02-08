@@ -4,6 +4,8 @@ using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Core;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching;
+using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching;
+using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.IO;
@@ -113,8 +115,8 @@ namespace OTAPI.UnifiedServerProcess.UnitTests
             host.Methods.Add(callerLocalByRef);
 
             var analyzers = new AnalyzerGroups(new NullLogger(), module);
-            var processor = new DelegatePlaceholderProcessor(rootContextDef, analyzers);
-            var source = new FilterArgumentSource(module, []);
+            var processor = new DelegatePlaceholderProcessor(analyzers);
+            var source = new PatcherArgumentSource(module, rootContextDef);
 
             processor.Apply(new TestComponent(new NullLogger()), ref source);
             processor.ClearJumpSitesCache();

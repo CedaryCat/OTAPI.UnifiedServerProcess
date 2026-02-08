@@ -19,6 +19,21 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Servers
             Netplay.ListenPort = -1;
             Netplay.UseUPNP = true;
         }
+        public Thread? RunningThread { get; protected set; }
+        public virtual Thread Run(string[] args) {
+            Thread result = RunningThread = new Thread(() => RunBlocking(args)) {
+                IsBackground = true,
+            };
+            result.Name = $"Server Instance: {Name}";
+            result.Start();
+            return result;
+        }
+        public virtual void RunBlocking(string[] args) {
+            ThreadLocalInitializer.Initialize();
+            RunningThread = Thread.CurrentThread;
+            RunningThread.Name = $"Server Instance: {Name}";
+            Program.LaunchGame(args);
+        }
         public override string ToString() => $"{{ Type:ServerContext, Name:\"{Name}\", Players:{Main.player.Count(p => p.active)} }}";
     }
 }

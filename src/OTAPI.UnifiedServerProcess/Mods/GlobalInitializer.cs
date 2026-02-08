@@ -20,4 +20,8 @@ namespace UnifiedServerProcess
         public readonly Type originalType = type;
         public readonly string MethodName = method;
     }
+    public static class ThreadLocalInitializer
+    {
+        public static void Initialize() { }
+    }
 }

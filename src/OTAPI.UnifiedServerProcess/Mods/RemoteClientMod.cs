@@ -1,12 +1,55 @@
 ﻿#pragma warning disable CS8321 // Local function is declared but never used
 #pragma warning disable CS0436 // Type conflicts with imported type
 using ModFramework;
+using Mono.Cecil;
+using Mono.Cecil.Cil;
+using MonoMod.Utils;
+using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Extensions;
 using System;
+using System.Linq;
+using Terraria;
 
-[Modification(ModType.PreWrite, "Rewrite RemoteClient ResetSections", ModPriority.Early)]
+[Modification(ModType.PostMerge, "Rewrite RemoteClient ResetSections", ModPriority.Early)]
 [MonoMod.MonoModIgnore]
 void NetplayConnectionCheck(ModFwModder modder) {
     Console.WriteLine("Rewrited Terraria.RemoteClient.ResetSections");
+
+    var remoteClientDef = modder.Module.GetType("Terraria.RemoteClient");
+    var mfwh_orig_ResetMDef = remoteClientDef.GetMethod("mfwh_orig_Reset");
+    var jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(mfwh_orig_ResetMDef);
+
+    var clearArrayInst = mfwh_orig_ResetMDef.Body.Instructions.Select(inst => {
+        if (inst is not Instruction { OpCode.Code: Code.Call, Operand: MethodReference { DeclaringType.FullName: "System.Array", Name: "Clear" } }) {
+            return null;
+        }
+        var path = MonoModCommon.Stack.AnalyzeParametersSources(mfwh_orig_ResetMDef, inst, jumpSites);
+        if (path.Length != 1) {
+            return null;
+        }
+        if (path[0].ParametersSources[0].Instructions.Last() is not Instruction { 
+            OpCode.Code: Code.Ldfld, 
+            Operand: FieldReference { Name: nameof(RemoteClient.TileSections) or nameof(RemoteClient.TileSectionsCheckTime) }
+        }) {
+            return null;
+        }
+
+        return path[0].ParametersSources.SelectMany(x => x.Instructions).Append(inst);
+
+    }).SelectMany(x => x ?? []).ToArray();
+
+    foreach (var inst in clearArrayInst) {
+        mfwh_orig_ResetMDef.Body.Instructions.Remove(inst);
+    }
+
+    var mfwh_ResetSectionsRef = new MethodReference(nameof(patch_RemoteClient.mfwh_ResetSections), modder.Module.TypeSystem.Void, remoteClientDef) {
+        HasThis = true,
+    };
+
+    mfwh_orig_ResetMDef.Body.Instructions.InsertRange(0, [
+        Instruction.Create(OpCodes.Ldarg_0),
+        Instruction.Create(OpCodes.Call, mfwh_ResetSectionsRef),
+    ]);
 }
 
 namespace Terraria
@@ -17,19 +60,18 @@ namespace Terraria
         public new void mfwh_ResetSections() {
             if (Main.maxSectionsX > TileSections.GetLength(0) || Main.maxSectionsY > TileSections.GetLength(1)) {
                 TileSections = new bool[Main.maxSectionsX, Main.maxSectionsY];
+                TileSectionsCheckTime = new uint[Main.maxSectionsX, Main.maxSectionsY];
                 return;
             }
-            for (int i = 0; i < Main.maxSectionsX; i++) {
-                for (int j = 0; j < Main.maxSectionsY; j++) {
-                    TileSections[i, j] = false;
-                }
-            }
+            Array.Clear(this.TileSections, 0, this.TileSections.Length);
+            Array.Clear(this.TileSectionsCheckTime, 0, this.TileSectionsCheckTime.Length);
         }
         [MonoMod.MonoModReplace]
         public new void mfwh_orig_ctor_RemoteClient() {
             Name = "Anonymous";
             StatusText = "";
             TileSections = new bool[2, 2];
+            TileSectionsCheckTime = new uint[2, 2];
             SpamProjectileMax = 100f;
             SpamAddBlockMax = 100f;
             SpamDeleteBlockMax = 500f;

@@ -340,7 +340,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 activePlayer.active = true;
 
                 SetClientCurrentlyServer(plr, to);
-                client.ResetSections(to);
+                client.mfwh_ResetSections(to);
 
                 SyncHelper.SyncServerOnlineToPlayer(to, plr);
                 SyncHelper.SyncPlayerJoinToOthers(to, plr);

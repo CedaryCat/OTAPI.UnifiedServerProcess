@@ -74,6 +74,9 @@ namespace OTAPI.UnifiedServerProcess.Core
         static bool IsShortBranch(OpCode opCode)
             => opCode.Code is Code.Brtrue_S or Code.Brfalse_S or Code.Br_S;
 
+        static bool IsEhSkeletonInstruction(OpCode opCode)
+            => opCode.Code is Code.Leave or Code.Leave_S or Code.Endfinally or Code.Endfilter or Code.Rethrow;
+
         static bool TryResolveBranchTarget(object? operand, out Instruction? target) {
             switch (operand) {
                 case Instruction instruction:
@@ -149,6 +152,140 @@ namespace OTAPI.UnifiedServerProcess.Core
             return changed;
         }
 
+        readonly struct ExceptionHandlerInfo(
+            ExceptionHandler handler,
+            int tryStart,
+            int tryEnd,
+            int handlerStart,
+            int handlerEnd,
+            int filterStart,
+            int filterEnd)
+        {
+            public ExceptionHandler Handler { get; } = handler;
+            public int TryStart { get; } = tryStart;
+            public int TryEnd { get; } = tryEnd;
+            public int HandlerStart { get; } = handlerStart;
+            public int HandlerEnd { get; } = handlerEnd;
+            public int FilterStart { get; } = filterStart;
+            public int FilterEnd { get; } = filterEnd;
+            public bool HasFilter => FilterStart >= 0;
+        }
+
+        static bool IsRangeFullyUnreachable(bool[] reachable, int startInclusive, int endExclusive) {
+            for (int i = startInclusive; i < endExclusive; i++) {
+                if (reachable[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        static void AddBoundaryInstruction(HashSet<int> preservedIndices, int index, int instructionCount) {
+            if (index >= 0 && index < instructionCount) {
+                preservedIndices.Add(index);
+            }
+        }
+
+        static void AddEhSkeletonInstructions(
+            HashSet<int> preservedIndices,
+            Mono.Collections.Generic.Collection<Instruction> instructions,
+            int startInclusive,
+            int endExclusive) {
+            for (int i = startInclusive; i < endExclusive; i++) {
+                if (IsEhSkeletonInstruction(instructions[i].OpCode)) {
+                    preservedIndices.Add(i);
+                }
+            }
+        }
+
+        static void GetEhInfos(
+            MethodBody body,
+            Dictionary<Instruction, int> indexMap,
+            int instructionCount,
+            out List<ExceptionHandlerInfo> infos) {
+            infos = [];
+            if (!body.HasExceptionHandlers) {
+                return;
+            }
+
+            foreach (var handler in body.ExceptionHandlers) {
+                if (handler.TryStart is null || !indexMap.TryGetValue(handler.TryStart, out var tryStart)) {
+                    continue;
+                }
+
+                int tryEnd;
+                if (handler.TryEnd is null) {
+                    tryEnd = instructionCount;
+                }
+                else if (!indexMap.TryGetValue(handler.TryEnd, out tryEnd)) {
+                    continue;
+                }
+
+                if (handler.HandlerStart is null || !indexMap.TryGetValue(handler.HandlerStart, out var handlerStart)) {
+                    continue;
+                }
+
+                int handlerEnd;
+                if (handler.HandlerEnd is null) {
+                    handlerEnd = instructionCount;
+                }
+                else if (!indexMap.TryGetValue(handler.HandlerEnd, out handlerEnd)) {
+                    continue;
+                }
+
+                int filterStart = -1;
+                int filterEnd = -1;
+                if (handler.FilterStart is not null) {
+                    if (!indexMap.TryGetValue(handler.FilterStart, out filterStart)) {
+                        continue;
+                    }
+                    filterEnd = handlerStart;
+                }
+
+                if (tryStart > tryEnd || handlerStart > handlerEnd || (filterStart >= 0 && filterStart > filterEnd)) {
+                    continue;
+                }
+
+                infos.Add(new ExceptionHandlerInfo(
+                    handler: handler,
+                    tryStart: tryStart,
+                    tryEnd: tryEnd,
+                    handlerStart: handlerStart,
+                    handlerEnd: handlerEnd,
+                    filterStart: filterStart,
+                    filterEnd: filterEnd));
+            }
+        }
+
+        static bool RemoveFullyUnreachableExceptionHandlers(
+            MethodBody body,
+            IReadOnlyList<ExceptionHandlerInfo> infos,
+            bool[] reachable,
+            out HashSet<ExceptionHandler> removedHandlers) {
+            removedHandlers = [];
+            bool changed = false;
+
+            foreach (var info in infos) {
+                if (!IsRangeFullyUnreachable(reachable, info.TryStart, info.TryEnd)) {
+                    continue;
+                }
+
+                if (info.HasFilter && !IsRangeFullyUnreachable(reachable, info.FilterStart, info.FilterEnd)) {
+                    continue;
+                }
+
+                if (!IsRangeFullyUnreachable(reachable, info.HandlerStart, info.HandlerEnd)) {
+                    continue;
+                }
+
+                body.ExceptionHandlers.Remove(info.Handler);
+                removedHandlers.Add(info.Handler);
+                changed = true;
+            }
+
+            return changed;
+        }
+
         bool NopUnreachableInstructions(MethodBody body) {
             var instructions = body.Instructions;
             if (instructions.Count == 0) {
@@ -162,35 +299,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             // Conservative EH edge: if any instruction in a try region is reachable, consider its handler/filter reachable too.
             // This is important for finally blocks (executed via "hidden" control-flow during leave/unwind).
-            List<(int tryStart, int tryEnd, int handlerStart, int filterStart)> exceptionHandlers = [];
-            if (body.HasExceptionHandlers) {
-                foreach (var handler in body.ExceptionHandlers) {
-                    if (handler.TryStart is null || !indexMap.TryGetValue(handler.TryStart, out var tryStart)) {
-                        continue;
-                    }
-
-                    int tryEnd;
-                    if (handler.TryEnd is null) {
-                        tryEnd = instructions.Count;
-                    }
-                    else if (!indexMap.TryGetValue(handler.TryEnd, out tryEnd)) {
-                        // Invalid boundary (likely already broken). Avoid making things worse by skipping EH-driven edges.
-                        continue;
-                    }
-
-                    int handlerStart = -1;
-                    if (handler.HandlerStart is not null && indexMap.TryGetValue(handler.HandlerStart, out var hs)) {
-                        handlerStart = hs;
-                    }
-
-                    int filterStart = -1;
-                    if (handler.FilterStart is not null && indexMap.TryGetValue(handler.FilterStart, out var fs)) {
-                        filterStart = fs;
-                    }
-
-                    exceptionHandlers.Add((tryStart, tryEnd, handlerStart, filterStart));
-                }
-            }
+            GetEhInfos(body, indexMap, instructions.Count, out var exceptionHandlers);
 
             var reachable = new bool[instructions.Count];
             var work = new Stack<int>();
@@ -201,19 +310,19 @@ namespace OTAPI.UnifiedServerProcess.Core
             while (work.TryPop(out var currentIndex)) {
                 var current = instructions[currentIndex];
 
-                foreach (var (tryStart, tryEnd, handlerStart, filterStart) in exceptionHandlers) {
-                    if (currentIndex < tryStart || currentIndex >= tryEnd) {
+                foreach (var handler in exceptionHandlers) {
+                    if (currentIndex < handler.TryStart || currentIndex >= handler.TryEnd) {
                         continue;
                     }
 
-                    if (filterStart >= 0 && !reachable[filterStart]) {
-                        reachable[filterStart] = true;
-                        work.Push(filterStart);
+                    if (handler.HasFilter && !reachable[handler.FilterStart]) {
+                        reachable[handler.FilterStart] = true;
+                        work.Push(handler.FilterStart);
                     }
 
-                    if (handlerStart >= 0 && !reachable[handlerStart]) {
-                        reachable[handlerStart] = true;
-                        work.Push(handlerStart);
+                    if (!reachable[handler.HandlerStart]) {
+                        reachable[handler.HandlerStart] = true;
+                        work.Push(handler.HandlerStart);
                     }
                 }
 
@@ -280,20 +389,49 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
             }
 
-            bool changed = false;
+            bool changed = RemoveFullyUnreachableExceptionHandlers(body, exceptionHandlers, reachable, out var removedHandlers);
+
+            HashSet<int> preservedEhSkeletonInstructionIndices = [];
+            foreach (var handler in exceptionHandlers) {
+                if (removedHandlers.Contains(handler.Handler)) {
+                    continue;
+                }
+
+                AddBoundaryInstruction(preservedEhSkeletonInstructionIndices, handler.TryStart, instructions.Count);
+                AddBoundaryInstruction(preservedEhSkeletonInstructionIndices, handler.TryEnd, instructions.Count);
+                AddBoundaryInstruction(preservedEhSkeletonInstructionIndices, handler.HandlerStart, instructions.Count);
+                AddBoundaryInstruction(preservedEhSkeletonInstructionIndices, handler.HandlerEnd, instructions.Count);
+                if (handler.HasFilter) {
+                    AddBoundaryInstruction(preservedEhSkeletonInstructionIndices, handler.FilterStart, instructions.Count);
+                    AddBoundaryInstruction(preservedEhSkeletonInstructionIndices, handler.FilterEnd, instructions.Count);
+                }
+
+                AddEhSkeletonInstructions(preservedEhSkeletonInstructionIndices, instructions, handler.TryStart, handler.TryEnd);
+                AddEhSkeletonInstructions(preservedEhSkeletonInstructionIndices, instructions, handler.HandlerStart, handler.HandlerEnd);
+                if (handler.HasFilter) {
+                    AddEhSkeletonInstructions(preservedEhSkeletonInstructionIndices, instructions, handler.FilterStart, handler.FilterEnd);
+                }
+            }
+
             for (int i = 0; i < instructions.Count; i++) {
                 if (reachable[i]) {
                     continue;
                 }
 
-                var instruction = instructions[i];
-                if (instruction.OpCode.Code == Code.Nop && instruction.Operand is null) {
+                if (preservedEhSkeletonInstructionIndices.Contains(i)) {
                     continue;
                 }
 
-                instruction.OpCode = OpCodes.Nop;
-                instruction.Operand = null;
-                changed = true;
+                var instruction = instructions[i];
+                if (instruction.OpCode.Code is Code.Nop && instruction.Operand is null) {
+                    continue;
+                }
+
+                if (instruction.OpCode.Code is not Code.Ret) {
+                    instruction.OpCode = OpCodes.Nop;
+                    instruction.Operand = null;
+                    changed = true;
+                }
             }
 
             return changed;

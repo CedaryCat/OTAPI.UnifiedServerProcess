@@ -32,7 +32,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             }
             var typeSets = types.ToHashSet();
             foreach (var fieldKV in source.UnmodifiedStaticFields.Concat(source.InitialStaticFields).ToArray()) {
-                if (typeSets.Contains(fieldKV.Value.DeclaringType.FullName)) {
+                if (typeSets.Contains(fieldKV.Value.DeclaringType.FullName) || 
+                    fieldKV.Value.FieldType.FullName is "System.Diagnostics.Stopwatch") {
                     var field = fieldKV.Value;
                     var fieldId = fieldKV.Key;
                     source.ModifiedStaticFields.TryAdd(fieldId, field);

@@ -38,8 +38,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         var inheritances = analyzers.TypeInheritanceGraph.GetDerivedTypeTree(typeConstr);
                         bool ctxBound = false;
                         foreach (var inheritance in inheritances) {
-                            var childCtor = inheritance.Methods.Single(x => x.IsConstructor && !x.IsStatic && x.Parameters.Count is 0);
-                            if (this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, childCtor)) {
+                            var childCtor = inheritance.Methods.FirstOrDefault(x => x.IsConstructor && !x.IsStatic && x.Parameters.Count is 0);
+                            if (childCtor is not null && this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, childCtor)) {
                                 ctxBound = true;
                                 break;
                             }

@@ -44,12 +44,8 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
 
             WorkRunner.RunTimedWorkAsync("Starting main servers...",
             () => {
-                Task.Run(() => {
-                    server1.Program.LaunchGame(args);
-                });
-                Task.Run(() => {
-                    server2.Program.LaunchGame(args);
-                });
+                server1.Run(args);
+                server2.Run(args);
                 var tcs = new TaskCompletionSource();
                 router.Started += () => tcs.SetResult();
                 return tcs;

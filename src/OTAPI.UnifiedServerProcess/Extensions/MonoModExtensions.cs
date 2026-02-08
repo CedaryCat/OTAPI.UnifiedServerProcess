@@ -9,7 +9,7 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Extensions
 {
-    public static class MonoModExtensions
+    public static partial class MonoModExtensions
     {
         [MonoMod.MonoModIgnore]
         public static void MakeMethodVirtual(this TypeDefinition type, params MethodDefinition[] ignores) {
@@ -196,211 +196,6 @@ namespace OTAPI.UnifiedServerProcess.Extensions
 
         public static string GetIdentifier(this FieldReference field) => field.DeclaringType.FullName + "." + field.Name;
 
-
-        private static void ResolveGenericParam(MethodReference method, out MethodReference resolved, out TypeReference typeToString) {
-            if (method is GenericInstanceMethod genericInstanceMethod) {
-                method = genericInstanceMethod.ElementMethod;
-            }
-            typeToString = method.DeclaringType;
-            if (typeToString is GenericInstanceType generic) {
-                typeToString = generic.ElementType;
-            }
-
-            if (method.HasGenericParameters || (typeToString?.HasGenericParameters ?? false)) {
-                Dictionary<IGenericParameterProvider, IGenericParameterProvider> providerMap = [];
-
-                var tmpMethod = new MethodReference(method.Name, method.Module.TypeSystem.Void);
-
-                if (method.HasGenericParameters) {
-                    for (int i = 0; i < method.GenericParameters.Count; i++) {
-                        tmpMethod.GenericParameters.Add(new GenericParameter(method));
-                    }
-                    providerMap.Add(method, tmpMethod);
-                }
-
-                tmpMethod.DeclaringType = method.DeclaringType;
-
-                if (typeToString is not null && typeToString.HasGenericParameters) {
-                    var tmpType = new TypeReference(typeToString.Namespace, typeToString.Name, typeToString.Module, typeToString.Scope) {
-                        DeclaringType = typeToString.DeclaringType
-                    };
-
-                    for (int i = 0; i < typeToString.GenericParameters.Count; i++) {
-                        tmpType.GenericParameters.Add(new GenericParameter(tmpType));
-                    }
-                    providerMap.Add(typeToString, tmpType);
-                    typeToString = tmpMethod.DeclaringType = tmpType;
-                }
-
-                var mapOption = new MonoModCommon.Structure.MapOption(providers: providerMap);
-                foreach (var param in method.Parameters) {
-                    tmpMethod.Parameters.Add(new ParameterDefinition(param.Name, param.Attributes, MonoModCommon.Structure.DeepMapTypeReference(param.ParameterType, mapOption)));
-                }
-                tmpMethod.ReturnType = MonoModCommon.Structure.DeepMapTypeReference(method.ReturnType, mapOption);
-
-                method = tmpMethod;
-            }
-            resolved = method;
-        }
-        public static string GetIdentifier(this MethodReference method, bool withTypeName = true) {
-            var originalType = method.DeclaringType;
-            if (method.DeclaringType is null && withTypeName) {
-                throw new ArgumentException("DeclaringType is null", nameof(method));
-            }
-            ResolveGenericParam(method, out var methodToString, out var typeToString);
-
-            var typeName = withTypeName ? typeToString?.FullName + "." : "";
-
-            // Handle anonymous type constructors, they may have a same overload but different Parameter names
-            IEnumerable<string> paramStrs;
-            if (originalType is not null
-                && originalType.Name.OrdinalStartsWith("<>f__AnonymousType")
-                && method.Name == ".ctor"
-                && originalType.Resolve().Methods.Count(m => m.IsConstructor && !m.IsStatic) > 1) {
-
-                var innerParamStrs = new List<string>();
-
-                var anonymousCtorDef = method.Resolve();
-                for (int i = 0; i < anonymousCtorDef.Parameters.Count; i++) {
-                    var paramName = anonymousCtorDef.Parameters[i].Name;
-                    var paramType = methodToString.Parameters[i].ParameterType;
-                    innerParamStrs.Add(paramName + ":" + paramType.FullName);
-                }
-                paramStrs = innerParamStrs;
-            }
-            else {
-                paramStrs = methodToString.Parameters.Select(p => p.ParameterType.FullName);
-            }
-
-            return typeName + method.Name +
-                (methodToString.HasGenericParameters ? "<" + string.Join(",", methodToString.GenericParameters.Select(p => "")) + ">" : "") +
-                "(" + string.Join(",", paramStrs) + ")";
-        }
-
-        public static string GetSimpleIdentifier(this System.Reflection.MethodBase method, bool withTypeName = true) {
-            var type = method.DeclaringType;
-            if (type is null && withTypeName) {
-                throw new ArgumentException("DeclaringType is null", nameof(method));
-            }
-            var typeName = withTypeName ? method.DeclaringType!.FullName + "." : "";
-
-            return typeName + method.Name + "(" + string.Join(",", method.GetParameters().Select(p => p.ParameterType.FullName)) + ")";
-        }
-
-        public static string GetIdentifier(this MethodReference method, bool withTypeName = true, params TypeDefinition[] ignoreParams) {
-            var originalType = method.DeclaringType;
-            if (method.DeclaringType is null && withTypeName) {
-                throw new ArgumentException("DeclaringType is null", nameof(method));
-            }
-            ResolveGenericParam(method, out var methodToString, out var typeToString);
-
-            var typeName = withTypeName ? typeToString?.FullName + "." : "";
-
-            HashSet<string> ignoreNames = [.. ignoreParams.Select(p => p.FullName)];
-            List<string> paramStrs = [];
-
-            // Handle anonymous type constructors, they may have a same overload but different Parameter names
-            if (originalType is not null
-                && originalType.Name.OrdinalStartsWith("<>f__AnonymousType")
-                && method.Name == ".ctor"
-                && originalType.Resolve().Methods.Count(m => m.IsConstructor && !m.IsStatic) > 1) {
-
-                var anonymousCtorDef = method.Resolve();
-                for (int i = 0; i < anonymousCtorDef.Parameters.Count; i++) {
-                    var paramName = anonymousCtorDef.Parameters[i].Name;
-                    var paramType = methodToString.Parameters[i].ParameterType;
-                    if (ignoreNames.Contains(paramType.FullName)) {
-                        continue;
-                    }
-                    paramStrs.Add(paramName + ":" + paramType.FullName);
-                }
-            }
-            else {
-                for (int i = 0; i < methodToString.Parameters.Count; i++) {
-                    var param = methodToString.Parameters[i];
-                    if (ignoreNames.Contains(param.ParameterType.FullName)) {
-                        continue;
-                    }
-                    paramStrs.Add(param.ParameterType.FullName);
-                }
-            }
-
-            return typeName + method.Name +
-                (methodToString.HasGenericParameters ? "<" + string.Join(",", methodToString.GenericParameters.Select(p => "")) + ">" : "") +
-                "(" + string.Join(",", paramStrs) + ")";
-        }
-        public static string GetIdentifier(this MethodReference method, bool withTypeName, Dictionary<string, string> typeNameMap, HashSet<int>? forceRefParams = null) {
-            var originalType = method.DeclaringType;
-            if (method.DeclaringType is null && withTypeName) {
-                throw new ArgumentException("DeclaringType is null", nameof(method));
-            }
-
-            typeNameMap ??= [];
-            forceRefParams ??= [];
-
-            ResolveGenericParam(method, out var methodToString, out var typeToString);
-
-            string typeName = "";
-
-            if (withTypeName) {
-                if (typeNameMap.TryGetValue(method.DeclaringType!.FullName, out var alias)) {
-                    typeName = alias;
-                }
-                else if (typeToString is not null) {
-                    typeName = typeToString.FullName;
-                }
-                else {
-                    typeName = method.DeclaringType.FullName;
-                }
-                typeName += ".";
-            }
-
-            List<string> paramStrs = [];
-
-            // Handle anonymous type constructors, they may have a same overload but different Parameter names
-            if (originalType is not null
-                && originalType.Name.OrdinalStartsWith("<>f__AnonymousType")
-                && method.Name == ".ctor"
-                && originalType.Resolve().Methods.Count(m => m.IsConstructor && !m.IsStatic) > 1) {
-
-                var anonymousCtorDef = method.Resolve();
-                for (int i = 0; i < anonymousCtorDef.Parameters.Count; i++) {
-                    var paramName = anonymousCtorDef.Parameters[i].Name;
-                    var paramType = methodToString.Parameters[i].ParameterType;
-                    paramStrs.Add(paramName + ":" + (typeNameMap.TryGetValue(paramType.FullName, out var alise) ? alise : paramType.FullName));
-                }
-            }
-            else {
-                for (int i = 0; i < methodToString.Parameters.Count; i++) {
-
-                    var paramType = methodToString.Parameters[i].ParameterType;
-
-                    if (typeNameMap.TryGetValue(paramType.FullName, out var alias)) {
-                        if (forceRefParams.Contains(i)) {
-                            paramStrs.Add(alias + "&");
-                        }
-                        else {
-                            paramStrs.Add(alias);
-                        }
-                    }
-                    else if (paramType is ByReferenceType referenceType && typeNameMap.TryGetValue(referenceType.ElementType.FullName, out var refAlias)) {
-                        paramStrs.Add(refAlias + "&");
-                    }
-                    else {
-                        paramStrs.Add(paramType.FullName);
-                    }
-                }
-            }
-
-            return typeName + method.Name +
-                (methodToString.HasGenericParameters ? "<" + string.Join(",", methodToString.GenericParameters.Select(p => "")) + ">" : "") +
-                "(" + string.Join(",", paramStrs) + ")";
-        }
-        public static string GetDebugName(this MethodReference method, bool fullTypeName = false) {
-            return (fullTypeName ? method.DeclaringType.FullName : method.DeclaringType.Name) + "." + method.Name +
-                (method.HasGenericParameters ? "<" + string.Join(",", method.GenericParameters.Select(p => "")) + ">" : "") +
-                "(" + string.Join(",", method.Parameters.Select(p => p.ParameterType.Name)) + ")";
-        }
         public static bool IsDelegate(this TypeReference type) =>
             type.Name == nameof(MulticastDelegate) ||
             type?.Resolve()?.BaseType?.Name == nameof(MulticastDelegate);
@@ -545,6 +340,19 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             clone.Operand = instruction.Operand;
             return clone;
         }
+        public static void Clear(this Instruction instruction) {
+            instruction.OpCode = OpCodes.Nop;
+            instruction.Operand = null;
+        }
+        public static Instruction CloneAndClear(this Instruction instruction) {
+            var clone = Instruction.Create(OpCodes.Nop);
+            clone.OpCode = instruction.OpCode;
+            clone.Operand = instruction.Operand;
+
+            instruction.OpCode = OpCodes.Nop;
+            instruction.Operand = null;
+            return clone;
+        }
 
         /// <summary>
         /// Seamlessly inserts a sequence of instructions before the target instruction by modifying the target's content in-place.
@@ -653,6 +461,21 @@ namespace OTAPI.UnifiedServerProcess.Extensions
 
             // Safe to physically remove if not referenced by control flow or exceptions
             removeFrom.Remove(instruction);
+        }
+
+        public static string GetSimpleIdentifier(this System.Reflection.MethodBase method, bool withTypeName = true) {
+            var type = method.DeclaringType;
+            if (type is null && withTypeName) {
+                throw new ArgumentException("DeclaringType is null", nameof(method));
+            }
+            var typeName = withTypeName ? method.DeclaringType!.FullName + "." : "";
+
+            return typeName + method.Name + "(" + string.Join(",", method.GetParameters().Select(p => p.ParameterType.FullName)) + ")";
+        }
+        public static string GetDebugName(this MethodReference method, bool fullTypeName = false) {
+            return (fullTypeName ? method.DeclaringType.FullName : method.DeclaringType.Name) + "." + method.Name +
+                (method.HasGenericParameters ? "<" + string.Join(",", method.GenericParameters.Select(p => "")) + ">" : "") +
+                "(" + string.Join(",", method.Parameters.Select(p => p.ParameterType.Name)) + ")";
         }
     }
 }

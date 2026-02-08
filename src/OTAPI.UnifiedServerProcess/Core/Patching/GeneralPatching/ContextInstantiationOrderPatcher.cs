@@ -1,6 +1,9 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
+using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
+using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -17,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
     /// </summary>
     /// <param name="logger"></param>
     /// <param name="callGraph"></param>
-    public class ContextInstantiationOrderPatcher(ILogger logger, MethodCallGraph callGraph) : GeneralPatcher(logger)
+    public class ContextInstantiationOrderPatcher(ILogger logger, MethodCallGraph callGraph, TypeInheritanceGraph typeInheritanceGraph) : GeneralPatcher(logger), IJumpSitesCacheFeature
     {
         public override string Name => nameof(ContextInstantiationOrderPatcher);
 
@@ -144,6 +147,40 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             }
                             else if (methodDef.HasBody && visitedMethod.TryAdd(methodDef.GetIdentifier(), methodDef)) {
                                 works.Push(methodDef.Body);
+                            }
+                        }
+                    }
+                    if (instruction.OpCode == OpCodes.Call) {
+                        var methodRef = (MethodReference)instruction.Operand;
+                        if (methodRef.DeclaringType.Name is not nameof(Activator)) {
+                            continue;
+                        }
+                        TypeReference? declaring = null;
+                        if (methodRef is GenericInstanceMethod gim && gim.Name is "CreateInstance`1") {
+                            declaring = gim.GenericArguments.Single();
+                        }
+                        else if (
+                            methodRef.Parameters.Count is 1 or 2 && 
+                            methodRef.Name is "CreateInstance" && 
+                            methodRef.Parameters[0].ParameterType.FullName == "System.Type") {
+
+                            var ldtoken = MonoModCommon.Stack.AnalyzeParametersSources(body.Method, instruction, this.GetMethodJumpSites(body.Method))
+                                .Single()
+                                .ParametersSources[0].Instructions
+                                .First();
+                            if (ldtoken.OpCode == OpCodes.Ldtoken) {
+                                declaring = (TypeReference)ldtoken.Operand;
+                            }
+                        }
+                        if (declaring is GenericParameter gp) {
+                            declaring = gp.Constraints.FirstOrDefault()?.ConstraintType;
+                            var def = declaring?.TryResolve();
+                            if (def is not null) {
+                                foreach(var child in typeInheritanceGraph.GetDerivedTypeTree(def)) {
+                                    foreach (var ctor in child.Methods.Where(x => x.IsConstructor && !x.IsStatic)) {
+                                        works.Push(ctor.Body);
+                                    }
+                                }
                             }
                         }
                     }

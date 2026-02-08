@@ -29,17 +29,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
             //legarcyLighting_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, new FieldReference(Constants.RootContextFieldName, rootDef, legarcyLighting)));
             //legarcyLighting_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
 
-            var lightSysCxt = module.GetType("Terraria.LightingSystemContext");
-            var lightSysCxt_ctor = lightSysCxt.Methods.Single(m => m.Name == ".ctor");
+            //var lightSysCxt = module.GetType("Terraria.LightingSystemContext");
+            //var lightSysCxt_ctor = lightSysCxt.Methods.Single(m => m.Name == ".ctor");
 
-            lightSysCxt_ctor.Body.Variables.Clear();
-            lightSysCxt_ctor.Body.Instructions.Clear();
-            lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-            lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, new MethodReference(".ctor", module.TypeSystem.Void, module.TypeSystem.Object) { HasThis = true }));
-            lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-            lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
-            lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, new FieldReference(Constants.RootContextFieldName, rootDef, lightSysCxt)));
-            lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+            //lightSysCxt_ctor.Body.Variables.Clear();
+            //lightSysCxt_ctor.Body.Instructions.Clear();
+            //lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+            //lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Call, new MethodReference(".ctor", module.TypeSystem.Void, module.TypeSystem.Object) { HasThis = true }));
+            //lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
+            //lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
+            //lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, new FieldReference(Constants.RootContextFieldName, rootDef, lightSysCxt)));
+            //lightSysCxt_ctor.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
         }
     }
 }

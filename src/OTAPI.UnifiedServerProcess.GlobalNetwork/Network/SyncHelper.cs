@@ -68,9 +68,6 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
             }
         }
         static void SendWorldInfo(this ServerContext server, int whoAmI) {
-            for (int i = 0; i < 290; i++) {
-                server.NetMessage.TrySendData(MessageID.NPCKillCountDeathTally, whoAmI, -1, null, i);
-            }
             server.NetMessage.TrySendData(57, whoAmI);
             server.NetMessage.TrySendData(MessageID.MoonlordHorror);
             server.NetMessage.TrySendData(MessageID.UpdateTowerShieldStrengths, whoAmI);
@@ -112,7 +109,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
                 if (!item.active || item.playerIndexTheItemIsReservedFor != plr) {
                     continue;
                 }
-                SendSmallPacket(offlineServer, plr, new ItemOwner((short)i, 255));
+                SendSmallPacket(offlineServer, plr, new ItemOwner((short)i, 255, item.position));
             }
             for (int i = 0; i < Terraria.Main.maxProjectiles; i++) {
                 var proj = offlineServer.Main.projectile[i];

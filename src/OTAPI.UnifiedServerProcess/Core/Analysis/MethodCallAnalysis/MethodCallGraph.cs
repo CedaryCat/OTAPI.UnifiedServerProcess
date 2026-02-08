@@ -93,7 +93,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                                         continue;
                                     }
                                     var m = stackType?.GetRuntimeMethods(true).FirstOrDefault(m => 
-                                        m.GetIdentifier(false).EndsWith("." + calleeDef.GetIdentifier(false)) || // implict interface impl
+                                        m.GetIdentifier(false).OrdinalEndsWith("." + calleeDef.GetIdentifier(false)) || // implict interface impl
                                         m.GetIdentifier(false) == calleeDef.GetIdentifier(false));
                                     if (m is not null) {
                                         tempMethods.Add(m);

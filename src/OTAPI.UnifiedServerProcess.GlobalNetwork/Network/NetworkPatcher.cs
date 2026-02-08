@@ -23,7 +23,6 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork.Network
 
             var Main = server.Main;
 
-            Terraria.Main.rand ??= new UnifiedRandom((int)DateTime.Now.Ticks);
             self.ServerIP = IPAddress.Any;
             Main.menuMode = 14;
             Main.statusText = Lang.menu[8].Value;

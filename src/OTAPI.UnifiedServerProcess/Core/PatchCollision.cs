@@ -39,12 +39,15 @@ namespace OTAPI.UnifiedServerProcess.Core
             foreach (var method in collisionType.Methods.Where(m => m.Name != ".cctor" && m.Name != ".ctor")) {
                 var instructionSnapshot = method.Body.Instructions.ToArray();
                 foreach (var instruction in instructionSnapshot) {
-                    if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference setField && setField.DeclaringType.FullName is "Terraria.Collision") {
-                        if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var methodData)) {
+                    if (instruction.Operand is FieldReference setField && setField.DeclaringType.FullName is "Terraria.Collision") {
+
+                        if (instruction.OpCode == OpCodes.Stsfld && !collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var methodData)) {
                             methodData = new MethodWithPreparedVariables(method);
                             methodData.PrepareVariables(collisionStateMethodsById);
                             break;
                         }
+
+
                     }
                 }
             }

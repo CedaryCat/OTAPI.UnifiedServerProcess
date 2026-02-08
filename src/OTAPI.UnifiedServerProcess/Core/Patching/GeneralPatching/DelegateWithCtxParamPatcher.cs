@@ -53,7 +53,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             continue;
                         }
 
-                        var originalId = targetRef.GetIdentifier(withTypeName: false);
+                        var originalId = targetRef.GetIdentifier(withDeclaring: false);
 
                         targetRef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                         targetDef = targetRef.TryResolve();
@@ -64,7 +64,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         // Create a method with a static root context parameter to adapt to the signature,
                         // but the implementation is merely to forward to the instance method of the corresponding context.
                         if (!targetRef.HasThis && arguments.OriginalToContextType.TryGetValue(targetRef.DeclaringType.FullName, out var contextTypeData)) {
-                            var transfieredMethod = contextTypeData.ContextTypeDef.Methods.Single(m => m.GetIdentifier(withTypeName: false) == originalId);
+                            var transfieredMethod = contextTypeData.ContextTypeDef.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == originalId);
 
                             var att = transfieredMethod.Attributes;
                             att |= MethodAttributes.Static;
@@ -94,7 +94,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         // Create a overloaded method. The "root" parameter is not used and is only for compatibility with the signature.
                         if (arguments.RootContextFieldToAdaptExternalInterface.TryGetValue(targetRef.DeclaringType.FullName, out var rootField)) {
                             var typeDef = targetRef.DeclaringType.Resolve();
-                            var originalMethod = typeDef.Methods.Single(m => m.GetIdentifier(withTypeName: false) == originalId);
+                            var originalMethod = typeDef.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == originalId);
 
                             var att = originalMethod.Attributes;
                             att &= ~MethodAttributes.Static;

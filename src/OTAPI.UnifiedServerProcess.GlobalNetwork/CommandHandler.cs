@@ -21,7 +21,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
         public CommandHandler(Router router, ChatHandler chat) {
             this.router = router;
             On.Terraria.Chat.Commands.SayChatCommand.ProcessIncomingMessage += ProcessIncomingMessage;
-            On.OTAPI.HooksSystemContext.MainSystemContext.InvokeCommandProcess += ProcessConsoleMessage;
+            On.OTAPI.HooksSystemContext.MainSystemContext.InvokeCommandProcess_string_string += ProcessConsoleMessage;
         }
 
         public void KeepReadingInput() {
@@ -39,7 +39,7 @@ namespace OTAPI.UnifiedServerProcess.GlobalNetwork
 
             orig(self, root, text, clientId);
         }
-        bool ProcessConsoleMessage(On.OTAPI.HooksSystemContext.MainSystemContext.orig_InvokeCommandProcess orig, HooksSystemContext.MainSystemContext self,
+        bool ProcessConsoleMessage(On.OTAPI.HooksSystemContext.MainSystemContext.orig_InvokeCommandProcess_string_string orig, HooksSystemContext.MainSystemContext self,
             string lowered, string raw) {
 
             if (ProcessUSPCommandText(self.root, raw, byte.MaxValue)) {
