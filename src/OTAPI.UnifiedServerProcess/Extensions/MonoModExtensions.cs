@@ -239,33 +239,29 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             return type.Methods.Single((MethodDefinition x) => x.Name == name);
         }
         public static IEnumerable<MethodDefinition> GetRuntimeMethods(this TypeDefinition type, bool includeInterf = false) {
-            foreach (var md in type.Methods) {
-                yield return md;
-            }
-            var baseType = type.BaseType?.TryResolve();
-            if (baseType is not null) {
-                foreach (var md in baseType.GetRuntimeMethods()) {
+            HashSet<MethodDefinition> visited = [];
+            foreach (var md in type.Methods)
+                if (visited.Add(md))
                     yield return md;
-                }
-            }
+            var baseType = type.BaseType?.TryResolve();
+            if (baseType is not null)
+                foreach (var md in baseType.GetRuntimeMethods())
+                    if (visited.Add(md))
+                        yield return md;
             static IEnumerable<MethodDefinition> GetInterfaceMethods(TypeDefinition type) {
-                HashSet<MethodDefinition> visited = [];
                 if (type.IsInterface)
                     foreach (var md in type.Methods)
-                        if (visited.Add(md))
-                            yield return md;
+                        yield return md;
                 foreach (var interf in type.Interfaces) {
                     var interfDef = interf.InterfaceType.TryResolve();
                     if (interfDef is not null)
                         foreach (var md in interfDef.Methods)
-                            if (visited.Add(md))
-                                yield return md;
+                            yield return md;
                 }
                 var baseType = type.BaseType?.TryResolve();
                 if (baseType is not null) {
                     foreach (var md in GetInterfaceMethods(baseType))
-                        if (visited.Add(md))
-                            yield return md;
+                        yield return md;
                 }
             }
             if (includeInterf) {
@@ -273,6 +269,27 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                     yield return md;
                 }
             }
+        }
+        public static IEnumerable<(TypeDefinition idef, TypeReference iref)> GetAllInterfaces(this TypeReference type) {
+            HashSet<string> visited = [];
+            var typeDef = type.TryResolve();
+            if (typeDef is null) {
+                yield break;
+            }
+            if (typeDef.IsInterface) {
+                yield return (typeDef, type);
+            }
+            foreach (var interf in typeDef.Interfaces) {
+                var interfDef = interf.InterfaceType.TryResolve();
+                if (interfDef is not null)
+                    if (visited.Add(interfDef.FullName))
+                        yield return (interfDef, interf.InterfaceType);
+            }
+            var baseType = typeDef.BaseType?.TryResolve();
+            if (baseType is not null)
+                foreach (var interfDef in typeDef.BaseType!.GetAllInterfaces())
+                    if(visited.Add(interfDef.idef.FullName))
+                        yield return interfDef;
         }
 
         public static EventDefinition GetEvent(this TypeDefinition type, string name) {

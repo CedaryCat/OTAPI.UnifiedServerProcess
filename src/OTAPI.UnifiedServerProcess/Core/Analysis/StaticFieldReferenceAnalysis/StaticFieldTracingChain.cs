@@ -229,7 +229,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
                 var loopBaseType = loopState.ExactType ?? TracingStaticField.FieldType;
                 if (!sccIndex.IsInSccIncludingBaseTypes(loopBaseType, loop.SccId)) {
-                    // A loop summary that doesn't apply to the current type would over-constrain the path; ignore it.
+                    // A loop summary that doesn't apply to the current typeRef would over-constrain the path; ignore it.
                     result = this;
                     return true;
                 }
@@ -324,7 +324,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return sccIndex.IsInSccIncludingBaseTypes(nextType, sccId) && seen.Contains(nextType.FullName);
         }
         public bool TryTraceEnumeratorCurrent([NotNullWhen(true)] out StaticFieldTracingChain? result) {
-            if (EncapsulationHierarchy.Length < 2) {
+            if (EncapsulationHierarchy.Length < 1) {
                 result = null;
                 return false;
             }
@@ -332,15 +332,39 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 result = null;
                 return false;
             }
-            if (EncapsulationHierarchy[1] is not ArrayElementLayer && EncapsulationHierarchy[1] is not CollectionElementLayer) {
-                throw new NotSupportedException("Enumerator layer must be followed by ArrayElementLayer or CollectionElementLayer.");
+            if (EncapsulationHierarchy.Length > 1 && EncapsulationHierarchy[1] is ArrayElementLayer or CollectionElementLayer) {
+                result = new StaticFieldTracingChain(
+                    TracingStaticField,
+                    EncapsulationHierarchy.RemoveAt(0).RemoveAt(0),
+                    ComponentAccessPath
+                );
+                return true;
             }
-            result = new StaticFieldTracingChain(
-                TracingStaticField,
-                EncapsulationHierarchy.RemoveAt(0).RemoveAt(0),
-                ComponentAccessPath
-            );
-            return true;
+            if (EncapsulationHierarchy.Length is 1) {
+                var typeRef = TracingStaticField.FieldType;
+                if (!ComponentAccessPath.IsEmpty) {
+                    typeRef = ComponentAccessPath.Last().MemberType;
+                }
+                if (typeRef is ArrayType at) {
+                    result = new StaticFieldTracingChain(
+                        TracingStaticField,
+                        EncapsulationHierarchy.RemoveAt(0),
+                        ComponentAccessPath.Add(new ArrayElementLayer(at))
+                    );
+                    return true;
+                }
+                var interfaces = typeRef.GetAllInterfaces().ToArray();
+                var (idef, iref) = interfaces.FirstOrDefault(i => i.idef.FullName == EnumeratorLayer.GetEnumerableType(typeRef.Module).FullName);
+                if (iref is GenericInstanceType git) {
+                    result = new StaticFieldTracingChain(
+                        TracingStaticField,
+                        EncapsulationHierarchy.RemoveAt(0),
+                        ComponentAccessPath.Add(new CollectionElementLayer(typeRef, git.GenericArguments.Last()))
+                    );
+                    return true;
+                }
+            }
+            throw new NotSupportedException("Enumerator layer must be followed by ArrayElementLayer or CollectionElementLayer.");
         }
 
         public StaticFieldTracingChain CreateEncapsulatedInstance(MemberReference storedIn)
@@ -443,11 +467,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
         }
         public StaticFieldTracingChain? CreateEncapsulatedEnumeratorInstance() {
             if (EncapsulationHierarchy.IsEmpty) {
-                return null;
+                var typeRef = TracingStaticField.FieldType;
+                if (!ComponentAccessPath.IsEmpty) {
+                    typeRef = ComponentAccessPath.Last().MemberType;
+                }
+                var typeDef = typeRef.TryResolve();
+                if (typeRef is not ArrayType && !typeRef.GetAllInterfaces()
+                    .Select(x => x.idef.FullName)
+                    .Contains(EnumeratorLayer.GetEnumerableType(typeRef.Module).FullName)) {
+                    return null;
+                }
+
+                return new StaticFieldTracingChain(this, new EnumeratorLayer(typeRef));
             }
             if (EncapsulationHierarchy[0] is ArrayElementLayer or CollectionElementLayer) {
-                var collectionEle = EncapsulationHierarchy[0];
-                return new StaticFieldTracingChain(this, new EnumeratorLayer(collectionEle.DeclaringType));
+                var collectionLayer = EncapsulationHierarchy[0];
+                return new StaticFieldTracingChain(this, new EnumeratorLayer(collectionLayer.DeclaringType));
             }
             // if there has already enumerator, we don't need to create a nested one
             if (EncapsulationHierarchy[0] is EnumeratorLayer) {

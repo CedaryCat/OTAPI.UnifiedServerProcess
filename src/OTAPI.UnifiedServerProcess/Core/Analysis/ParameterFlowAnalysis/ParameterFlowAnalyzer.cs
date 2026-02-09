@@ -183,6 +183,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         case Code.Ldarg_3:
                         case Code.Ldarg_S:
                         case Code.Ldarg:
+                        case Code.Ldarga_S:
+                        case Code.Ldarga:
                             HandleLoadArgument(instruction);
                             break;
 
@@ -191,6 +193,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         case Code.Stloc_2:
                         case Code.Stloc_3:
                         case Code.Stloc_S:
+                        case Code.Stloc:
                             HandleStoreLocal(instruction);
                             break;
 
@@ -199,10 +202,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         case Code.Ldloc_2:
                         case Code.Ldloc_3:
                         case Code.Ldloc_S:
+                        case Code.Ldloc:
+                        case Code.Ldloca_S:
+                        case Code.Ldloca:
                             HandleLoadLocal(instruction);
                             break;
 
                         case Code.Ldfld:
+                        case Code.Ldflda:
                             HandleLoadField(instruction);
                             break;
 

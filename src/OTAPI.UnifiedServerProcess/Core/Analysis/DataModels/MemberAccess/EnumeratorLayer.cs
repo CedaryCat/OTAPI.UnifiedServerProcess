@@ -13,10 +13,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
         public override TypeReference MemberType => collectionType;
         static TypeReference? enumeratorType;
         static TypeReference? enumerableType;
-        static TypeReference GetEnumeratorType(ModuleDefinition module) {
+        public static TypeReference GetEnumeratorType(ModuleDefinition module) {
             return enumeratorType ??= module.ImportReference(typeof(IEnumerator<>));
         }
-        static TypeReference GetEnumerableType(ModuleDefinition module) {
+        public static TypeReference GetEnumerableType(ModuleDefinition module) {
             return enumerableType ??= module.ImportReference(typeof(IEnumerable<>));
         }
         public static bool IsEnumerator(TypeInheritanceGraph graph, TypeDefinition type) {
@@ -30,16 +30,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             return true;
         }
         public static bool IsGetEnumeratorMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction getEnumeratorInstruction) {
-            if (getEnumeratorInstruction.OpCode != OpCodes.Call || getEnumeratorInstruction.OpCode != OpCodes.Callvirt) {
+            if (getEnumeratorInstruction is not {
+                OpCode.Code: Code.Call or Code.Callvirt,
+                Operand: MethodReference { HasThis: true } getEnumerator
+            }) {
                 return false;
             }
-            if (getEnumeratorInstruction.Operand is not MethodReference methodRef) {
+            if (getEnumerator.Name != "GetEnumerator") {
                 return false;
             }
-            if (methodRef.Name != "GetEnumerator") {
-                return false;
-            }
-            var declaringType = methodRef.DeclaringType.TryResolve();
+            var declaringType = getEnumerator.DeclaringType.TryResolve();
             if (declaringType is null) {
                 return false;
             }
@@ -52,17 +52,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             }
             return true;
         }
-        public static bool IsGetCurrentMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction getEnumeratorInstruction) {
-            if (getEnumeratorInstruction.OpCode != OpCodes.Call && getEnumeratorInstruction.OpCode != OpCodes.Callvirt) {
+        public static bool IsGetCurrentMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction getCurrentInstruction) {
+            if (getCurrentInstruction is not {
+                OpCode.Code: Code.Call or Code.Callvirt,
+                Operand: MethodReference { HasThis: true } getCurrent
+            }) {
                 return false;
             }
-            if (getEnumeratorInstruction.Operand is not MethodReference methodRef) {
+            if (getCurrent.Name != "get_Current") {
                 return false;
             }
-            if (methodRef.Name != "get_Current") {
-                return false;
-            }
-            var declaringType = methodRef.DeclaringType.TryResolve();
+            var declaringType = getCurrent.DeclaringType.TryResolve();
             if (declaringType is null) {
                 return false;
             }

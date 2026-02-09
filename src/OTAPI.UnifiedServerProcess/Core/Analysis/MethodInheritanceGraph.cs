@@ -533,9 +533,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             Dictionary<string, Dictionary<string, MethodDefinition>> chains) {
             foreach (var interfaceImpl in type.Interfaces) {
                 var interfaceDef = interfaceImpl.InterfaceType.Resolve();
-                if (interfaceDef.Name.StartsWith("IEntryFilter")) {
-
-                }
 
                 foreach (var interfaceMethod in interfaceDef.Methods) {
                     // Instantiate the interface method against the concrete interface type (handles generics).

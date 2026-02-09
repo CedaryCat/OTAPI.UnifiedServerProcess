@@ -36,11 +36,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
         }
         public static bool IsStoreElementsMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction storeMethodCallInstruction) {
 
-            if (storeMethodCallInstruction.Operand is not MethodReference storeMethod) {
-                return false;
-            }
-
-            if (!storeMethod.HasThis) {
+            if (storeMethodCallInstruction is not {
+                OpCode.Code: Code.Call or Code.Callvirt,
+                Operand: MethodReference { HasThis: true } storeMethod
+            }) {
                 return false;
             }
 
@@ -55,13 +54,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
         }
 
         public static bool IsStoreElementMethod(TypeInheritanceGraph graph, MethodReference caller, Instruction storeMethodCallInstruction, out int indexOfValueInParameters) {
-
             indexOfValueInParameters = -1;
-            if (storeMethodCallInstruction.Operand is not MethodReference storeMethod) {
-                return false;
-            }
 
-            if (!storeMethod.HasThis) {
+            if (storeMethodCallInstruction is not { 
+                OpCode.Code: Code.Call or Code.Callvirt, 
+                Operand: MethodReference { HasThis: true } storeMethod }) {
                 return false;
             }
 
