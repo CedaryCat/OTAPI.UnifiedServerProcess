@@ -12,7 +12,7 @@
 	<ItemGroup>
 		<PackageReference Include="MonoMod.RuntimeDetour" Version="25.3.3" />
 		<PackageReference Include="MonoMod.RuntimeDetour.HookGen" Version="22.7.31.1" />
-		<PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.16" />
+		<PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.15-mf-a807e26.11" />
 		<PackageReference Include="System.IO.Packaging" Version="10.0.2" />
 	</ItemGroup>
 	<ItemGroup>
