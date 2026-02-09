@@ -33,15 +33,15 @@ namespace OTAPI.UnifiedServerProcess.Core
             Dictionary<string, MethodWithPreparedVariables> collisionStateMethodsById = [];
 
             // Get the type definition for Terraria.Collision
-            var collisionType = module.GetType("Terraria.Collision");
+            TypeDefinition collisionType = module.GetType("Terraria.Collision");
 
             // Seed: methods inside Terraria.Collision that assign to Collision static fields.
-            foreach (var method in collisionType.Methods.Where(m => m.Name != ".cctor" && m.Name != ".ctor")) {
-                var instructionSnapshot = method.Body.Instructions.ToArray();
-                foreach (var instruction in instructionSnapshot) {
+            foreach (MethodDefinition? method in collisionType.Methods.Where(m => m.Name != ".cctor" && m.Name != ".ctor")) {
+                Instruction[] instructionSnapshot = method.Body.Instructions.ToArray();
+                foreach (Instruction? instruction in instructionSnapshot) {
                     if (instruction.Operand is FieldReference setField && setField.DeclaringType.FullName is "Terraria.Collision") {
 
-                        if (instruction.OpCode == OpCodes.Stsfld && !collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var methodData)) {
+                        if (instruction.OpCode == OpCodes.Stsfld && !collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out MethodWithPreparedVariables? methodData)) {
                             methodData = new MethodWithPreparedVariables(method);
                             methodData.PrepareVariables(collisionStateMethodsById);
                             break;
@@ -52,14 +52,13 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
             }
 
-            foreach (var fieldDef in collisionType.Fields) {
+            foreach (FieldDefinition? fieldDef in collisionType.Fields) {
                 if (tlsFields.Contains(fieldDef.Name) && !fieldDef.CustomAttributes.Any(a => a.AttributeType.Name is "ThreadStaticAttribute")) {
                     fieldDef.CustomAttributes.Add(new CustomAttribute(
                         new MethodReference(
                             ".ctor",
-                            module.TypeSystem.Void, 
-                            new TypeReference("System", "ThreadStaticAttribute", module, module.TypeSystem.CoreLibrary)) 
-                        { 
+                            module.TypeSystem.Void,
+                            new TypeReference("System", "ThreadStaticAttribute", module, module.TypeSystem.CoreLibrary)) {
                             HasThis = true
                         }
                     ));
@@ -67,7 +66,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             }
 
             Console.WriteLine($"Collision static field writers found: {collisionStateMethodsById.Count}");
-            foreach (var m in collisionStateMethodsById.Values) {
+            foreach (MethodWithPreparedVariables m in collisionStateMethodsById.Values) {
                 Console.WriteLine($"    【{m.Method.GetDebugName()}】 | {string.Join(",", m.VariablesByFieldName.Values)}");
             }
             //Console.WriteLine($"Press Enter to continue");
@@ -77,17 +76,17 @@ namespace OTAPI.UnifiedServerProcess.Core
             // Second seed: all methods across the module that *read* Collision static fields.
             Dictionary<string, MethodWithPreparedVariables> collisionFieldReadersById = [];
 
-            foreach (var type in module.Types) {
-                foreach (var method in type.Methods) {
+            foreach (TypeDefinition? type in module.Types) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
 
-                    var instructionSnapshot = method.Body.Instructions.ToArray();
-                    foreach (var instruction in instructionSnapshot) {
+                    Instruction[] instructionSnapshot = method.Body.Instructions.ToArray();
+                    foreach (Instruction? instruction in instructionSnapshot) {
                         if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference getField && IsTargetCollisionField(getField)) {
 
-                            if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var added)) {
+                            if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out MethodWithPreparedVariables? added)) {
                                 added = new MethodWithPreparedVariables(method);
                                 added.PrepareVariables(collisionStateMethodsById);
                             }
@@ -100,8 +99,8 @@ namespace OTAPI.UnifiedServerProcess.Core
             }
 
             Console.WriteLine($"Collision static field readers found: {collisionFieldReadersById.Count}");
-            foreach (var kv in collisionFieldReadersById) {
-                var m = kv.Value;
+            foreach (KeyValuePair<string, MethodWithPreparedVariables> kv in collisionFieldReadersById) {
+                MethodWithPreparedVariables m = kv.Value;
                 Console.WriteLine($"    【{m.Method.GetDebugName()}】 | {string.Join(",", m.VariablesByFieldName.Values)}");
             }
             //Console.WriteLine($"Press Enter to continue");
@@ -115,20 +114,20 @@ namespace OTAPI.UnifiedServerProcess.Core
             for (int depthIndex = 0; depthIndex < 6; depthIndex++) {
                 var callDepth = depthIndex + 2;
                 // Iterate through each type in the module
-                foreach (var type in module.Types) {
+                foreach (TypeDefinition? type in module.Types) {
                     // Iterate through each method in the type
-                    foreach (var method in type.Methods) {
+                    foreach (MethodDefinition? method in type.Methods) {
                         if (!method.HasBody) {
                             continue;
                         }
 
                         bool callsPreviousDepthMethod = false;
 
-                        var instructionSnapshot = method.Body.Instructions.ToArray();
-                        foreach (var instruction in instructionSnapshot) {
+                        Instruction[] instructionSnapshot = method.Body.Instructions.ToArray();
+                        foreach (Instruction? instruction in instructionSnapshot) {
                             if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference methodRef) {
 
-                                if (previousDepthMethodsById.TryGetValue(methodRef.GetIdentifier(), out var _)) {
+                                if (previousDepthMethodsById.TryGetValue(methodRef.GetIdentifier(), out MethodWithPreparedVariables _)) {
                                     Console.WriteLine($"[Call depth {callDepth}] {method.GetDebugName()} calls previous-depth method {methodRef.GetDebugName()}");
                                     callsPreviousDepthMethod = true;
                                 }
@@ -136,7 +135,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                         }
 
                         if (callsPreviousDepthMethod) {
-                            if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out var added)) {
+                            if (!collisionStateMethodsById.TryGetValue(method.GetIdentifier(), out MethodWithPreparedVariables? added)) {
                                 added = new MethodWithPreparedVariables(method);
                                 added.PrepareVariables(collisionStateMethodsById);
                             }
@@ -149,7 +148,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
 
                 Console.WriteLine($"[Call depth {callDepth}] caller methods found: {currentDepthMethodsById.Count} (【Method】 | [variables])");
-                foreach (var m in currentDepthMethodsById.Values) {
+                foreach (MethodWithPreparedVariables m in currentDepthMethodsById.Values) {
                     Console.WriteLine($"    【{m.Method.GetDebugName()}】| {string.Join(",", m.VariablesByFieldName.Values)}");
                 }
                 //Console.WriteLine($"Press Enter to continue");
@@ -164,27 +163,27 @@ namespace OTAPI.UnifiedServerProcess.Core
                     .Where(m => m.VariablesByFieldName.Values.Any(v => v.Mode == VariableMode.InParam))
                     .ToDictionary(x => x.Identifier, x => x);
 
-            foreach (var methodData in collisionStateMethodsById.Values.ToArray()) {
+            foreach (MethodWithPreparedVariables? methodData in collisionStateMethodsById.Values.ToArray()) {
                 // Names of Collision fields whose values are required later in this method body.
                 HashSet<string> pendingRequiredStateNames = [];
 
-                var reverseInstructions = methodData.Method.Body.Instructions.Reverse().ToArray();
-                foreach (var instruction in reverseInstructions) {
+                Instruction[] reverseInstructions = methodData.Method.Body.Instructions.Reverse().ToArray();
+                foreach (Instruction? instruction in reverseInstructions) {
                     if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference methodRef) {
-                        if (methodsRequiringInputParamsById.TryGetValue(methodRef.GetIdentifier(), out var calleeRequiringInputs)) {
-                            foreach (var item in calleeRequiringInputs.VariablesByFieldName.Values.Where(
+                        if (methodsRequiringInputParamsById.TryGetValue(methodRef.GetIdentifier(), out MethodWithPreparedVariables? calleeRequiringInputs)) {
+                            foreach (VariableItem? item in calleeRequiringInputs.VariablesByFieldName.Values.Where(
                                 v => v.Mode == VariableMode.InParam && v.FieldName is not nameof(Collision.shimmer) or nameof(Collision.honey))) {
                                 pendingRequiredStateNames.Add(item.FieldName);
                             }
                             Console.WriteLine($"Detected that {methodData.Method.GetDebugName()} calls {methodRef.GetDebugName()} which requires inputs: {string.Join(",", pendingRequiredStateNames)}");
                         }
-                        if (collisionStateMethodsById.TryGetValue(methodRef.GetIdentifier(), out var calleeMethodData)) {
-                            var transferableOutParams = calleeMethodData.VariablesByFieldName.Values
+                        if (collisionStateMethodsById.TryGetValue(methodRef.GetIdentifier(), out MethodWithPreparedVariables? calleeMethodData)) {
+                            VariableItem[] transferableOutParams = calleeMethodData.VariablesByFieldName.Values
                                 .Where(v => pendingRequiredStateNames.Contains(v.FieldName) && v.Mode != VariableMode.InParam)
                                 .ToArray();
 
                             calleeMethodData.PrepareVariables(collisionStateMethodsById, [.. transferableOutParams.Select(v => v.Field.Name)]);
-                            foreach (var item in transferableOutParams) {
+                            foreach (VariableItem? item in transferableOutParams) {
                                 pendingRequiredStateNames.Remove(item.FieldName);
                                 Console.WriteLine($"    Promote {item.FieldName} to out-param for {calleeMethodData.Method.GetDebugName()} (needed later in {methodData.Method.GetDebugName()})");
                                 Console.WriteLine($"    Pending state values: {string.Join(",", pendingRequiredStateNames)}");
@@ -207,7 +206,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 MonoModCommon.Reference.Method(() => default(Player)!.SlopingCollision(default,default)).GetSimpleIdentifier(),
             ];
 
-            foreach (var m in collisionStateMethodsById.Values.ToArray()) {
+            foreach (MethodWithPreparedVariables? m in collisionStateMethodsById.Values.ToArray()) {
                 if (outParamPreferenceMethodIds.Contains(m.Identifier)) {
                     m.PrepareVariables(collisionStateMethodsById, [.. m.VariablesByFieldName.Values.Where(v => v.Mode is not VariableMode.InParam).Select(v => v.Field.Name)]);
                 }
@@ -216,7 +215,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
             }
 
-            foreach (var m in collisionStateMethodsById.Values.ToArray()) {
+            foreach (MethodWithPreparedVariables? m in collisionStateMethodsById.Values.ToArray()) {
                 m.PrepareVariables(collisionStateMethodsById);
             }
 
@@ -228,7 +227,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
 
             Console.WriteLine($"Analysis complete: {collisionStateMethodsById.Count} related methods; {signatureRewriteQueue.Count} require signature rewrites:");
-            foreach (var m in signatureRewriteQueue) {
+            foreach (MethodWithPreparedVariables m in signatureRewriteQueue) {
                 Console.WriteLine($"    【 {m.Method.GetDebugName()} 】 | {string.Join(",", m.VariablesByFieldName.Values)}");
             }
             //Console.WriteLine($"Press Enter to continue");
@@ -240,10 +239,10 @@ namespace OTAPI.UnifiedServerProcess.Core
             while (signatureRewriteQueue.Count > 0) {
                 iteration++;
                 Dictionary<string, MethodWithPreparedVariables> processedThisIterationById = [];
-                var queueSnapshot = signatureRewriteQueue.ToArray();
-                foreach (var queuedMethod in queueSnapshot) {
-                    foreach (var kv in collisionStateMethodsById) {
-                        var candidateCaller = kv.Value;
+                MethodWithPreparedVariables[] queueSnapshot = signatureRewriteQueue.ToArray();
+                foreach (MethodWithPreparedVariables queuedMethod in queueSnapshot) {
+                    foreach (KeyValuePair<string, MethodWithPreparedVariables> kv in collisionStateMethodsById) {
+                        MethodWithPreparedVariables candidateCaller = kv.Value;
                         var candidateCallerId = kv.Key;
 
                         // If this candidate calls a method that needs signature rewrites, this candidate must
@@ -266,7 +265,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
 
                 Console.WriteLine($"[Iteration {iteration}] processed non-local methods: {processedThisIterationById.Count}, remaining {signatureRewriteQueue.Count}");
-                foreach (var m in processedThisIterationById.Values) {
+                foreach (MethodWithPreparedVariables m in processedThisIterationById.Values) {
                     Console.WriteLine($"    【 {m.Method.GetDebugName()} 】 | {string.Join(",", m.VariablesByFieldName.Values)}");
                 }
 
@@ -278,7 +277,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
 
             Console.WriteLine($"Methods involved in rewrite: {methodsToRewriteById.Count}");
-            foreach (var methodData in methodsToRewriteById.Values) {
+            foreach (MethodWithPreparedVariables methodData in methodsToRewriteById.Values) {
                 methodData.ApplyVariables();
                 Console.WriteLine($"    【 {methodData.Method.GetDebugName()} 】 | {string.Join(",", methodData.VariablesByFieldName.Values)}");
                 Console.WriteLine($"        【params】{string.Join(",", methodData.Method.Parameters.Where(p => methodData.VariablesByFieldName.Values.Any(nv => nv.IsSameVariableReference(p))).Select(v => v.Index))}");
@@ -288,7 +287,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             //Console.ReadLine();
 
             Console.WriteLine($"Rewriting IL for involved methods...");
-            foreach (var methodToRewrite in methodsToRewriteById.Values) {
+            foreach (MethodWithPreparedVariables methodToRewrite in methodsToRewriteById.Values) {
 
                 //if (methodToRewrite.VariablesByFieldName.Values.Any(v => v.Mode is not VariableMode.Local)) {
                 //    foreach (var param in methodToRewrite.Method.Parameters) {
@@ -296,37 +295,33 @@ namespace OTAPI.UnifiedServerProcess.Core
                 //    }
                 //}
 
-                var ilProcessor = methodToRewrite.Method.Body.GetILProcessor();
+                ILProcessor ilProcessor = methodToRewrite.Method.Body.GetILProcessor();
 
                 // Initialize out-params at method entry to keep callers from observing uninitialized data.
-                foreach (var outParam in methodToRewrite.VariablesByFieldName.Values.Where(v => v.Mode == VariableMode.OutParam)) {
-                    var methodEntryInstruction = methodToRewrite.Method.Body.Instructions.First();
+                foreach (VariableItem? outParam in methodToRewrite.VariablesByFieldName.Values.Where(v => v.Mode == VariableMode.OutParam)) {
+                    Instruction methodEntryInstruction = methodToRewrite.Method.Body.Instructions.First();
 
-                    foreach (var instruction in outParam.CreateSetValueFromStackInstructions(methodToRewrite.Method, [ilProcessor.Create(OpCodes.Ldc_I4_0)])) {
+                    foreach (Instruction instruction in outParam.CreateSetValueFromStackInstructions(methodToRewrite.Method, [ilProcessor.Create(OpCodes.Ldc_I4_0)])) {
                         ilProcessor.InsertBefore(methodEntryInstruction, instruction);
                     }
                 }
 
-                var instructionSnapshot = methodToRewrite.Method.Body.Instructions.ToArray();
-                foreach (var instruction in instructionSnapshot) {
+                Instruction[] instructionSnapshot = methodToRewrite.Method.Body.Instructions.ToArray();
+                foreach (Instruction? instruction in instructionSnapshot) {
                     if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference methodRef) {
 
-                        if (methodRef.Name is "mfwh_Collision_MoveWhileWet") {
-
-                        }
-
                         var calleeId = methodRef.GetIdentifier();
-                        if (methodsToRewriteById.TryGetValue(calleeId, out var calleeMethodData)) {
+                        if (methodsToRewriteById.TryGetValue(calleeId, out MethodWithPreparedVariables? calleeMethodData)) {
 
                             Instruction? insertBefore = null;
                             if (calleeMethodData.AnyOptionalParameter) {
-                                var paths = MonoModCommon.Stack.AnalyzeParametersSources(methodToRewrite.Method, instruction, methodToRewrite.JumpSitesCache);
+                                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paths = MonoModCommon.Stack.AnalyzeParametersSources(methodToRewrite.Method, instruction, methodToRewrite.JumpSitesCache);
                                 if (!paths.BeginAtSameInstruction(out _)) {
                                     throw new InvalidOperationException($"Cannot handle multiple parameter source paths for optional parameter at call to {methodRef.GetDebugName()} in {methodToRewrite.Method.GetDebugName()}");
                                 }
                                 insertBefore = paths
-                                    .Select(path => { 
-                                        var inst = path.ParametersSources[calleeMethodData.NonOptionalParameterCount + (methodRef.HasThis ? 1 : 0)].Instructions.First();
+                                    .Select(path => {
+                                        Instruction inst = path.ParametersSources[calleeMethodData.NonOptionalParameterCount + (methodRef.HasThis ? 1 : 0)].Instructions.First();
                                         var index = methodToRewrite.Method.Body.Instructions.IndexOf(inst);
                                         if (index < 0) {
                                             throw new Exception();
@@ -344,18 +339,18 @@ namespace OTAPI.UnifiedServerProcess.Core
 
                             List<VariableItem> insertedVariables = [];
 
-                            foreach (var variable in calleeMethodData.VariablesByFieldName.Values) {
+                            foreach (VariableItem variable in calleeMethodData.VariablesByFieldName.Values) {
 
-                                if (methodToRewrite.VariablesByFieldName.TryGetValue(variable.FieldName, out var item)) {
+                                if (methodToRewrite.VariablesByFieldName.TryGetValue(variable.FieldName, out VariableItem? item)) {
                                     if (variable.Mode == VariableMode.InParam) {
                                         insertedVariables.Add(item);
-                                        foreach (var inst in item.CreatePushValueInstructions(methodToRewrite.Method)) {
+                                        foreach (Instruction inst in item.CreatePushValueInstructions(methodToRewrite.Method)) {
                                             ilProcessor.InsertBefore(insertBefore, inst);
                                         }
                                     }
                                     else if (variable.Mode == VariableMode.OutParam) {
                                         insertedVariables.Add(item);
-                                        foreach (var inst in item.CreatePushAddressInstructions(methodToRewrite.Method)) {
+                                        foreach (Instruction inst in item.CreatePushAddressInstructions(methodToRewrite.Method)) {
                                             ilProcessor.InsertBefore(insertBefore, inst);
                                         }
                                     }
@@ -375,11 +370,11 @@ namespace OTAPI.UnifiedServerProcess.Core
                     }
                     else if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference readField && IsTargetCollisionField(readField)) {
 
-                        if (methodToRewrite.VariablesByFieldName.TryGetValue(readField.Name, out var item)) {
-                            var replacementInstructions = item.CreatePushValueInstructions(methodToRewrite.Method);
+                        if (methodToRewrite.VariablesByFieldName.TryGetValue(readField.Name, out VariableItem? item)) {
+                            Instruction[] replacementInstructions = item.CreatePushValueInstructions(methodToRewrite.Method);
 
                             // Update any instruction operands (including branch labels) that point at the old instruction.
-                            foreach (var i in instructionSnapshot) {
+                            foreach (Instruction? i in instructionSnapshot) {
                                 if (i.Operand == instruction) {
                                     i.Operand = replacementInstructions[0];
                                 }
@@ -403,11 +398,11 @@ namespace OTAPI.UnifiedServerProcess.Core
                         instruction.Operand is FieldReference writeField &&
                         writeField.DeclaringType.FullName == "Terraria.Collision") {
 
-                        if (methodToRewrite.VariablesByFieldName.TryGetValue(writeField.Name, out var item) && item.Mode == VariableMode.OutParam) {
+                        if (methodToRewrite.VariablesByFieldName.TryGetValue(writeField.Name, out VariableItem? item) && item.Mode == VariableMode.OutParam) {
 
-                            var replacementInstructions = item.CreateSetValueFromStackInstructions(methodToRewrite.Method, [instruction.Previous]);
+                            Instruction[] replacementInstructions = item.CreateSetValueFromStackInstructions(methodToRewrite.Method, [instruction.Previous]);
 
-                            foreach (var i in instructionSnapshot) {
+                            foreach (Instruction? i in instructionSnapshot) {
                                 if (i.Operand == instruction.Previous) {
                                     i.Operand = replacementInstructions[0];
                                 }
@@ -435,13 +430,13 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             Console.WriteLine($"Rewriting call sites to point at updated method signatures...");
             int replacedCallCount = 0;
-            foreach (var type in module.Types) {
-                foreach (var method in type.Methods) {
+            foreach (TypeDefinition? type in module.Types) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
-                    foreach (var instruction in method.Body.Instructions) {
-                        if (instruction.Operand is MethodReference methodRef && methodsToRewriteById.TryGetValue(methodRef.GetIdentifier(), out var newMethod)) {
+                    foreach (Instruction? instruction in method.Body.Instructions) {
+                        if (instruction.Operand is MethodReference methodRef && methodsToRewriteById.TryGetValue(methodRef.GetIdentifier(), out MethodWithPreparedVariables? newMethod)) {
                             instruction.Operand = MonoModCommon.Structure.DeepMapMethodReference(newMethod.Method, new());
                             replacedCallCount++;
                         }
@@ -451,24 +446,24 @@ namespace OTAPI.UnifiedServerProcess.Core
             Console.WriteLine($"Replaced {replacedCallCount} method calls");
 
             // If a method was wrapped with a delegate helper (mfwh_...), ensure the delegate Invoke/BeginInvoke signature matches.
-            foreach (var m in methodsToRewriteById.Values) {
+            foreach (MethodWithPreparedVariables m in methodsToRewriteById.Values) {
                 if (!m.Method.DeclaringType.Methods.Any(other => other.Name == "mfwh_" + m.Method.Name)) {
                     continue;
                 }
 
-                foreach (var inst in m.Method.Body.Instructions) {
+                foreach (Instruction? inst in m.Method.Body.Instructions) {
                     if (inst.Operand is not MethodReference { Name: ".ctor" } deleCtor) {
                         continue;
                     }
-                    var delegateDef = deleCtor.DeclaringType.Resolve();
+                    TypeDefinition delegateDef = deleCtor.DeclaringType.Resolve();
                     if (!delegateDef.IsDelegate()) {
                         continue;
                     }
-                    var invokeDef = delegateDef.GetMethod("Invoke");
-                    var beginInvoke = delegateDef.GetMethod("BeginInvoke");
+                    MethodDefinition invokeDef = delegateDef.GetMethod("Invoke");
+                    MethodDefinition beginInvoke = delegateDef.GetMethod("BeginInvoke");
                     invokeDef.Parameters.Clear();
-                    var asyncCallback = beginInvoke.Parameters[^2];
-                    var asyncState = beginInvoke.Parameters[^1];
+                    ParameterDefinition asyncCallback = beginInvoke.Parameters[^2];
+                    ParameterDefinition asyncState = beginInvoke.Parameters[^1];
                     beginInvoke.Parameters.Clear();
                     for (int i = 0; i < m.Method.Parameters.Count; i++) {
                         invokeDef.Parameters.Add(m.Method.Parameters[i].Clone());
@@ -760,7 +755,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 JumpSitesCache = MonoModCommon.Stack.BuildJumpSitesMap(method);
             }
             public void ApplyVariables() {
-                foreach (var variable in VariablesByFieldName.Values) {
+                foreach (VariableItem variable in VariablesByFieldName.Values) {
                     variable.ApplyMethodVariables(Method);
                 }
             }
@@ -770,7 +765,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
 
                 // First, look for direct field writes, this priority is highest
-                foreach (var instruction in Method.Body.Instructions) {
+                foreach (Instruction? instruction in Method.Body.Instructions) {
                     if (instruction.OpCode == OpCodes.Stsfld && instruction.Operand is FieldReference field && IsTargetCollisionField(field)) {
                         _preferredOutParamFieldNames.Add(field.Name);
                         VariablesByFieldName.Remove(field.Name);
@@ -778,19 +773,19 @@ namespace OTAPI.UnifiedServerProcess.Core
                     }
                 }
                 // Next, look for direct field calls, pre-designed as in param, but can be overridden by the following logic
-                foreach (var instruction in Method.Body.Instructions) {
+                foreach (Instruction? instruction in Method.Body.Instructions) {
                     if (instruction.OpCode == OpCodes.Ldsfld && instruction.Operand is FieldReference field && IsTargetCollisionField(field)) {
 
-                        if (!VariablesByFieldName.TryGetValue(field.Name, out var _)) {
+                        if (!VariablesByFieldName.TryGetValue(field.Name, out VariableItem _)) {
                             VariablesByFieldName.Add(field.Name, new VariableItem(field.Resolve(), new ParameterDefinition(field.Name, ParameterAttributes.None, field.FieldType)));
                         }
                     }
                 }
 
-                foreach (var instruction in Method.Body.Instructions) {
+                foreach (Instruction? instruction in Method.Body.Instructions) {
                     if ((instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) && instruction.Operand is MethodReference calleeRef) {
                         var calleeId = calleeRef.GetIdentifier();
-                        if (collection.TryGetValue(calleeId, out var calleeData)) {
+                        if (collection.TryGetValue(calleeId, out MethodWithPreparedVariables? calleeData)) {
 
                             CalleesById.TryAdd(calleeId, calleeData);
 
@@ -799,10 +794,10 @@ namespace OTAPI.UnifiedServerProcess.Core
                                 calleeData.PrepareVariables(collection, [.. _preferredOutParamFieldNames]);
                             }
 
-                            foreach (var inheritedVariable in calleeData.VariablesByFieldName.Values.ToArray()) {
+                            foreach (VariableItem? inheritedVariable in calleeData.VariablesByFieldName.Values.ToArray()) {
                                 if (inheritedVariable.Mode is VariableMode.Local) {
                                     // Inherit the variable of the called function
-                                    if (!VariablesByFieldName.TryGetValue(inheritedVariable.FieldName, out var old)) {
+                                    if (!VariablesByFieldName.TryGetValue(inheritedVariable.FieldName, out VariableItem? old)) {
                                         VariablesByFieldName.Add(inheritedVariable.FieldName,
                                             new VariableItem(
                                                 inheritedVariable.Field,
@@ -817,8 +812,8 @@ namespace OTAPI.UnifiedServerProcess.Core
                                     }
                                 }
                                 else if (inheritedVariable.Mode is VariableMode.OutParam) {
-                                    if (VariablesByFieldName.TryGetValue(inheritedVariable.FieldName, out var item)) {
-                                        var expectedMode = VariableMode.Local;
+                                    if (VariablesByFieldName.TryGetValue(inheritedVariable.FieldName, out VariableItem? item)) {
+                                        VariableMode expectedMode = VariableMode.Local;
                                         if (_preferredOutParamFieldNames.Contains(inheritedVariable.FieldName)) {
                                             expectedMode = VariableMode.OutParam;
                                         }
@@ -855,7 +850,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
 
                 var key = Method.GetIdentifier();
-                if (collection.TryGetValue(key, out var m)) {
+                if (collection.TryGetValue(key, out MethodWithPreparedVariables? m)) {
                     if (m != this) {
                         throw new InvalidOperationException();
                     }

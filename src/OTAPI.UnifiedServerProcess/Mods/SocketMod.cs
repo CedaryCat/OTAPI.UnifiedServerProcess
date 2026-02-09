@@ -29,7 +29,7 @@ namespace Terraria.Net.Sockets
         public TcpClient _connection;
         void ISocket.AsyncSendNoCopy(byte[] data, int offset, int size, SocketSendCallback callback, object state) {
             _connection.GetStream().BeginWrite(data, offset, size, static result => {
-                var tuple = (Tuple<TcpSocket, SocketSendCallback, object>)result.AsyncState;
+                Tuple<TcpSocket, SocketSendCallback, object> tuple = (Tuple<TcpSocket, SocketSendCallback, object>)result.AsyncState;
                 try {
                     tuple.Item1._connection.GetStream().EndWrite(result);
                     tuple.Item2(tuple.Item3);
@@ -43,7 +43,7 @@ namespace Terraria.Net.Sockets
             var array = ArrayPool<byte>.Shared.Rent(data.Length);
             data.CopyTo(array);
             _connection.GetStream().BeginWrite(array, 0, data.Length, static result => {
-                var tuple = (Tuple<TcpSocket, byte[], SocketSendCallback, object>)result.AsyncState;
+                Tuple<TcpSocket, byte[], SocketSendCallback, object> tuple = (Tuple<TcpSocket, byte[], SocketSendCallback, object>)result.AsyncState;
                 try {
                     tuple.Item1._connection.GetStream().EndWrite(result);
                     tuple.Item3(tuple.Item4);

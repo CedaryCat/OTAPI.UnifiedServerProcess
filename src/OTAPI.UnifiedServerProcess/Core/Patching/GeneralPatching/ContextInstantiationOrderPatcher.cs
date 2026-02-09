@@ -25,16 +25,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public override string Name => nameof(ContextInstantiationOrderPatcher);
 
         public override void Patch(PatcherArguments arguments) {
-            var module = arguments.MainModule;
-            var rootContextDef = arguments.RootContextDef;
+            ModuleDefinition module = arguments.MainModule;
+            TypeDefinition rootContextDef = arguments.RootContextDef;
 
             var contexts = arguments.ContextTypes.ToDictionary();
             var contextReferenceGraph = contexts.ToDictionary(kv => kv.Value, kv => AnalyzeInstantiationReferences(contexts, kv.Value));
 
-            var order = DetermineInstantiationOrder(contextReferenceGraph)
+            IEnumerable<ContextTypeData> order = DetermineInstantiationOrder(contextReferenceGraph)
                 .Where(x => x.ContextTypeDef.DeclaringType is null && !(x.IsReusedSingleton && !x.SingletonCtorCallShouldBeMoveToRootCtor));
 
-            var rootContextCtor = rootContextDef.Methods.Single(m => m.IsConstructor && !m.IsStatic);
+            MethodDefinition rootContextCtor = rootContextDef.Methods.Single(m => m.IsConstructor && !m.IsStatic);
             rootContextCtor.Body.Instructions.Clear();
 
             rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
@@ -44,7 +44,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1));
             rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Stfld, rootContextDef.GetField("Name")));
 
-            foreach (var context in order) {
+            foreach (ContextTypeData? context in order) {
                 rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
                 rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
                 rootContextCtor.Body.Instructions.Add(Instruction.Create(OpCodes.Newobj, context.constructor));
@@ -59,23 +59,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var inDegree = new Dictionary<ContextTypeData, int>();
 
             // InitializeEn adjacency list and in-degree for all nodes
-            foreach (var type in dependencies.Keys) {
+            foreach (ContextTypeData type in dependencies.Keys) {
                 adjacencyList[type] = [];
                 inDegree[type] = 0;
             }
             // Fill adjacency list and in-degree
-            foreach (var kvp in dependencies) {
-                var currentType = kvp.Key;
-                var dependentTypes = kvp.Value;
+            foreach (KeyValuePair<ContextTypeData, ContextTypeData[]> kvp in dependencies) {
+                ContextTypeData currentType = kvp.Key;
+                ContextTypeData[] dependentTypes = kvp.Value;
 
-                foreach (var depType in dependentTypes) {
+                foreach (ContextTypeData depType in dependentTypes) {
                     adjacencyList[depType].Add(currentType);
                     inDegree[currentType]++;
                 }
             }
             // Kahn's algorithm to initialize the queue
             var queue = new Queue<ContextTypeData>();
-            foreach (var type in inDegree.Keys) {
+            foreach (ContextTypeData type in inDegree.Keys) {
                 if (inDegree[type] == 0) {
                     queue.Enqueue(type);
                 }
@@ -83,10 +83,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // Process the queue to generate a topological sort
             var result = new List<ContextTypeData>();
             while (queue.Count > 0) {
-                var current = queue.Dequeue();
+                ContextTypeData current = queue.Dequeue();
                 result.Add(current);
 
-                foreach (var neighbor in adjacencyList[current]) {
+                foreach (ContextTypeData neighbor in adjacencyList[current]) {
                     inDegree[neighbor]--;
 
                     if (inDegree[neighbor] == 0) {
@@ -99,7 +99,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             if (result.Count != dependencies.Count) {
                 // find all unresolved nodes
                 var unresolvedNodes = dependencies.Keys.Except(result).ToList();
-                var cycles = CycleTool.FindAllCycles(dependencies, unresolvedNodes);
+                List<List<ContextTypeData>> cycles = CycleTool.FindAllCycles(dependencies, unresolvedNodes);
             }
 
             return result;
@@ -111,11 +111,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             works.Push(context.constructor.Body);
 
             while (works.Count > 0) {
-                var body = works.Pop();
+                MethodBody body = works.Pop();
                 bool callGraphRecorded = false;
-                if (callGraph.MediatedCallGraph.TryGetValue(body.Method.GetIdentifier(), out var callData)) {
+                if (callGraph.MediatedCallGraph.TryGetValue(body.Method.GetIdentifier(), out MethodCallData? callData)) {
                     callGraphRecorded = true;
-                    foreach (var used in callData.UsedMethods) {
+                    foreach (MethodReferenceData used in callData.UsedMethods) {
                         if (used.implicitCallMode is ImplicitCallMode.Delegate) {
                             continue;
                         }
@@ -123,7 +123,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             works.Push(used.DirectlyCalledMethod.Body);
                         }
                         if (used.implicitCallMode is ImplicitCallMode.Inheritance) {
-                            foreach (var callee in used.ImplementedMethods()) {
+                            foreach (MethodDefinition callee in used.ImplementedMethods()) {
                                 if (callee.HasBody && visitedMethod.TryAdd(callee.GetIdentifier(), callee)) {
                                     works.Push(callee.Body);
                                 }
@@ -131,14 +131,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         }
                     }
                 }
-                foreach (var instruction in body.Instructions) {
-                    if (instruction.OpCode == OpCodes.Ldfld && contexts.TryGetValue(((FieldReference)instruction.Operand).FieldType.FullName, out var referencedContext)) {
+                foreach (Instruction? instruction in body.Instructions) {
+                    if (instruction.OpCode == OpCodes.Ldfld && contexts.TryGetValue(((FieldReference)instruction.Operand).FieldType.FullName, out ContextTypeData? referencedContext)) {
                         visitedContext.TryAdd(referencedContext.ContextTypeDef.FullName, referencedContext);
                     }
                     if (!callGraphRecorded) {
                         if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt || instruction.OpCode == OpCodes.Newobj) {
                             var methodRef = (MethodReference)instruction.Operand;
-                            var methodDef = methodRef.TryResolve();
+                            MethodDefinition? methodDef = methodRef.TryResolve();
                             if (methodDef is null) {
                                 continue;
                             }
@@ -160,11 +160,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             declaring = gim.GenericArguments.Single();
                         }
                         else if (
-                            methodRef.Parameters.Count is 1 or 2 && 
-                            methodRef.Name is "CreateInstance" && 
+                            methodRef.Parameters.Count is 1 or 2 &&
+                            methodRef.Name is "CreateInstance" &&
                             methodRef.Parameters[0].ParameterType.FullName == "System.Type") {
 
-                            var ldtoken = MonoModCommon.Stack.AnalyzeParametersSources(body.Method, instruction, this.GetMethodJumpSites(body.Method))
+                            Instruction ldtoken = MonoModCommon.Stack.AnalyzeParametersSources(body.Method, instruction, this.GetMethodJumpSites(body.Method))
                                 .Single()
                                 .ParametersSources[0].Instructions
                                 .First();
@@ -174,10 +174,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         }
                         if (declaring is GenericParameter gp) {
                             declaring = gp.Constraints.FirstOrDefault()?.ConstraintType;
-                            var def = declaring?.TryResolve();
+                            TypeDefinition? def = declaring?.TryResolve();
                             if (def is not null) {
-                                foreach(var child in typeInheritanceGraph.GetDerivedTypeTree(def)) {
-                                    foreach (var ctor in child.Methods.Where(x => x.IsConstructor && !x.IsStatic)) {
+                                foreach (TypeDefinition child in typeInheritanceGraph.GetDerivedTypeTree(def)) {
+                                    foreach (MethodDefinition? ctor in child.Methods.Where(x => x.IsConstructor && !x.IsStatic)) {
                                         works.Push(ctor.Body);
                                     }
                                 }
@@ -202,12 +202,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 var allCycles = new HashSet<string>();
                 var cycles = new List<List<ContextTypeData>>();
 
-                foreach (var node in unresolvedNodes) {
+                foreach (ContextTypeData node in unresolvedNodes) {
                     var visited = new Dictionary<ContextTypeData, VisitState>();
                     var pathStack = new Stack<ContextTypeData>();
 
                     // InitializeEn visit state
-                    foreach (var n in dependencies.Keys)
+                    foreach (ContextTypeData n in dependencies.Keys)
                         visited[n] = VisitState.Unvisited;
 
                     DFSFindAllCycles(node, dependencies, visited, pathStack, allCycles, cycles);
@@ -235,7 +235,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         var cycleNodes = pathList.Skip(cycleStartIndex).ToList();
                         cycleNodes.Add(node);
 
-                        var normalizedCycle = NormalizeCycle(cycleNodes);
+                        List<ContextTypeData> normalizedCycle = NormalizeCycle(cycleNodes);
                         string hash = GetCycleHash(normalizedCycle);
 
                         if (!knownCycleHashes.Contains(hash)) {
@@ -249,7 +249,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 visited[node] = VisitState.Visiting;
                 pathStack.Push(node);
 
-                foreach (var neighbor in dependencies[node]) {
+                foreach (ContextTypeData neighbor in dependencies[node]) {
                     DFSFindAllCycles(neighbor, dependencies, visited, pathStack, knownCycleHashes, cycles);
                 }
                 visited[node] = VisitState.Visited;
@@ -263,7 +263,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 // Remove closed loop node (e.g. A→B→C→A becomes [A,B,C])
                 var nodes = rawCycle.Take(rawCycle.Count - 1).ToList();
                 // Find the smallest starting node
-                var minNode = nodes.OrderBy(n => n.ContextTypeDef.Name).First();
+                ContextTypeData minNode = nodes.OrderBy(n => n.ContextTypeDef.Name).First();
                 int startIndex = nodes.IndexOf(minNode);
                 // Reorder the cycle
                 var normalized = new List<ContextTypeData>();

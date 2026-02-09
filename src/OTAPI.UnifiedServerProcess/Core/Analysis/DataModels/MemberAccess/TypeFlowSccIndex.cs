@@ -29,8 +29,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
         public static TypeFlowSccIndex Build(ModuleDefinition module) {
             if (module is null) throw new ArgumentNullException(nameof(module));
 
-            var graph = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            var selfEdges = new HashSet<string>(StringComparer.Ordinal);
+            Dictionary<string, HashSet<string>> graph = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            HashSet<string> selfEdges = new HashSet<string>(StringComparer.Ordinal);
 
             static string GetKey(TypeReference type) => NormalizeType(type).FullName;
 
@@ -69,7 +69,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
 
             var (sccIdByNode, membersByScc) = ComputeScc(graph);
 
-            var recursive = new HashSet<int>();
+            HashSet<int> recursive = new HashSet<int>();
             foreach (var (sccId, members) in membersByScc) {
                 if (members.Count > 1) {
                     recursive.Add(sccId);
@@ -238,14 +238,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             Dictionary<string, HashSet<string>> graph) {
 
             int index = 0;
-            var stack = new Stack<string>();
-            var onStack = new HashSet<string>(StringComparer.Ordinal);
-            var indices = new Dictionary<string, int>(StringComparer.Ordinal);
-            var lowLink = new Dictionary<string, int>(StringComparer.Ordinal);
+            Stack<string> stack = new Stack<string>();
+            HashSet<string> onStack = new HashSet<string>(StringComparer.Ordinal);
+            Dictionary<string, int> indices = new Dictionary<string, int>(StringComparer.Ordinal);
+            Dictionary<string, int> lowLink = new Dictionary<string, int>(StringComparer.Ordinal);
 
             int nextSccId = 0;
-            var sccIdByNode = new Dictionary<string, int>(StringComparer.Ordinal);
-            var membersByScc = new Dictionary<int, List<string>>();
+            Dictionary<string, int> sccIdByNode = new Dictionary<string, int>(StringComparer.Ordinal);
+            Dictionary<int, List<string>> membersByScc = new Dictionary<int, List<string>>();
 
             void StrongConnect(string v) {
                 indices[v] = index;
@@ -268,7 +268,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
                 }
 
                 if (lowLink[v] == indices[v]) {
-                    var members = new List<string>();
+                    List<string> members = new List<string>();
                     while (stack.Count > 0) {
                         var w = stack.Pop();
                         onStack.Remove(w);

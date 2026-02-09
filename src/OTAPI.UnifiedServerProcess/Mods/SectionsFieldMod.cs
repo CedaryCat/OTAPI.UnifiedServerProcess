@@ -1,10 +1,10 @@
 ﻿using ModFramework;
 using Mono.Cecil;
 using Mono.Cecil.Cil;
-using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Terraria;
 
@@ -12,40 +12,40 @@ using Terraria;
 [MonoMod.MonoModIgnore]
 void PatchSectionsAwareFields(ModFwModder modder) {
 
-    var module = modder.Module;
+    ModuleDefinition module = modder.Module;
 
-    var resetAndResize = module
+    MethodDefinition resetAndResize = module
         .GetType("UnifiedServerProcess.SectionsHelper")
         .GetMethod("ResetAndResize");
 
-    var setWorldSize = module
+    MethodDefinition setWorldSize = module
         .GetType("Terraria.WorldGen")
         .GetMethod("mfwh_setWorldSize");
 
-    var ret = setWorldSize.Body.Instructions.Single(i => i.OpCode.Code is Code.Ret);
+    Instruction ret = setWorldSize.Body.Instructions.Single(i => i.OpCode.Code is Code.Ret);
 
-    var activeSections_Reset = module
+    MethodDefinition activeSections_Reset = module
         .GetType("Terraria.DataStructures.ActiveSections")
         .GetMethod("Reset");
     Process(activeSections_Reset, "LastActiveTime");
     setWorldSize.Body.GetILProcessor()
         .InsertBefore(ret, Instruction.Create(OpCodes.Call, MonoModCommon.Structure.CreateMethodReference(activeSections_Reset, activeSections_Reset)));
 
-    var leashedEntityClear = module
+    MethodDefinition leashedEntityClear = module
         .GetType("Terraria.GameContent.LeashedEntity")
         .GetMethod("Clear");
     Process(leashedEntityClear, "BySection");
 
 
     void Process(MethodDefinition method, string fieldName) {
-        foreach (var inst in method.Body.Instructions) {
+        foreach (Instruction? inst in method.Body.Instructions) {
             if (inst is not Instruction { OpCode.Code: Code.Call, Operand: MethodReference { DeclaringType.FullName: "System.Array", Name: "Clear" } }) {
                 continue;
             }
 
-            var jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(method);
+            Dictionary<Instruction, List<Instruction>> jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(method);
 
-            var paths = MonoModCommon.Stack.AnalyzeParametersSources(method, inst, jumpSites);
+            MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paths = MonoModCommon.Stack.AnalyzeParametersSources(method, inst, jumpSites);
 
             if (paths is not [var path] ||
                 path.ParametersSources[0].Instructions is not [var ldsfld] ||
@@ -56,7 +56,7 @@ void PatchSectionsAwareFields(ModFwModder modder) {
                 continue;
             }
 
-            var field = fr.Resolve();
+            FieldDefinition field = fr.Resolve();
             field.IsInitOnly = false;
 
             ldsfld.OpCode = OpCodes.Ldsflda;

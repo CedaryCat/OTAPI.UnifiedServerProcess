@@ -10,7 +10,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
     {
         public static bool BeginAtSameInstruction<T>(this FlowPath<T>[] paths, [NotNullWhen(true)] out Instruction? begin) where T : ArgumentSource {
             begin = null;
-            foreach (var first in paths.Select(p => p.ParametersSources[0].Instructions.First())) {
+            foreach (Instruction? first in paths.Select(p => p.ParametersSources[0].Instructions.First())) {
                 begin ??= first;
                 if (begin != first) {
                     return false;

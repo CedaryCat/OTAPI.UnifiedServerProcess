@@ -20,10 +20,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {
-            var module = source.MainModule;
+            ModuleDefinition module = source.MainModule;
 
-            foreach (var modified in modifiedFields) {
-                if (!source.OriginalToContextType.TryGetValue(modified.DeclaringType.FullName, out var contextType)) {
+            foreach (FieldDefinition modified in modifiedFields) {
+                if (!source.OriginalToContextType.TryGetValue(modified.DeclaringType.FullName, out ContextTypeData? contextType)) {
                     contextType = new ContextTypeData(modified.DeclaringType, source.RootContextDef, callGraph.MediatedCallGraph, ref source.OriginalToContextType);
                     logger.Info("Instance-converting type: {0}", modified.DeclaringType.FullName);
 

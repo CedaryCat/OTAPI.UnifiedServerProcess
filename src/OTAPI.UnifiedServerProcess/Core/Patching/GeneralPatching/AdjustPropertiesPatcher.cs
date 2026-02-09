@@ -1,4 +1,5 @@
 ﻿using Mono.Cecil;
+using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
@@ -20,9 +21,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public override string Name => nameof(AdjustPropertiesPatcher);
 
         public override void Patch(PatcherArguments arguments) {
-            var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
-                foreach (var prop in type.Properties.ToArray()) {
+            ContextBoundMethodMap mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
+                foreach (PropertyDefinition? prop in type.Properties.ToArray()) {
                     string getterName = "get_" + prop.Name;
                     string setterName = "set_" + prop.Name;
 
@@ -36,10 +37,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         setterName = string.Join('.', nameParts);
                     }
 
-                    var getter = type.Methods.FirstOrDefault(x => x.Name == getterName);
-                    var setter = type.Methods.FirstOrDefault(x => x.Name == setterName);
+                    MethodDefinition? getter = type.Methods.FirstOrDefault(x => x.Name == getterName);
+                    MethodDefinition? setter = type.Methods.FirstOrDefault(x => x.Name == setterName);
 
-                    var innerField = type.Fields.FirstOrDefault(x => x.Name == $"<{prop.Name}>k__BackingField");
+                    FieldDefinition? innerField = type.Fields.FirstOrDefault(x => x.Name == $"<{prop.Name}>k__BackingField");
 
                     bool shouldRemove = getter is null && setter is null;
 
@@ -54,7 +55,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         prop.DeclaringType = type;
                     }
                 }
-                foreach (var method in type.Methods.ToArray()) {
+                foreach (MethodDefinition? method in type.Methods.ToArray()) {
                     if (!method.IsSpecialName) {
                         continue;
                     }
@@ -65,9 +66,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     }
 
                     var propName = method.Name[4..];
-                    var prop = type.Properties.FirstOrDefault(x => x.Name == propName);
+                    PropertyDefinition? prop = type.Properties.FirstOrDefault(x => x.Name == propName);
 
-                    if (arguments.ContextTypes.TryGetValue(type.FullName, out var contextTypeData)
+                    if (arguments.ContextTypes.TryGetValue(type.FullName, out ContextTypeData? contextTypeData)
                         && contextTypeData.originalType.FullName != type.FullName
                         && contextTypeData.originalType.Module == type.Module) {
 
@@ -76,9 +77,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             type.Properties.Add(prop);
                         }
 
-                        var originalSetter = contextTypeData.originalType.Methods.FirstOrDefault(x => x.Name == $"set_{propName}");
-                        var originalGetter = contextTypeData.originalType.Methods.FirstOrDefault(x => x.Name == $"get_{propName}");
-                        var originalProp = contextTypeData.originalType.Properties.FirstOrDefault(x => x.Name == propName);
+                        MethodDefinition? originalSetter = contextTypeData.originalType.Methods.FirstOrDefault(x => x.Name == $"set_{propName}");
+                        MethodDefinition? originalGetter = contextTypeData.originalType.Methods.FirstOrDefault(x => x.Name == $"get_{propName}");
+                        PropertyDefinition? originalProp = contextTypeData.originalType.Properties.FirstOrDefault(x => x.Name == propName);
 
                         if (isSetter && prop.SetMethod is null) {
                             prop.SetMethod = method;
@@ -138,15 +139,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var accessorOrigId = PatchingCommon.GetVanillaMethodRef(arguments.RootContextDef, arguments.ContextTypes, accessor).GetIdentifier();
             var accessorId = accessor.GetIdentifier();
 
-            if (callGraph.MediatedCallGraph.TryGetValue(accessorOrigId, out var callData)) {
-                foreach (var callerItem in callData.UsedByMethods) {
-                    var caller = callerItem;
+            if (callGraph.MediatedCallGraph.TryGetValue(accessorOrigId, out MethodCallData? callData)) {
+                foreach (MethodDefinition callerItem in callData.UsedByMethods) {
+                    MethodDefinition caller = callerItem;
 
-                    if (mappedMethods.originalToContextBound.TryGetValue(callerItem.GetIdentifier(), out var convertedMethod)) {
+                    if (mappedMethods.originalToContextBound.TryGetValue(callerItem.GetIdentifier(), out MethodDefinition? convertedMethod)) {
                         caller = convertedMethod;
                     }
 
-                    foreach (var il in caller.Body.Instructions) {
+                    foreach (Instruction? il in caller.Body.Instructions) {
                         if (il.Operand is MethodReference accessorRef && accessorRef.GetIdentifier() == accessorId) {
                             accessorRef.Name = newMethodName;
                         }

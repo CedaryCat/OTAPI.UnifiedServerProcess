@@ -27,9 +27,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         }
 
         public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {
-            var module = source.MainModule;
+            ModuleDefinition module = source.MainModule;
 
-            var taskFields = FieldTasks(source.MainModule)
+            FieldDefinition[] taskFields = FieldTasks(source.MainModule)
                 .Select(fr => fr.TryResolve() ?? throw new InvalidOperationException($"Failed to resolve field task '{fr.FullName}'."))
                 .Distinct()
                 .ToArray();
@@ -41,36 +41,36 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             Tasks.GeneratedDelegateFactory.AddNameMapping("PlaceHookDele", Tasks.DelegateSignature.Capture(taskFields.Single(f => f.Name is "hook").FieldType));
             Tasks.GeneratedDelegateFactory.AddNameMapping("SeedChangedDele", Tasks.DelegateSignature.Capture(taskFields.Single(f => f.Name is "OnOptionStateChanged").FieldType));
 
-            var fieldUseSites = Index.BuildFieldUseSites(module);
-            var callUseSites = Index.BuildMethodCallSites(module);
+            Dictionary<FieldDefinition, List<(MethodDefinition Method, Instruction Inst)>> fieldUseSites = Index.BuildFieldUseSites(module);
+            Dictionary<MethodDefinition, List<(MethodDefinition Caller, Instruction CallInst)>> callUseSites = Index.BuildMethodCallSites(module);
 
-            var taskGroups = Tasks.Build(module, taskFields);
+            Tasks.DelegateTaskGroup[] taskGroups = Tasks.Build(module, taskFields);
 
-            foreach (var group in taskGroups) {
-                foreach (var field in group.Fields) {
+            foreach (Tasks.DelegateTaskGroup group in taskGroups) {
+                foreach (FieldDefinition field in group.Fields) {
                     field.FieldType = group.Transform.TransformType(field.FieldType);
                 }
             }
 
             static TypeReference TransformByAll(TypeReference type, Tasks.DelegateTaskGroup[] groups) {
-                var current = type;
-                foreach (var g in groups) {
+                TypeReference current = type;
+                foreach (Tasks.DelegateTaskGroup g in groups) {
                     current = g.Transform.TransformType(current);
                 }
                 return current;
             }
 
             // Rewrite type operands (e.g. castclass/isinst/ldtoken) up-front to avoid relying on value-flow reaching them.
-            foreach (var type in module.GetAllTypes()) {
-                foreach (var method in type.Methods) {
+            foreach (TypeDefinition? type in module.GetAllTypes()) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
-                    foreach (var inst in method.Body.Instructions) {
+                    foreach (Instruction? inst in method.Body.Instructions) {
                         if (inst.Operand is not TypeReference tr) {
                             continue;
                         }
-                        var transformed = TransformByAll(tr, taskGroups);
+                        TypeReference transformed = TransformByAll(tr, taskGroups);
                         if (transformed.FullName != tr.FullName) {
                             inst.Operand = transformed;
                         }
@@ -109,11 +109,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Dictionary<MethodDefinition, List<(MethodDefinition Caller, Instruction CallInst)>> callUseSites,
                 MethodDefinition callee) {
 
-                if (!callUseSites.TryGetValue(callee, out var callers)) {
+                if (!callUseSites.TryGetValue(callee, out List<(MethodDefinition Caller, Instruction CallInst)>? callers)) {
                     return;
                 }
 
-                foreach (var (_, callInst) in callers) {
+                foreach ((MethodDefinition _, Instruction? callInst) in callers) {
                     if (callInst.Operand is not MethodReference callRef) {
                         continue;
                     }
@@ -127,30 +127,30 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     return;
                 }
 
-                var current = accessor.Parameters[0].ParameterType;
+                TypeReference current = accessor.Parameters[0].ParameterType;
                 if (current.FullName == eventType.FullName) {
                     return;
                 }
 
-                var affected = planner.PlanParameterTypeChange(accessor, 0, eventType);
-                foreach (var affectedMethod in affected) {
+                MethodDefinition[] affected = planner.PlanParameterTypeChange(accessor, 0, eventType);
+                foreach (MethodDefinition affectedMethod in affected) {
                     RewriteCallOperandsForSignatureChange(callUseSites, affectedMethod);
                 }
             }
 
-            foreach (var group in taskGroups) {
-                foreach (var field in group.Fields) {
-                    var declaringType = field.DeclaringType;
+            foreach (Tasks.DelegateTaskGroup group in taskGroups) {
+                foreach (FieldDefinition field in group.Fields) {
+                    TypeDefinition? declaringType = field.DeclaringType;
                     if (declaringType is null || !declaringType.HasEvents) {
                         continue;
                     }
 
-                    foreach (var evt in declaringType.Events) {
+                    foreach (EventDefinition? evt in declaringType.Events) {
                         if (evt.Name != field.Name) {
                             continue;
                         }
 
-                        var expectedEventType = field.FieldType;
+                        TypeReference expectedEventType = field.FieldType;
                         if (evt.EventType.FullName != expectedEventType.FullName) {
                             evt.EventType = expectedEventType;
                         }
@@ -169,20 +169,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                 Dictionary<FieldDefinition, List<(MethodDefinition, Instruction)>> result = [];
 
-                foreach (var type in module.GetAllTypes()) {
-                    foreach (var method in type.Methods) {
+                foreach (TypeDefinition? type in module.GetAllTypes()) {
+                    foreach (MethodDefinition? method in type.Methods) {
                         if (!method.HasBody) {
                             continue;
                         }
-                        foreach (var inst in method.Body.Instructions) {
+                        foreach (Instruction? inst in method.Body.Instructions) {
                             if (inst.Operand is not FieldReference fr) {
                                 continue;
                             }
-                            var def = fr.TryResolve();
+                            FieldDefinition? def = fr.TryResolve();
                             if (def is null || def.Module != module) {
                                 continue;
                             }
-                            if (!result.TryGetValue(def, out var list)) {
+                            if (!result.TryGetValue(def, out List<(MethodDefinition, Instruction)>? list)) {
                                 result.Add(def, list = []);
                             }
                             list.Add((method, inst));
@@ -198,24 +198,24 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                 var result = new Dictionary<MethodDefinition, List<(MethodDefinition, Instruction)>>(ReferenceEqualityComparer.Instance);
 
-                foreach (var type in module.GetAllTypes()) {
-                    foreach (var method in type.Methods) {
+                foreach (TypeDefinition? type in module.GetAllTypes()) {
+                    foreach (MethodDefinition? method in type.Methods) {
                         if (!method.HasBody) {
                             continue;
                         }
 
-                        foreach (var inst in method.Body.Instructions) {
+                        foreach (Instruction? inst in method.Body.Instructions) {
                             if (inst.OpCode.Code is not Code.Call and not Code.Callvirt and not Code.Newobj) {
                                 continue;
                             }
                             if (inst.Operand is not MethodReference mr) {
                                 continue;
                             }
-                            var def = mr.TryResolve();
+                            MethodDefinition? def = mr.TryResolve();
                             if (def is null || def.Module != module) {
                                 continue;
                             }
-                            if (!result.TryGetValue(def, out var list)) {
+                            if (!result.TryGetValue(def, out List<(MethodDefinition, Instruction)>? list)) {
                                 result.Add(def, list = []);
                             }
                             list.Add((method, inst));
@@ -237,10 +237,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 this.module = module ?? throw new ArgumentNullException(nameof(module));
                 ArgumentNullException.ThrowIfNull(graph);
 
-                foreach (var kv in graph.RawMethodImplementationChains) {
-                    var chain = kv.Value;
-                    foreach (var m in chain) {
-                        if (!groupsByMethodDef.TryGetValue(m, out var list)) {
+                foreach (KeyValuePair<string, MethodDefinition[]> kv in graph.RawMethodImplementationChains) {
+                    MethodDefinition[] chain = kv.Value;
+                    foreach (MethodDefinition m in chain) {
+                        if (!groupsByMethodDef.TryGetValue(m, out List<MethodDefinition[]>? list)) {
                             groupsByMethodDef.Add(m, list = []);
                         }
                         list.Add(chain);
@@ -249,14 +249,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             }
 
             public IEnumerable<MethodDefinition> GetRelatedMethods(MethodDefinition method) {
-                if (!groupsByMethodDef.TryGetValue(method, out var groups)) {
+                if (!groupsByMethodDef.TryGetValue(method, out List<MethodDefinition[]>? groups)) {
                     yield return method;
                     yield break;
                 }
 
                 HashSet<MethodDefinition> emitted = new(ReferenceEqualityComparer.Instance);
-                foreach (var group in groups) {
-                    foreach (var m in group) {
+                foreach (MethodDefinition[] group in groups) {
+                    foreach (MethodDefinition m in group) {
                         if (m.Module != module) {
                             throw new NotSupportedException($"Inheritance group for '{method.GetIdentifier()}' includes external method '{m.GetIdentifier()}'.");
                         }
@@ -281,9 +281,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 ArgumentNullException.ThrowIfNull(method);
                 ArgumentNullException.ThrowIfNull(newParameterType);
 
-                var affected = inheritanceIndex.GetRelatedMethods(method).ToArray();
+                MethodDefinition[] affected = inheritanceIndex.GetRelatedMethods(method).ToArray();
 
-                foreach (var m in affected) {
+                foreach (MethodDefinition? m in affected) {
                     if (m.Module != module) {
                         throw new NotSupportedException($"Cannot change signature for external method '{m.GetIdentifier()}'.");
                     }
@@ -306,9 +306,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 ArgumentNullException.ThrowIfNull(method);
                 ArgumentNullException.ThrowIfNull(newReturnType);
 
-                var affected = inheritanceIndex.GetRelatedMethods(method).ToArray();
+                MethodDefinition[] affected = inheritanceIndex.GetRelatedMethods(method).ToArray();
 
-                foreach (var m in affected) {
+                foreach (MethodDefinition? m in affected) {
                     if (m.Module != module) {
                         throw new NotSupportedException($"Cannot change signature for external method '{m.GetIdentifier()}'.");
                     }
@@ -339,16 +339,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 ArgumentNullException.ThrowIfNull(module);
                 ArgumentNullException.ThrowIfNull(fields);
 
-                var container = GetOrCreateDelegateContainerType(module);
+                TypeDefinition container = GetOrCreateDelegateContainerType(module);
                 var groups = new Dictionary<string, DelegateTaskGroup>(StringComparer.Ordinal);
 
-                foreach (var field in fields) {
-                    var occurrence = DelegateTypeScanner.ExtractSingleDelegateOccurrence(field.FieldType);
+                foreach (FieldDefinition field in fields) {
+                    DelegateOccurrence occurrence = DelegateTypeScanner.ExtractSingleDelegateOccurrence(field.FieldType);
                     var signature = DelegateSignature.Capture(occurrence.DelegateType);
                     var key = signature.ToStableKeyString();
 
-                    if (!groups.TryGetValue(key, out var group)) {
-                        var generated = GeneratedDelegateFactory.GetOrCreateDelegateType(module, container, signature);
+                    if (!groups.TryGetValue(key, out DelegateTaskGroup? group)) {
+                        GeneratedDelegate generated = GeneratedDelegateFactory.GetOrCreateDelegateType(module, container, signature);
                         group = new DelegateTaskGroup(signature, new DelegateTransform(generated.NewDelegateTypeDef));
                         groups.Add(key, group);
                     }
@@ -363,7 +363,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             private static TypeDefinition GetOrCreateDelegateContainerType(ModuleDefinition module) {
                 const string ns = Constants.DelegatesNameSpace;
                 const string name = Constants.CtxDelegatesContainerName;
-                var existing = module.Types.FirstOrDefault(t => t.Namespace == ns && t.Name == name);
+                TypeDefinition? existing = module.Types.FirstOrDefault(t => t.Namespace == ns && t.Name == name);
                 if (existing is not null) {
                     return existing;
                 }
@@ -388,8 +388,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     if (type is GenericInstanceType git) {
                         var anyChanged = false;
                         var newGit = new GenericInstanceType(git.ElementType);
-                        foreach (var arg in git.GenericArguments) {
-                            var newArg = TransformType(arg);
+                        foreach (TypeReference? arg in git.GenericArguments) {
+                            TypeReference newArg = TransformType(arg);
                             if (newArg.FullName != arg.FullName) {
                                 anyChanged = true;
                             }
@@ -399,27 +399,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     }
 
                     if (type is ArrayType array) {
-                        var newElement = TransformType(array.ElementType);
+                        TypeReference newElement = TransformType(array.ElementType);
                         return newElement.FullName != array.ElementType.FullName ? new ArrayType(newElement, array.Rank) : type;
                     }
 
                     if (type is ByReferenceType byRef) {
-                        var newElement = TransformType(byRef.ElementType);
+                        TypeReference newElement = TransformType(byRef.ElementType);
                         return newElement.FullName != byRef.ElementType.FullName ? new ByReferenceType(newElement) : type;
                     }
 
                     if (type is PointerType ptr) {
-                        var newElement = TransformType(ptr.ElementType);
+                        TypeReference newElement = TransformType(ptr.ElementType);
                         return newElement.FullName != ptr.ElementType.FullName ? new PointerType(newElement) : type;
                     }
 
                     if (type is RequiredModifierType req) {
-                        var newElement = TransformType(req.ElementType);
+                        TypeReference newElement = TransformType(req.ElementType);
                         return newElement.FullName != req.ElementType.FullName ? new RequiredModifierType(req.ModifierType, newElement) : type;
                     }
 
                     if (type is OptionalModifierType opt) {
-                        var newElement = TransformType(opt.ElementType);
+                        TypeReference newElement = TransformType(opt.ElementType);
                         return newElement.FullName != opt.ElementType.FullName ? new OptionalModifierType(opt.ModifierType, newElement) : type;
                     }
 
@@ -450,7 +450,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         }
 
                         if (tr is GenericInstanceType git) {
-                            foreach (var arg in git.GenericArguments) {
+                            foreach (TypeReference? arg in git.GenericArguments) {
                                 Visit(arg, containerDepth + 1);
                             }
                             return;
@@ -476,7 +476,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         throw new NotSupportedException($"Delegate types with generic parameters are not supported: '{found.FullName}'.");
                     }
 
-                    var invoke = found.TryResolve()?.GetMethod("Invoke");
+                    MethodDefinition? invoke = found.TryResolve()?.GetMethod("Invoke");
                     if (invoke is null) {
                         throw new InvalidOperationException($"Delegate '{found.FullName}' does not define Invoke.");
                     }
@@ -494,8 +494,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 public static DelegateSignature Capture(TypeReference delegateType) {
                     ArgumentNullException.ThrowIfNull(delegateType);
 
-                    var delDef = delegateType.TryResolve() ?? throw new InvalidOperationException($"Failed to resolve delegate type '{delegateType.FullName}'.");
-                    var invoke = delDef.GetMethod("Invoke");
+                    TypeDefinition delDef = delegateType.TryResolve() ?? throw new InvalidOperationException($"Failed to resolve delegate type '{delegateType.FullName}'.");
+                    MethodDefinition invoke = delDef.GetMethod("Invoke");
 
                     MonoModCommon.Structure.MapOption option = new();
                     if (delegateType is GenericInstanceType git) {
@@ -506,8 +506,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         option = new MonoModCommon.Structure.MapOption(genericParameterMap: map);
                     }
 
-                    var ret = MonoModCommon.Structure.DeepMapTypeReference(invoke.ReturnType, option);
-                    var parameters = invoke.Parameters.Select(p => MonoModCommon.Structure.DeepMapTypeReference(p.ParameterType, option)).ToArray();
+                    TypeReference ret = MonoModCommon.Structure.DeepMapTypeReference(invoke.ReturnType, option);
+                    TypeReference[] parameters = invoke.Parameters.Select(p => MonoModCommon.Structure.DeepMapTypeReference(p.ParameterType, option)).ToArray();
 
                     if (ret.ContainsGenericParameter || parameters.Any(p => p.ContainsGenericParameter)) {
                         throw new NotSupportedException($"Delegate signature must be closed. Found generic parameters in '{delegateType.FullName}'.");
@@ -564,7 +564,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 public static GeneratedDelegate GetOrCreateDelegateType(ModuleDefinition module, TypeDefinition container, DelegateSignature signature) {
                     var name = GetName(module, signature);
 
-                    var existing = container.NestedTypes.FirstOrDefault(t => t.Name == name && t.BaseType?.FullName == typeof(MulticastDelegate).FullName);
+                    TypeDefinition? existing = container.NestedTypes.FirstOrDefault(t => t.Name == name && t.BaseType?.FullName == typeof(MulticastDelegate).FullName);
                     if (existing is not null) {
                         return new GeneratedDelegate(existing);
                     }
@@ -608,7 +608,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     }
                     else {
                         for (int i = 0; i < signature.ParameterTypes.Length; i++) {
-                            var p = signature.ParameterTypes[i];
+                            TypeReference p = signature.ParameterTypes[i];
                             invoke.Parameters.Add(new ParameterDefinition("arg" + (i + 1), ParameterAttributes.None, p));
                         }
                     }
@@ -631,7 +631,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     }
                     else {
                         for (int i = 0; i < signature.ParameterTypes.Length; i++) {
-                            var p = signature.ParameterTypes[i];
+                            TypeReference p = signature.ParameterTypes[i];
                             beginInvoke.Parameters.Add(new ParameterDefinition("arg" + (i + 1), ParameterAttributes.None, p));
                         }
                     }
@@ -651,7 +651,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     };
 
                     for (int i = 0; i < signature.ParameterTypes.Length; i++) {
-                        var p = signature.ParameterTypes[i];
+                        TypeReference p = signature.ParameterTypes[i];
                         if (p is ByReferenceType) {
                             endInvoke.Parameters.Add(new ParameterDefinition("arg" + (i + 1), ParameterAttributes.None, p));
                         }
@@ -695,7 +695,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 var anyChanged = false;
 
                 if (calleeRef.DeclaringType is not null) {
-                    var newDecl = transform.TransformType(calleeRef.DeclaringType);
+                    TypeReference newDecl = transform.TransformType(calleeRef.DeclaringType);
                     if (newDecl.FullName != calleeRef.DeclaringType.FullName) {
                         calleeRef.DeclaringType = newDecl;
                         anyChanged = true;
@@ -704,8 +704,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                 if (calleeRef is GenericInstanceMethod gim) {
                     for (int i = 0; i < gim.GenericArguments.Count; i++) {
-                        var oldArg = gim.GenericArguments[i];
-                        var newArg = transform.TransformType(oldArg);
+                        TypeReference oldArg = gim.GenericArguments[i];
+                        TypeReference newArg = transform.TransformType(oldArg);
                         if (newArg.FullName != oldArg.FullName) {
                             gim.GenericArguments[i] = newArg;
                             anyChanged = true;
@@ -725,22 +725,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 ArgumentNullException.ThrowIfNull(calleeRef);
                 ArgumentNullException.ThrowIfNull(transform);
 
-                var oldDecl = calleeRef.DeclaringType;
+                TypeReference? oldDecl = calleeRef.DeclaringType;
                 if (oldDecl is null) {
                     return false;
                 }
 
-                var newDecl = transform.TransformType(oldDecl);
+                TypeReference newDecl = transform.TransformType(oldDecl);
                 if (newDecl.FullName == oldDecl.FullName) {
                     return false;
                 }
 
-                var newDeclDef = newDecl.TryResolve();
+                TypeDefinition? newDeclDef = newDecl.TryResolve();
                 if (newDeclDef is null || newDeclDef.Module != module) {
                     return false;
                 }
 
-                var methodDef = newDeclDef.GetMethod(calleeRef.Name);
+                MethodDefinition methodDef = newDeclDef.GetMethod(calleeRef.Name);
 
                 // Action<Arg1,Arg2>.Invoke(!T1, !T2) → MyDele.Invoke(Arg1, Arg2)
 
@@ -753,18 +753,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 var globalWork = new Stack<MethodSeedWorkItem>();
 
                 var fieldToTransform = new Dictionary<FieldDefinition, Tasks.DelegateTransform>();
-                foreach (var group in taskGroups) {
-                    foreach (var field in group.Fields) {
+                foreach (Tasks.DelegateTaskGroup group in taskGroups) {
+                    foreach (FieldDefinition field in group.Fields) {
                         fieldToTransform[field] = group.Transform;
                     }
                 }
 
                 // Seed from uses of task fields.
-                foreach (var (field, transform) in fieldToTransform) {
-                    if (!fieldUseSites.TryGetValue(field, out var useSites)) {
+                foreach ((FieldDefinition? field, Tasks.DelegateTransform? transform) in fieldToTransform) {
+                    if (!fieldUseSites.TryGetValue(field, out List<(MethodDefinition Method, Instruction Inst)>? useSites)) {
                         continue;
                     }
-                    foreach (var (method, inst) in useSites) {
+                    foreach ((MethodDefinition? method, Instruction? inst) in useSites) {
                         if (!method.HasBody) {
                             continue;
                         }
@@ -778,7 +778,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                             continue;
                         }
 
-                        var infectedType = inst.OpCode.Code is Code.Ldflda or Code.Ldsflda
+                        TypeReference infectedType = inst.OpCode.Code is Code.Ldflda or Code.Ldsflda
                             ? new ByReferenceType(fieldRef.FieldType)
                             : fieldRef.FieldType;
                         globalWork.Push(new MethodSeedWorkItem(method, new ValueSeed(inst, infectedType, transform)));
@@ -786,13 +786,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 }
 
                 while (globalWork.Count > 0) {
-                    var workItem = globalWork.Pop();
-                    var method = workItem.Method;
+                    MethodSeedWorkItem workItem = globalWork.Pop();
+                    MethodDefinition method = workItem.Method;
                     if (!method.HasBody) {
                         continue;
                     }
 
-                    var visitedKey = (Method: method, PushOffset: workItem.Seed.Push.Offset, InfectedTypeFullName: workItem.Seed.InfectedType.FullName);
+                    (MethodDefinition Method, int PushOffset, string InfectedTypeFullName) visitedKey = (Method: method, PushOffset: workItem.Seed.Push.Offset, InfectedTypeFullName: workItem.Seed.InfectedType.FullName);
                     if (!globalVisited.Add(visitedKey)) {
                         continue;
                     }
@@ -802,15 +802,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             }
 
             private void ProcessMethodSeed(MethodDefinition method, ValueSeed seed, Stack<MethodSeedWorkItem> globalWork) {
-                var jumpSites = getJumpSites(method);
-                BuildMethodIndex(method, out var ldlocSites, out var ldlocaSites, out var ldargSites, out var ldargaSites);
+                Dictionary<Instruction, List<Instruction>> jumpSites = getJumpSites(method);
+                BuildMethodIndex(method, out Dictionary<int, List<Instruction>>? ldlocSites, out Dictionary<int, List<Instruction>>? ldlocaSites, out Dictionary<int, List<Instruction>>? ldargSites, out Dictionary<int, List<Instruction>>? ldargaSites);
 
                 var localVisited = new HashSet<(int PushOffset, string InfectedTypeFullName)>();
                 var valueWork = new Stack<ValueSeed>();
                 valueWork.Push(seed);
 
                 while (valueWork.Count > 0) {
-                    var current = valueWork.Pop();
+                    ValueSeed current = valueWork.Pop();
                     if (!localVisited.Add((current.Push.Offset, current.InfectedType.FullName))) {
                         continue;
                     }
@@ -818,30 +818,30 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     HandleValueProducer(method, current, globalWork);
                     TryPlanParameterChangeFromLoad(method, current, globalWork);
 
-                     foreach (var consumer in MonoModCommon.Stack.TraceStackValueConsumers(method, current.Push)) {
-                         if (current.InfectedType is ByReferenceType byRef && IsIndirectLoad(consumer.OpCode.Code)) {
-                             valueWork.Push(new ValueSeed(consumer, byRef.ElementType, current.Transform));
-                             continue;
-                         }
+                    foreach (Instruction consumer in MonoModCommon.Stack.TraceStackValueConsumers(method, current.Push)) {
+                        if (current.InfectedType is ByReferenceType byRef && IsIndirectLoad(consumer.OpCode.Code)) {
+                            valueWork.Push(new ValueSeed(consumer, byRef.ElementType, current.Transform));
+                            continue;
+                        }
 
-                         if (consumer.OpCode.Code is Code.Castclass or Code.Isinst) {
-                             if (consumer.Operand is TypeReference tr) {
-                                 var transformed = current.Transform.TransformType(tr);
-                                 if (transformed.FullName != tr.FullName) {
-                                     consumer.Operand = transformed;
-                                 }
+                        if (consumer.OpCode.Code is Code.Castclass or Code.Isinst) {
+                            if (consumer.Operand is TypeReference tr) {
+                                TypeReference transformed = current.Transform.TransformType(tr);
+                                if (transformed.FullName != tr.FullName) {
+                                    consumer.Operand = transformed;
+                                }
 
-                                 if (TypeContainsDelegate(transformed, current.Transform.NewDelegateTypeDef.FullName)) {
-                                     valueWork.Push(new ValueSeed(consumer, transformed, current.Transform));
-                                 }
-                             }
-                             continue;
-                         }
+                                if (TypeContainsDelegate(transformed, current.Transform.NewDelegateTypeDef.FullName)) {
+                                    valueWork.Push(new ValueSeed(consumer, transformed, current.Transform));
+                                }
+                            }
+                            continue;
+                        }
 
-                         if (consumer.OpCode.Code is Code.Stloc_0 or Code.Stloc_1 or Code.Stloc_2 or Code.Stloc_3 or Code.Stloc_S or Code.Stloc) {
-                             HandleStoreLocal(method, consumer, current, ldlocSites, ldlocaSites, valueWork);
-                             continue;
-                         }
+                        if (consumer.OpCode.Code is Code.Stloc_0 or Code.Stloc_1 or Code.Stloc_2 or Code.Stloc_3 or Code.Stloc_S or Code.Stloc) {
+                            HandleStoreLocal(method, consumer, current, ldlocSites, ldlocaSites, valueWork);
+                            continue;
+                        }
 
                         if (consumer.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
                             HandleCallConsumer(method, consumer, current, jumpSites, ldlocSites, ldlocaSites, ldargSites, ldargaSites, valueWork, globalWork);
@@ -858,7 +858,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                                 continue;
                             }
 
-                            var expectedReturnType = current.Transform.TransformType(method.ReturnType);
+                            TypeReference expectedReturnType = current.Transform.TransformType(method.ReturnType);
                             if (expectedReturnType.FullName != current.InfectedType.FullName) {
                                 continue;
                             }
@@ -883,12 +883,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     && ctorRef.DeclaringType is not null
                     && infected.InfectedType is not ByReferenceType) {
 
-                    var oldDecl = ctorRef.DeclaringType;
-                    var newDecl = infected.Transform.TransformType(oldDecl);
+                    TypeReference oldDecl = ctorRef.DeclaringType;
+                    TypeReference newDecl = infected.Transform.TransformType(oldDecl);
                     if (newDecl.FullName != oldDecl.FullName && newDecl.FullName == infected.InfectedType.FullName) {
-                        var newDeclDef = newDecl.TryResolve();
+                        TypeDefinition? newDeclDef = newDecl.TryResolve();
                         if (newDeclDef is not null && newDeclDef.Module == module) {
-                            var newCtorDef = newDeclDef.GetMethod(".ctor");
+                            MethodDefinition newCtorDef = newDeclDef.GetMethod(".ctor");
                             infected.Push.Operand = MonoModCommon.Structure.CreateMethodReference(newCtorDef, newCtorDef);
                         }
                     }
@@ -897,9 +897,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 if (infected.Push.OpCode.Code is Code.Call or Code.Callvirt
                     && infected.Push.Operand is MethodReference calleeRef) {
 
-                    var typed = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
-                    var formalReturn = typed.ReturnType;
-                    var expectedReturn = infected.Transform.TransformType(formalReturn);
+                    MethodReference typed = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
+                    TypeReference formalReturn = typed.ReturnType;
+                    TypeReference expectedReturn = infected.Transform.TransformType(formalReturn);
                     if (expectedReturn.FullName != infected.InfectedType.FullName) {
                         return;
                     }
@@ -907,10 +907,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         return;
                     }
 
-                    var calleeDef = calleeRef.TryResolve();
+                    MethodDefinition? calleeDef = calleeRef.TryResolve();
                     if (calleeDef is null || calleeDef.Module != module) {
                         if (TryRewriteExternalGenericInstantiation(calleeRef, infected.Transform)) {
-                            var typedAfter = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
+                            MethodReference typedAfter = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
                             if (typedAfter.ReturnType.FullName == expectedReturn.FullName) {
                                 return;
                             }
@@ -934,10 +934,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 ldargSites = [];
                 ldargaSites = [];
 
-                foreach (var inst in method.Body.Instructions) {
+                foreach (Instruction? inst in method.Body.Instructions) {
                     if (MonoModCommon.IL.TryGetReferencedVariable(method, inst, out var localIndex, out _)
                         && inst.OpCode.Code is Code.Ldloc_0 or Code.Ldloc_1 or Code.Ldloc_2 or Code.Ldloc_3 or Code.Ldloc_S or Code.Ldloc) {
-                        if (!ldlocSites.TryGetValue(localIndex, out var list)) {
+                        if (!ldlocSites.TryGetValue(localIndex, out List<Instruction>? list)) {
                             ldlocSites.Add(localIndex, list = []);
                         }
                         list.Add(inst);
@@ -946,7 +946,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                     if (MonoModCommon.IL.TryGetReferencedVariable(method, inst, out localIndex, out _)
                         && inst.OpCode.Code is Code.Ldloca or Code.Ldloca_S) {
-                        if (!ldlocaSites.TryGetValue(localIndex, out var list)) {
+                        if (!ldlocaSites.TryGetValue(localIndex, out List<Instruction>? list)) {
                             ldlocaSites.Add(localIndex, list = []);
                         }
                         list.Add(inst);
@@ -955,7 +955,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                     if (MonoModCommon.IL.TryGetReferencedParameter(method, inst, out var innerIndex, out _)
                         && inst.OpCode.Code is Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S or Code.Ldarg) {
-                        if (!ldargSites.TryGetValue(innerIndex, out var list)) {
+                        if (!ldargSites.TryGetValue(innerIndex, out List<Instruction>? list)) {
                             ldargSites.Add(innerIndex, list = []);
                         }
                         list.Add(inst);
@@ -964,7 +964,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                     if (MonoModCommon.IL.TryGetReferencedParameter(method, inst, out innerIndex, out _)
                         && inst.OpCode.Code is Code.Ldarga or Code.Ldarga_S) {
-                        if (!ldargaSites.TryGetValue(innerIndex, out var list)) {
+                        if (!ldargaSites.TryGetValue(innerIndex, out List<Instruction>? list)) {
                             ldargaSites.Add(innerIndex, list = []);
                         }
                         list.Add(inst);
@@ -974,7 +974,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             }
 
             private void TryPlanParameterChangeFromLoad(MethodDefinition method, ValueSeed seed, Stack<MethodSeedWorkItem> globalWork) {
-                if (!MonoModCommon.IL.TryGetReferencedParameter(method, seed.Push, out var innerIndex, out var parameter)) {
+                if (!MonoModCommon.IL.TryGetReferencedParameter(method, seed.Push, out var innerIndex, out ParameterDefinition? parameter)) {
                     return;
                 }
                 if (innerIndex == 0 && method.HasThis) {
@@ -986,7 +986,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     return;
                 }
 
-                var expected = seed.Transform.TransformType(parameter.ParameterType);
+                TypeReference expected = seed.Transform.TransformType(parameter.ParameterType);
                 if (expected.FullName != seed.InfectedType.FullName) {
                     return;
                 }
@@ -995,11 +995,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             }
 
             private void RewriteCallOperandsForSignatureChange(MethodDefinition callee) {
-                if (!callUseSites.TryGetValue(callee, out var callers)) {
+                if (!callUseSites.TryGetValue(callee, out List<(MethodDefinition Caller, Instruction CallInst)>? callers)) {
                     return;
                 }
 
-                foreach (var (_, callInst) in callers) {
+                foreach ((MethodDefinition _, Instruction? callInst) in callers) {
                     if (callInst.Operand is not MethodReference callRef) {
                         continue;
                     }
@@ -1015,8 +1015,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Tasks.DelegateTransform transform,
                 Stack<MethodSeedWorkItem> globalWork) {
 
-                var affected = planner.PlanParameterTypeChange(method, paramIndex, newParameterType);
-                foreach (var affectedMethod in affected) {
+                MethodDefinition[] affected = planner.PlanParameterTypeChange(method, paramIndex, newParameterType);
+                foreach (MethodDefinition affectedMethod in affected) {
                     RewriteCallOperandsForSignatureChange(affectedMethod);
                     EnqueueCallersForParamChange(affectedMethod, paramIndex, newParameterType, transform, globalWork);
                 }
@@ -1035,8 +1035,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     throw new NotSupportedException($"Return type changes involving void are not supported for '{method.GetIdentifier()}': '{method.ReturnType.FullName}' -> '{newReturnType.FullName}'.");
                 }
 
-                var affected = planner.PlanReturnTypeChange(method, newReturnType);
-                foreach (var affectedMethod in affected) {
+                MethodDefinition[] affected = planner.PlanReturnTypeChange(method, newReturnType);
+                foreach (MethodDefinition affectedMethod in affected) {
                     RewriteCallOperandsForSignatureChange(affectedMethod);
                     EnqueueCallersForReturnChange(affectedMethod, newReturnType, transform, globalWork);
                     SeedExpectedValueIntoAllReturns(affectedMethod, newReturnType, transform, globalWork);
@@ -1049,11 +1049,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Tasks.DelegateTransform transform,
                 Stack<MethodSeedWorkItem> globalWork) {
 
-                if (!callUseSites.TryGetValue(callee, out var callers)) {
+                if (!callUseSites.TryGetValue(callee, out List<(MethodDefinition Caller, Instruction CallInst)>? callers)) {
                     return;
                 }
 
-                foreach (var (caller, callInst) in callers) {
+                foreach ((MethodDefinition? caller, Instruction? callInst) in callers) {
                     if (!caller.HasBody) {
                         continue;
                     }
@@ -1078,20 +1078,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     return;
                 }
 
-                var jumpSites = getJumpSites(method);
-                foreach (var ret in method.Body.Instructions) {
+                Dictionary<Instruction, List<Instruction>> jumpSites = getJumpSites(method);
+                foreach (Instruction? ret in method.Body.Instructions) {
                     if (ret.OpCode.Code is not Code.Ret) {
                         continue;
                     }
 
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, ret, jumpSites)) {
-                        var valueSource = path.ParametersSources.SingleOrDefault(s => s.Index == 0);
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, ret, jumpSites)) {
+                        MonoModCommon.Stack.InstructionArgsSource? valueSource = path.ParametersSources.SingleOrDefault(s => s.Index == 0);
                         if (valueSource is null || valueSource.Instructions.Length == 0) {
                             continue;
                         }
 
-                        var last = valueSource.Instructions.Last();
-                        foreach (var top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, last, jumpSites)) {
+                        Instruction last = valueSource.Instructions.Last();
+                        foreach (MonoModCommon.Stack.StackTopTypePath top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, last, jumpSites)) {
                             globalWork.Push(new MethodSeedWorkItem(method, new ValueSeed(top.RealPushValueInstruction, expectedReturnType, transform)));
                         }
                     }
@@ -1120,21 +1120,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Dictionary<int, List<Instruction>> ldlocaSites,
                 Stack<ValueSeed> valueWork) {
 
-                var variable = MonoModCommon.IL.GetReferencedVariable(method, stloc);
-                var newVarType = stored.Transform.TransformType(variable.VariableType);
+                VariableDefinition variable = MonoModCommon.IL.GetReferencedVariable(method, stloc);
+                TypeReference newVarType = stored.Transform.TransformType(variable.VariableType);
                 if (newVarType.FullName != variable.VariableType.FullName) {
                     variable.VariableType = newVarType;
                 }
 
-                if (ldlocSites.TryGetValue(variable.Index, out var loads)) {
-                    foreach (var ldloc in loads) {
+                if (ldlocSites.TryGetValue(variable.Index, out List<Instruction>? loads)) {
+                    foreach (Instruction ldloc in loads) {
                         valueWork.Push(new ValueSeed(ldloc, stored.InfectedType, stored.Transform));
                     }
                 }
 
-                if (ldlocaSites.TryGetValue(variable.Index, out var addrLoads)) {
-                    var byRef = stored.Transform.TransformType(new ByReferenceType(variable.VariableType));
-                    foreach (var ldloca in addrLoads) {
+                if (ldlocaSites.TryGetValue(variable.Index, out List<Instruction>? addrLoads)) {
+                    TypeReference byRef = stored.Transform.TransformType(new ByReferenceType(variable.VariableType));
+                    foreach (Instruction ldloca in addrLoads) {
                         valueWork.Push(new ValueSeed(ldloca, byRef, stored.Transform));
                     }
                 }
@@ -1175,7 +1175,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Stack<ValueSeed> valueWork,
                 Stack<MethodSeedWorkItem> globalWork) {
 
-                foreach (var rule in SpecialCallRules) {
+                foreach (SpecialCallRule rule in SpecialCallRules) {
                     if (rule(
                         this,
                         caller,
@@ -1230,13 +1230,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     return false;
                 }
 
-                var expected = UnwrapByRef(infected.InfectedType);
+                TypeReference expected = UnwrapByRef(infected.InfectedType);
                 if (expected.FullName is "System.Delegate" or "System.MulticastDelegate" or "System.Object") {
                     return false;
                 }
 
                 for (int argIndex = 0; argIndex < path.ParametersSources.Length; argIndex++) {
-                    var source = path.ParametersSources[argIndex];
+                    MonoModCommon.Stack.ParameterSource source = path.ParametersSources[argIndex];
                     if (source.Instructions.Length == 0) {
                         continue;
                     }
@@ -1274,14 +1274,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Stack<MethodSeedWorkItem> globalWork) {
 
                 var calleeRef = (MethodReference)callInst.Operand;
-                var calleeDef = calleeRef.TryResolve();
+                MethodDefinition? calleeDef = calleeRef.TryResolve();
 
                 var includeThis = (callInst.OpCode == OpCodes.Call || callInst.OpCode == OpCodes.Callvirt) && calleeRef.HasThis;
                 var thisOffset = includeThis ? 1 : 0;
 
-                var paths = MonoModCommon.Stack.AnalyzeParametersSources(caller, callInst, jumpSites);
-                foreach (var path in paths) {
-                    var infectedArgIndices = FindInfectedArgIndices(path, infected.Push);
+                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paths = MonoModCommon.Stack.AnalyzeParametersSources(caller, callInst, jumpSites);
+                foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in paths) {
+                    IReadOnlyList<int> infectedArgIndices = FindInfectedArgIndices(path, infected.Push);
                     if (infectedArgIndices.Count == 0) {
                         continue;
                     }
@@ -1314,14 +1314,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                             continue;
                         }
 
-                        var formalUntyped = UnwrapByRef(calleeRef.Parameters[paramIndex].ParameterType);
+                        TypeReference formalUntyped = UnwrapByRef(calleeRef.Parameters[paramIndex].ParameterType);
                         if (formalUntyped is GenericParameter gp && includeThis) {
-                            if (TryInferNewDeclaringTypeFromDeclaringGenericParam(calleeRef.DeclaringType, gp, infected.InfectedType, out var newDeclType)) {
+                            if (TryInferNewDeclaringTypeFromDeclaringGenericParam(calleeRef.DeclaringType, gp, infected.InfectedType, out TypeReference? newDeclType)) {
                                 if (newDeclType.FullName != calleeRef.DeclaringType.FullName) {
                                     calleeRef.DeclaringType = newDeclType;
 
-                                    var thisSource = path.ParametersSources[0];
-                                    foreach (var thisTop in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, thisSource.Instructions.Last(), jumpSites)) {
+                                    MonoModCommon.Stack.ParameterSource thisSource = path.ParametersSources[0];
+                                    foreach (MonoModCommon.Stack.StackTopTypePath thisTop in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, thisSource.Instructions.Last(), jumpSites)) {
                                         valueWork.Push(new ValueSeed(thisTop.RealPushValueInstruction, newDeclType, infected.Transform));
                                     }
                                 }
@@ -1329,17 +1329,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                             continue;
                         }
 
-                        var typed = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
-                        var formalTyped = typed.Parameters[paramIndex].ParameterType;
-                        var expected = infected.Transform.TransformType(formalTyped);
+                        MethodReference typed = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
+                        TypeReference formalTyped = typed.Parameters[paramIndex].ParameterType;
+                        TypeReference expected = infected.Transform.TransformType(formalTyped);
                         if (expected.FullName == formalTyped.FullName) {
                             continue;
                         }
 
                         if (calleeDef is null || calleeDef.Module != module) {
                             if (TryRewriteExternalGenericInstantiation(calleeRef, infected.Transform)) {
-                                var typedAfter = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
-                                var formalAfter = typedAfter.Parameters[paramIndex].ParameterType;
+                                MethodReference typedAfter = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
+                                TypeReference formalAfter = typedAfter.Parameters[paramIndex].ParameterType;
                                 if (formalAfter.FullName == expected.FullName) {
                                     continue;
                                 }
@@ -1380,14 +1380,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     }
                 }
 
-                var typed = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
+                MethodReference typed = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
 
                 if (calleeDef is null || calleeDef.Module != module) {
                     if (TryRewriteExternalGenericInstantiation(calleeRef, infectedThis.Transform)) {
                         typed = MonoModCommon.Structure.CreateInstantiatedMethod(calleeRef);
                     }
-                    foreach (var p in typed.Parameters) {
-                        var transformed = infectedThis.Transform.TransformType(p.ParameterType);
+                    foreach (ParameterDefinition? p in typed.Parameters) {
+                        TypeReference transformed = infectedThis.Transform.TransformType(p.ParameterType);
                         if (transformed.FullName != p.ParameterType.FullName) {
                             throw new NotSupportedException($"External method '{calleeRef.FullName}' requires signature changes for '{p.ParameterType.FullName}' -> '{transformed.FullName}'.");
                         }
@@ -1395,7 +1395,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 }
                 else {
                     for (int i = 0; i < calleeDef.Parameters.Count; i++) {
-                        var transformed = infectedThis.Transform.TransformType(calleeDef.Parameters[i].ParameterType);
+                        TypeReference transformed = infectedThis.Transform.TransformType(calleeDef.Parameters[i].ParameterType);
                         if (transformed.FullName != calleeDef.Parameters[i].ParameterType.FullName) {
                             PlanParameterChangeAndEnqueueCallers(calleeDef, i, transformed, infectedThis.Transform, globalWork);
                         }
@@ -1412,17 +1412,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         continue;
                     }
 
-                    var expected = typed.Parameters[paramIndex].ParameterType;
+                    TypeReference expected = typed.Parameters[paramIndex].ParameterType;
                     if (!TypeContainsDelegate(expected, infectedThis.Transform.NewDelegateTypeDef.FullName)) {
                         continue;
                     }
 
-                    var source = path.ParametersSources[argIndex];
+                    MonoModCommon.Stack.ParameterSource source = path.ParametersSources[argIndex];
                     PropagateExpectedTypeIntoArgumentSource(caller, source.Instructions.Last(), expected, infectedThis.Transform, jumpSites, ldlocSites, ldlocaSites, ldargSites, ldargaSites, valueWork, globalWork);
                 }
 
                 if (MonoModCommon.Stack.GetPushCount(caller.Body, callInst) > 0) {
-                    var expectedReturn = typed.ReturnType;
+                    TypeReference expectedReturn = typed.ReturnType;
                     if (TypeContainsDelegate(expectedReturn, infectedThis.Transform.NewDelegateTypeDef.FullName)) {
                         valueWork.Push(new ValueSeed(callInst, expectedReturn, infectedThis.Transform));
                     }
@@ -1443,20 +1443,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Stack<MethodSeedWorkItem> globalWork) {
 
                 if (expectedParamType is ByReferenceType byRef) {
-                    var expectedElement = byRef.ElementType;
+                    TypeReference expectedElement = byRef.ElementType;
 
                     if (lastArgInstruction.OpCode.Code is Code.Ldloca or Code.Ldloca_S
-                        && MonoModCommon.IL.TryGetReferencedVariable(caller, lastArgInstruction, out var localIndex, out var variable)) {
+                        && MonoModCommon.IL.TryGetReferencedVariable(caller, lastArgInstruction, out var localIndex, out VariableDefinition? variable)) {
                         if (variable.VariableType.FullName != expectedElement.FullName) {
                             variable.VariableType = expectedElement;
                         }
-                        if (ldlocSites.TryGetValue(localIndex, out var loads)) {
-                            foreach (var load in loads) {
+                        if (ldlocSites.TryGetValue(localIndex, out List<Instruction>? loads)) {
+                            foreach (Instruction load in loads) {
                                 valueWork.Push(new ValueSeed(load, expectedElement, transform));
                             }
                         }
-                        if (ldlocaSites.TryGetValue(localIndex, out var addrLoads)) {
-                            foreach (var load in addrLoads) {
+                        if (ldlocaSites.TryGetValue(localIndex, out List<Instruction>? addrLoads)) {
+                            foreach (Instruction load in addrLoads) {
                                 valueWork.Push(new ValueSeed(load, expectedParamType, transform));
                             }
                         }
@@ -1465,20 +1465,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     }
 
                     if (lastArgInstruction.OpCode.Code is Code.Ldarga or Code.Ldarga_S
-                        && MonoModCommon.IL.TryGetReferencedParameter(caller, lastArgInstruction, out var innerIndex, out var parameter)) {
+                        && MonoModCommon.IL.TryGetReferencedParameter(caller, lastArgInstruction, out var innerIndex, out ParameterDefinition? parameter)) {
                         if (innerIndex != 0 || !caller.HasThis) {
                             var paramIndex = innerIndex - (caller.HasThis ? 1 : 0);
                             if (paramIndex >= 0 && paramIndex < caller.Parameters.Count) {
                                 if (parameter.ParameterType.FullName != expectedElement.FullName) {
                                     PlanParameterChangeAndEnqueueCallers(caller, paramIndex, expectedElement, transform, globalWork);
                                 }
-                                if (ldargSites.TryGetValue(innerIndex, out var loads)) {
-                                    foreach (var load in loads) {
+                                if (ldargSites.TryGetValue(innerIndex, out List<Instruction>? loads)) {
+                                    foreach (Instruction load in loads) {
                                         valueWork.Push(new ValueSeed(load, expectedElement, transform));
                                     }
                                 }
-                                if (ldargaSites.TryGetValue(innerIndex, out var addrLoads)) {
-                                    foreach (var load in addrLoads) {
+                                if (ldargaSites.TryGetValue(innerIndex, out List<Instruction>? addrLoads)) {
+                                    foreach (Instruction load in addrLoads) {
                                         valueWork.Push(new ValueSeed(load, expectedParamType, transform));
                                     }
                                 }
@@ -1490,15 +1490,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                     if (lastArgInstruction.OpCode.Code is Code.Ldflda or Code.Ldsflda
                         && lastArgInstruction.Operand is FieldReference fr) {
-                        var fieldDef = fr.TryResolve();
+                        FieldDefinition? fieldDef = fr.TryResolve();
                         if (fieldDef is not null && fieldDef.Module == module) {
                             if (fieldDef.FieldType.FullName != expectedElement.FullName) {
                                 fieldDef.FieldType = expectedElement;
                             }
                             fr.FieldType = expectedElement;
 
-                            if (fieldUseSites.TryGetValue(fieldDef, out var useSites)) {
-                                foreach (var (useMethod, inst) in useSites) {
+                            if (fieldUseSites.TryGetValue(fieldDef, out List<(MethodDefinition Method, Instruction Inst)>? useSites)) {
+                                foreach ((MethodDefinition? useMethod, Instruction? inst) in useSites) {
                                     if (!useMethod.HasBody) {
                                         continue;
                                     }
@@ -1523,19 +1523,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     throw new NotSupportedException($"Unsupported byref argument source in '{caller.GetIdentifier()}': '{lastArgInstruction.OpCode.Code}'.");
                 }
 
-                foreach (var top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, lastArgInstruction, jumpSites)) {
+                foreach (MonoModCommon.Stack.StackTopTypePath top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, lastArgInstruction, jumpSites)) {
                     valueWork.Push(new ValueSeed(top.RealPushValueInstruction, expectedParamType, transform));
                 }
             }
 
             private void HandleStoreField(Instruction stfld, ValueSeed stored, Stack<MethodSeedWorkItem> globalWork) {
                 var fieldRef = (FieldReference)stfld.Operand;
-                var fieldDef = fieldRef.TryResolve();
+                FieldDefinition? fieldDef = fieldRef.TryResolve();
                 if (fieldDef is null || fieldDef.Module != module) {
                     return;
                 }
 
-                var transformed = stored.Transform.TransformType(fieldDef.FieldType);
+                TypeReference transformed = stored.Transform.TransformType(fieldDef.FieldType);
                 if (transformed.FullName == fieldDef.FieldType.FullName) {
                     return;
                 }
@@ -1543,11 +1543,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 fieldDef.FieldType = transformed;
                 fieldRef.FieldType = transformed;
 
-                if (!fieldUseSites.TryGetValue(fieldDef, out var useSites)) {
+                if (!fieldUseSites.TryGetValue(fieldDef, out List<(MethodDefinition Method, Instruction Inst)>? useSites)) {
                     return;
                 }
 
-                foreach (var (useMethod, inst) in useSites) {
+                foreach ((MethodDefinition? useMethod, Instruction? inst) in useSites) {
                     if (!useMethod.HasBody) {
                         continue;
                     }
@@ -1580,14 +1580,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     return;
                 }
 
-                var jumpSites = getJumpSites(method);
-                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, stfldOrStsfld, jumpSites)) {
-                    var valueSource = path.ParametersSources.SingleOrDefault(s => s.Index == 0);
+                Dictionary<Instruction, List<Instruction>> jumpSites = getJumpSites(method);
+                foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, stfldOrStsfld, jumpSites)) {
+                    MonoModCommon.Stack.InstructionArgsSource? valueSource = path.ParametersSources.SingleOrDefault(s => s.Index == 0);
                     if (valueSource is null || valueSource.Instructions.Length == 0) {
                         continue;
                     }
-                    var last = valueSource.Instructions.Last();
-                    foreach (var top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, last, jumpSites)) {
+                    Instruction last = valueSource.Instructions.Last();
+                    foreach (MonoModCommon.Stack.StackTopTypePath top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, last, jumpSites)) {
                         globalWork.Push(new MethodSeedWorkItem(method, new ValueSeed(top.RealPushValueInstruction, expectedValueType, transform)));
                     }
                 }
@@ -1600,11 +1600,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Tasks.DelegateTransform transform,
                 Stack<MethodSeedWorkItem> globalWork) {
 
-                if (!callUseSites.TryGetValue(callee, out var callers)) {
+                if (!callUseSites.TryGetValue(callee, out List<(MethodDefinition Caller, Instruction CallInst)>? callers)) {
                     return;
                 }
 
-                foreach (var (caller, callInst) in callers) {
+                foreach ((MethodDefinition? caller, Instruction? callInst) in callers) {
                     if (!caller.HasBody) {
                         continue;
                     }
@@ -1615,23 +1615,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     var includeThis = (callInst.OpCode == OpCodes.Call || callInst.OpCode == OpCodes.Callvirt) && callRef.HasThis;
                     var argIndex = paramIndex + (includeThis ? 1 : 0);
 
-                    var jumpSites = getJumpSites(caller);
-                    var paths = MonoModCommon.Stack.AnalyzeParametersSources(caller, callInst, jumpSites);
-                    foreach (var path in paths) {
+                    Dictionary<Instruction, List<Instruction>> jumpSites = getJumpSites(caller);
+                    MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paths = MonoModCommon.Stack.AnalyzeParametersSources(caller, callInst, jumpSites);
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in paths) {
                         if (argIndex < 0 || argIndex >= path.ParametersSources.Length) {
                             continue;
                         }
-                        var srcLast = path.ParametersSources[argIndex].Instructions.Last();
+                        Instruction srcLast = path.ParametersSources[argIndex].Instructions.Last();
 
                         if (expectedParamType is ByReferenceType byRef) {
-                            var element = byRef.ElementType;
+                            TypeReference element = byRef.ElementType;
 
                             if (srcLast.OpCode.Code is Code.Ldloca or Code.Ldloca_S
-                                && MonoModCommon.IL.TryGetReferencedVariable(caller, srcLast, out var localIndex, out var variable)) {
+                                && MonoModCommon.IL.TryGetReferencedVariable(caller, srcLast, out var localIndex, out VariableDefinition? variable)) {
                                 if (variable.VariableType.FullName != element.FullName) {
                                     variable.VariableType = element;
                                 }
-                                foreach (var inst in caller.Body.Instructions) {
+                                foreach (Instruction? inst in caller.Body.Instructions) {
                                     if (MonoModCommon.IL.TryGetReferencedVariable(caller, inst, out var idx, out _)
                                         && idx == localIndex
                                         && inst.OpCode.Code is Code.Ldloc_0 or Code.Ldloc_1 or Code.Ldloc_2 or Code.Ldloc_3 or Code.Ldloc_S or Code.Ldloc) {
@@ -1648,14 +1648,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                             }
 
                             if (srcLast.OpCode.Code is Code.Ldarga or Code.Ldarga_S
-                                && MonoModCommon.IL.TryGetReferencedParameter(caller, srcLast, out var innerIndex, out var parameter)) {
+                                && MonoModCommon.IL.TryGetReferencedParameter(caller, srcLast, out var innerIndex, out ParameterDefinition? parameter)) {
                                 if (innerIndex != 0 || !caller.HasThis) {
                                     var callerParamIndex = innerIndex - (caller.HasThis ? 1 : 0);
                                     if (callerParamIndex >= 0 && callerParamIndex < caller.Parameters.Count) {
                                         if (parameter.ParameterType.FullName != element.FullName) {
                                             PlanParameterChangeAndEnqueueCallers(caller, callerParamIndex, element, transform, globalWork);
                                         }
-                                        foreach (var inst in caller.Body.Instructions) {
+                                        foreach (Instruction? inst in caller.Body.Instructions) {
                                             if (MonoModCommon.IL.TryGetReferencedParameter(caller, inst, out var ii, out _)
                                                 && ii == innerIndex
                                                 && inst.OpCode.Code is Code.Ldarg_0 or Code.Ldarg_1 or Code.Ldarg_2 or Code.Ldarg_3 or Code.Ldarg_S or Code.Ldarg) {
@@ -1675,15 +1675,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
                             if (srcLast.OpCode.Code is Code.Ldflda or Code.Ldsflda
                                 && srcLast.Operand is FieldReference fr) {
-                                var fieldDef = fr.TryResolve();
+                                FieldDefinition? fieldDef = fr.TryResolve();
                                 if (fieldDef is not null && fieldDef.Module == module) {
                                     if (fieldDef.FieldType.FullName != element.FullName) {
                                         fieldDef.FieldType = element;
                                     }
                                     fr.FieldType = element;
 
-                                    if (fieldUseSites.TryGetValue(fieldDef, out var useSites)) {
-                                        foreach (var (useMethod, inst) in useSites) {
+                                    if (fieldUseSites.TryGetValue(fieldDef, out List<(MethodDefinition Method, Instruction Inst)>? useSites)) {
+                                        foreach ((MethodDefinition? useMethod, Instruction? inst) in useSites) {
                                             if (!useMethod.HasBody) {
                                                 continue;
                                             }
@@ -1707,7 +1707,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                             throw new NotSupportedException($"Unsupported byref call argument source in '{caller.GetIdentifier()}': '{srcLast.OpCode.Code}'.");
                         }
 
-                        foreach (var top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, srcLast, jumpSites)) {
+                        foreach (MonoModCommon.Stack.StackTopTypePath top in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, srcLast, jumpSites)) {
                             globalWork.Push(new MethodSeedWorkItem(caller, new ValueSeed(top.RealPushValueInstruction, expectedParamType, transform)));
                         }
                     }

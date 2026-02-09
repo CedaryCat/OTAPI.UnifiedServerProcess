@@ -80,7 +80,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 return false;
             }
 
-            var methodId = checkMethod.GetIdentifier();
+            string methodId = checkMethod.GetIdentifier();
 
             if (overwriteContextBoundCheck.TryGetValue(methodId, out bool isContextBound)) {
                 return isContextBound;
@@ -204,7 +204,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                     continue;
                 }
 
-                var currentId = currentCheck.GetIdentifier();
+                string currentId = currentCheck.GetIdentifier();
 
                 if (callGraph.MediatedCallGraph.TryGetValue(currentId, out var calldata)) {
                     if (overwriteContextBoundCheck.TryGetValue(currentId, out bool currentIsContextBound)) {
@@ -248,7 +248,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                                 if (PredefineMethodUsedContext.Contains(callee.GetIdentifier())) {
                                     return CacheReturn(true, useCache, methodId);
                                 }
-                                if (ParamCheck(useds, callee, out var shouldAddToCheckList)) {
+                                if (ParamCheck(useds, callee, out bool shouldAddToCheckList)) {
                                     return CacheReturn(true, useCache, methodId);
                                 }
                                 if (shouldAddToCheckList) {

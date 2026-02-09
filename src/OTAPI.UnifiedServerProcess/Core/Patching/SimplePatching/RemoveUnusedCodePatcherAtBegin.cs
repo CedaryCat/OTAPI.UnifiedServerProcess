@@ -22,7 +22,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
         public MethodCallGraph MethodCallGraph => methodCallGraph;
 
         public override void Patch() {
-            foreach (var method in module.GetType("Terraria.Initializers.DyeInitializer/<>c").Methods) {
+            foreach (MethodDefinition? method in module.GetType("Terraria.Initializers.DyeInitializer/<>c").Methods) {
                 if (method.Name.StartsWith("<LoadLegacyHairdyes>")) {
                     ClearMethodBody(method);
                 }
@@ -31,18 +31,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
             ClearMethodBody(module.GetType("Terraria.Graphics.FinalFractalHelper/FinalFractalProfile").GetMethod("StripDust"));
             ClearMethodBody(module.GetType("Microsoft.Xna.Framework.GameWindow").GetMethod("get_Title"));
 
-            foreach (var method in module.GetType("Terraria.DelegateMethods/Minecart").Methods) {
+            foreach (MethodDefinition? method in module.GetType("Terraria.DelegateMethods/Minecart").Methods) {
                 if (method.IsConstructor || method.ReturnType.FullName != module.TypeSystem.Void.FullName) {
                     continue;
                 }
                 ClearMethodBody(method);
             }
 
-            var mountTypeDef = module.GetType("Terraria.Mount");
+            TypeDefinition mountTypeDef = module.GetType("Terraria.Mount");
             ClearMethodBody(mountTypeDef.GetMethod("MeowcartLandingSound"));
             ClearMethodBody(mountTypeDef.GetMethod("MeowcartBumperSound"));
 
-            ClearExHandler(module.GetType("Terraria.Localization.LanguageManager").GetMethod("LoadFromContentSources")); 
+            ClearExHandler(module.GetType("Terraria.Localization.LanguageManager").GetMethod("LoadFromContentSources"));
         }
 
         private void ClearMethodBody(MethodDefinition method) {
@@ -67,23 +67,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
         private static void ClearExHandler(MethodDefinition method) {
             if (method?.HasBody != true) return;
 
-            var body = method.Body;
+            MethodBody body = method.Body;
             if (!body.HasExceptionHandlers) return;
 
             body.SimplifyMacros();
-            var il = body.GetILProcessor();
+            ILProcessor il = body.GetILProcessor();
 
             static IEnumerable<Instruction> Range(Instruction start, Instruction endExclusive) {
-                for (var i = start; i != null && i != endExclusive; i = i.Next)
+                for (Instruction i = start; i != null && i != endExclusive; i = i.Next)
                     yield return i;
             }
 
-            foreach (var eh in body.ExceptionHandlers.ToArray()) {
+            foreach (ExceptionHandler? eh in body.ExceptionHandlers.ToArray()) {
                 if (eh.HandlerType != ExceptionHandlerType.Catch) continue;
                 if (eh.HandlerStart == null) continue;
 
                 if (eh.HandlerEnd == null) {
-                    var endNop = il.Create(OpCodes.Nop);
+                    Instruction endNop = il.Create(OpCodes.Nop);
                     body.Instructions.Add(endNop);
                     eh.HandlerEnd = endNop;
                 }
@@ -91,7 +91,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
                 var region = Range(eh.HandlerStart, eh.HandlerEnd).ToList();
                 if (region.Count == 0) continue;
 
-                var first = region[0];
+                Instruction first = region[0];
 
                 bool consumesExceptionObject =
                     first.OpCode.Code is Code.Stloc or Code.Stloc_S or Code.Stloc_0 or Code.Stloc_1 or Code.Stloc_2 or Code.Stloc_3
@@ -109,7 +109,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
                     il.InsertAfter(first, il.Create(OpCodes.Leave, eh.HandlerEnd));
                 }
                 else {
-                    var last = region[^1];
+                    Instruction last = region[^1];
                     last.OpCode = OpCodes.Leave;
                     last.Operand = eh.HandlerEnd;
                 }

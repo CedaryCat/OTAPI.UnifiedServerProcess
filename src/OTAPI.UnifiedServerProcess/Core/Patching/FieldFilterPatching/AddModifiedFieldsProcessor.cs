@@ -14,8 +14,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
     public class AddModifiedFieldsProcessor(FieldDefinition[] modifiedFields, FieldDefinition[] initModifiedFields) : IFieldFilterArgProcessor
     {
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
-            var modifiedStaticFieldIds = new HashSet<string>(modifiedFields.Select(x => x.GetIdentifier()));
-            var initialStaticFieldIds = new HashSet<string>(initModifiedFields.Select(x => x.GetIdentifier()));
+            HashSet<string> modifiedStaticFieldIds = new HashSet<string>(modifiedFields.Select(x => x.GetIdentifier()));
+            HashSet<string> initialStaticFieldIds = new HashSet<string>(initModifiedFields.Select(x => x.GetIdentifier()));
 
             foreach (var type in raw.MainModule.GetAllTypes()) {
                 if (type.Name.OrdinalStartsWith('<')) {

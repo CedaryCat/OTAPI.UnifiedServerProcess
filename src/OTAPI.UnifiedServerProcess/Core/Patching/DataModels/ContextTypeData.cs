@@ -61,8 +61,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             this.FieldInitInsertionPoint = constructor.Body.Instructions.Single(i => i.OpCode == OpCodes.Call && ((MethodReference)i.Operand).Name == ".ctor").Previous;
             this.StaticConstructorBodyInsertionPoint = constructor.Body.Instructions.Single(i => i.OpCode == OpCodes.Stfld && ((FieldReference)i.Operand).FullName == rootContextField.FullName).Next;
             IsPredefined = true;
-            var predefinedMethodMap = new Dictionary<string, MethodDefinition>();
-            var correspondMethod = originalType.Methods.ToDictionary(m => m.GetIdentifier(false), m => m);
+            Dictionary<string, MethodDefinition> predefinedMethodMap = new Dictionary<string, MethodDefinition>();
+            Dictionary<string, MethodDefinition> correspondMethod = originalType.Methods.ToDictionary(m => m.GetIdentifier(false), m => m);
             foreach (var method in convertedType.Methods) {
                 if (!correspondMethod.TryGetValue(method.GetIdentifier(false), out var originalMethod)) {
                     continue;
@@ -88,10 +88,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             TypeDefinition rootContextDef,
             IReadOnlyDictionary<string, MethodCallData> callGraph,
             ref Dictionary<string, ContextTypeData> instanceConvdTypeOrigMap) {
-
-            if (originalType.Name == "LocalizedText" || originalType.Name == "Lang") {
-
-            }
 
             PredefinedMethodMap = ImmutableDictionary<string, MethodDefinition>.Empty;
 
@@ -168,8 +164,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                 return CreateInstanceConvdType(originalType, contextDef, declaringType, out rootContextField, out constructor, out storeSelfPlaceHolder);
             }
             IsReusedSingleton = true;
-            var tmpSingletonMathodMap = new Dictionary<string, MethodDefinition>();
-            var tmpSingletonFieldMap = new Dictionary<string, FieldDefinition>();
+            Dictionary<string, MethodDefinition> tmpSingletonMathodMap = new Dictionary<string, MethodDefinition>();
+            Dictionary<string, FieldDefinition> tmpSingletonFieldMap = new Dictionary<string, FieldDefinition>();
 
             var reusedType = originalType;
             constructor = reusedType.Methods.Single(m => m.IsConstructor && !m.IsStatic);
@@ -254,7 +250,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
 
         static void ReuseSingletonConstructor(TypeDefinition type, MethodDefinition existingConstructor, FieldDefinition rootContextField, ContextTypeData? declaringType, out Instruction storeSelfPlaceHolder) {
 
-            var rootContextParam = new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, rootContextField.FieldType);
+            ParameterDefinition rootContextParam = new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, rootContextField.FieldType);
             PatchingCommon.InsertParamAt0AndRemapIndices(existingConstructor.Body, PatchingCommon.InsertParamMode.Insert, rootContextParam);
 
             // instance field init (not reference any Parameter or field)
@@ -289,7 +285,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             out MethodDefinition constructor,
             out Instruction storeSelfPlaceHolder) {
 
-            var myContextTypeDef = new TypeDefinition(
+            TypeDefinition myContextTypeDef = new TypeDefinition(
                 originalType.Namespace,
                 originalType.Name + Constants.ContextSuffix,
                 originalType.IsNested ? Constants.Modifiers.ContextNestedType : Constants.Modifiers.ContextType,
@@ -310,11 +306,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
         }
         static MethodDefinition CreateConstructor(TypeDefinition myContextTypeDef, FieldDefinition rootContextField, ContextTypeData? declaringType, out Instruction storeSelfPlaceHolder) {
             var module = myContextTypeDef.Module;
-            var ctor = new MethodDefinition(".ctor", Constants.Modifiers.ContextConstructor, module.TypeSystem.Void) {
+            MethodDefinition ctor = new MethodDefinition(".ctor", Constants.Modifiers.ContextConstructor, module.TypeSystem.Void) {
                 DeclaringType = myContextTypeDef
             };
 
-            var rootContextParam = new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, rootContextField.FieldType);
+            ParameterDefinition rootContextParam = new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, rootContextField.FieldType);
             ctor.Parameters.Add(rootContextParam);
 
             ctor.Body = new MethodBody(ctor);
@@ -361,7 +357,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                     fieldName = fieldName + "_" + collisionCount;
                 }
             }
-            var field = new FieldDefinition(fieldName, FieldAttributes.Public, instanceConvdType);
+            FieldDefinition field = new FieldDefinition(fieldName, FieldAttributes.Public, instanceConvdType);
             declaringType.Fields.Add(field);
 
 

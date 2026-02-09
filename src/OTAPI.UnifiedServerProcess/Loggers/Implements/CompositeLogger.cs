@@ -7,20 +7,20 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements
     {
 
         public void Dispose() {
-            foreach (var logger in loggers.OfType<IDisposable>()) {
+            foreach (IDisposable logger in loggers.OfType<IDisposable>()) {
                 logger.Dispose();
             }
             GC.SuppressFinalize(this);
         }
 
         public override void LogSegments(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            foreach (var logger in loggers) {
+            foreach (Logger logger in loggers) {
                 logger.LogSegments(sender, level, segments);
             }
         }
 
         public override void LogSegmentsLine(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            foreach (var logger in loggers) {
+            foreach (Logger logger in loggers) {
                 logger.LogSegmentsLine(sender, level, segments);
             }
         }

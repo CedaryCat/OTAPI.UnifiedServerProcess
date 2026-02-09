@@ -32,9 +32,9 @@ namespace OTAPI.UnifiedServerProcess.Commons
             /// <param name="afterThisExec">Analyze after this instruction</param>
             /// <returns>Return all possible uses of the top value on the stack/returns>
             public static Instruction[] TraceStackValueConsumers(MethodDefinition caller, Instruction afterThisExec) {
-                var visited = new HashSet<(Instruction, int)>();
-                var results = new HashSet<Instruction>();
-                var workStack = new Stack<AnalysisContext>();
+                HashSet<(Instruction, int)> visited = new HashSet<(Instruction, int)>();
+                HashSet<Instruction> results = new HashSet<Instruction>();
+                Stack<AnalysisContext> workStack = new Stack<AnalysisContext>();
 
                 Instruction initialInstruction = afterThisExec.Next;
 
@@ -126,7 +126,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 cachedJumpSitess ??= BuildJumpSitesMap(caller);
 
                 // initialize analysis queue
-                var workStack = new Stack<(Instruction current, int stackBalance, HashSet<Instruction> visited)>();
+                Stack<(Instruction current, int stackBalance, HashSet<Instruction> visited)> workStack = new Stack<(Instruction current, int stackBalance, HashSet<Instruction> visited)>();
 
                 workStack.Push((afterThisExec, -1, []));
 
@@ -195,7 +195,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 cachedJumpSitess ??= BuildJumpSitesMap(caller);
 
                 // initialize analysis queue
-                var workStack = new Stack<(ReversibleLinkedList<Instruction> path, Instruction current, int stackBalance, HashSet<Instruction> visited)>();
+                Stack<(ReversibleLinkedList<Instruction> path, Instruction current, int stackBalance, HashSet<Instruction> visited)> workStack = new Stack<(ReversibleLinkedList<Instruction> path, Instruction current, int stackBalance, HashSet<Instruction> visited)>();
 
                 workStack.Push((new(), afterThisExec, -1, []));
 
@@ -345,7 +345,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             }
 
             static void FindEndpoints(IEnumerable<Instruction> nodes, out Instruction min, out Instruction max, out HashSet<Instruction> block) {
-                var nodeSet = new HashSet<Instruction>(nodes);
+                HashSet<Instruction> nodeSet = new HashSet<Instruction>(nodes);
 
                 if (nodeSet.Count == 0) throw new ArgumentException("Node set must contain at least one node");
 
@@ -475,20 +475,20 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         var parameter = IL.GetReferencedParameter(method, instruction);
                         return parameter.ParameterType;
                     case Code.Ldfld:
-                        var field = (FieldReference)instruction.Operand;
+                        FieldReference field = (FieldReference)instruction.Operand;
                         return field.FieldType;
                     case Code.Ldsfld:
                         field = (FieldReference)instruction.Operand;
                         return field.FieldType;
                     case Code.Call:
                     case Code.Callvirt:
-                        var methodCall = (MethodReference)instruction.Operand;
+                        MethodReference methodCall = (MethodReference)instruction.Operand;
                         return IL.GetMethodReturnType(methodCall, method);
                     case Code.Calli:
-                        var sig = (CallSite)instruction.Operand;
+                        CallSite sig = (CallSite)instruction.Operand;
                         return sig.ReturnType;
                     case Code.Newobj:
-                        var ctor = (MethodReference)instruction.Operand;
+                        MethodReference ctor = (MethodReference)instruction.Operand;
                         return ctor.DeclaringType;
                     case Code.Newarr:
                         return new ArrayType((TypeReference)instruction.Operand);
@@ -628,7 +628,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     case Code.Ldind_Ref:
                         var referencePaths = AnalyzeInstructionArgsSources(method, instruction, cachedJumpSites).First();
                         var referenceInstructions = referencePaths.ParametersSources[0].Instructions;
-                        var referenceType = (ByReferenceType)AnalyzeStackTopType(method, referenceInstructions.Last(), cachedJumpSites)!;
+                        ByReferenceType referenceType = (ByReferenceType)AnalyzeStackTopType(method, referenceInstructions.Last(), cachedJumpSites)!;
                         return referenceType.ElementType;
 
                     case Code.Ldobj: return (TypeReference)instruction.Operand;
@@ -734,15 +734,15 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 cachedJumpSitess ??= BuildJumpSitesMap(caller);
 
                 // Resolve method signature
-                var callee = (MethodReference)target.Operand;
+                MethodReference callee = (MethodReference)target.Operand;
                 bool hasThis = (target.OpCode == OpCodes.Call || target.OpCode == OpCodes.Callvirt) && callee.HasThis;
                 int paramCount = callee.Parameters.Count + (hasThis ? 1 : 0);
                 if (target.OpCode == OpCodes.Newobj)
                     paramCount = callee.Parameters.Count;
 
                 // Initialize analysis queue
-                var workStack = new Stack<ReverseAnalysisContext>();
-                var initialDemand = new StackDemand(paramCount, GetPushCount(caller.Body, target));
+                Stack<ReverseAnalysisContext> workStack = new Stack<ReverseAnalysisContext>();
+                StackDemand initialDemand = new StackDemand(paramCount, GetPushCount(caller.Body, target));
                 workStack.Push(new ReverseAnalysisContext(
                     current: target,
                     previous: target.Previous,
@@ -765,7 +765,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                     // Clone context to prevent state pollution
                     var stackDemand = ctx.StackDemand.Clone();
-                    var path = new ReversibleLinkedList<Instruction>(ctx.Path);
+                    ReversibleLinkedList<Instruction> path = new ReversibleLinkedList<Instruction>(ctx.Path);
 
                     // Process tail instruction's reverse stack effect
                     int originalPush = GetPushCount(caller.Body, ctx.Current);
@@ -860,8 +860,8 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 var argsCount = GetInstructionArgCount(caller.Body, target);
 
                 // initialize analysis queue
-                var workStack = new Stack<ReverseAnalysisContext>();
-                var initialDemand = new StackDemand(argsCount, GetPushCount(caller.Body, target));
+                Stack<ReverseAnalysisContext> workStack = new Stack<ReverseAnalysisContext>();
+                StackDemand initialDemand = new StackDemand(argsCount, GetPushCount(caller.Body, target));
 
                 workStack.Push(new ReverseAnalysisContext(
                     current: target,
@@ -885,7 +885,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                     // Clone context to prevent polluting
                     var stackDemand = ctx.StackDemand.Clone();
-                    var path = new ReversibleLinkedList<Instruction>(ctx.Path);
+                    ReversibleLinkedList<Instruction> path = new ReversibleLinkedList<Instruction>(ctx.Path);
 
                     // Process the reverse stack effect of the tail instruction
                     int originalPush = GetPushCount(caller.Body, ctx.Current);
@@ -946,7 +946,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 return BuildFlowPaths(caller.Body, paths);
             }
             public static Dictionary<Instruction, List<Instruction>> BuildJumpSitesMap(MethodDefinition method) {
-                var jumpTargets = new Dictionary<Instruction, List<Instruction>>();
+                Dictionary<Instruction, List<Instruction>> jumpTargets = new Dictionary<Instruction, List<Instruction>>();
                 foreach (var instruction in method.Body.Instructions) {
                     if (instruction.Operand is ILLabel label) {
                         var target = label.Target;
@@ -997,7 +997,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 if (target.OpCode == OpCodes.Newobj)
                     paramCount = callee.Parameters.Count;
 
-                var parameters = new List<ParameterSource>();
+                List<ParameterSource> parameters = new List<ParameterSource>();
                 int currentIndex = path.Length - 1;
 
                 for (int i = 0; i < paramCount; i++) {
@@ -1006,7 +1006,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     var (start, end) = FindArgRange(path, deltas, currentIndex);
                     if (start == -1) break;
 
-                    var paramInstructions = new List<Instruction>();
+                    List<Instruction> paramInstructions = new List<Instruction>();
                     for (int j = start; j <= end; j++)
                         paramInstructions.Add(path[j]);
 
@@ -1033,7 +1033,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             private static List<InstructionArgsSource> AnalyzeInstructionArgs(MethodBody body, Instruction target, int argsCount, Instruction[] path) {
                 path = [.. path.Take(path.Length - 1)];
                 var deltas = ComputeStackDeltas(body, path);
-                var argsSources = new List<InstructionArgsSource>();
+                List<InstructionArgsSource> argsSources = new List<InstructionArgsSource>();
 
                 int currentIndex = path.Length - 1;
 
@@ -1043,7 +1043,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     var (start, end) = FindArgRange(path, deltas, currentIndex);
                     if (start == -1) break;
 
-                    var argInstructions = new List<Instruction>();
+                    List<Instruction> argInstructions = new List<Instruction>();
                     for (int j = start; j <= end; j++)
                         argInstructions.Add(path[j]);
 
@@ -1148,7 +1148,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         return 0;
                     case StackBehaviour.Varpop:
                         if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt || instruction.OpCode == OpCodes.Newobj) {
-                            var methodRef = (MethodReference)instruction.Operand;
+                            MethodReference methodRef = (MethodReference)instruction.Operand;
                             int count = methodRef.Parameters.Count;
                             if (instruction.OpCode != OpCodes.Newobj && methodRef.HasThis)
                                 count++;
@@ -1187,11 +1187,11 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         return 2;
                     case StackBehaviour.Varpush:
                         if (instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Callvirt) {
-                            var method = (MethodReference)instruction.Operand;
+                            MethodReference method = (MethodReference)instruction.Operand;
                             return method.ReturnType.FullName == "System.Void" ? 0 : 1;
                         }
                         else if (instruction.OpCode == OpCodes.Calli) {
-                            var sig = (CallSite)instruction.Operand;
+                            CallSite sig = (CallSite)instruction.Operand;
                             return sig.ReturnType.FullName == "System.Void" ? 0 : 1;
                         }
                         else if (instruction.OpCode == OpCodes.Newobj) {

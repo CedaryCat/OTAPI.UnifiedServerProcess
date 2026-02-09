@@ -14,9 +14,9 @@ using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices.JavaScript;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 {
@@ -39,16 +39,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public MethodInheritanceGraph MethodInheritanceGraph => methodInheritanceGraph;
         public MethodCallGraph MethodCallGraph => callGraph;
         public override void Patch(PatcherArguments arguments) {
-            var module = arguments.MainModule;
+            ModuleDefinition module = arguments.MainModule;
 
             var mappedMethods = new ContextBoundMethodMap();
             arguments.StoreVariable(mappedMethods);
 
-            var convertedMethodOrigMap = mappedMethods.originalToContextBound;
-            var contextBoundMethods = mappedMethods.contextBoundMethods;
-            
-            foreach (var dele in module.GetType($"{Constants.DelegatesNameSpace}.{Constants.CtxDelegatesContainerName}").NestedTypes) {
-                var md = dele.GetMethod(nameof(Action.Invoke));
+            ContextBoundMethodMap.DebugMap convertedMethodOrigMap = mappedMethods.originalToContextBound;
+            ContextBoundMethodMap.DebugMap contextBoundMethods = mappedMethods.contextBoundMethods;
+
+            foreach (TypeDefinition? dele in module.GetType($"{Constants.DelegatesNameSpace}.{Constants.CtxDelegatesContainerName}").NestedTypes) {
+                MethodDefinition md = dele.GetMethod(nameof(Action.Invoke));
                 var oldkey = md.GetIdentifier();
                 md.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                 convertedMethodOrigMap.Add(oldkey, md);
@@ -61,24 +61,24 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 contextBoundMethods.Add(md.GetIdentifier(), md);
             }
 
-            foreach (var predefined in arguments.ContextTypes.Values.Where(t => t.IsPredefined)) {
-                foreach (var kv in predefined.PredefinedMethodMap) {
-                    var method = kv.Value;
+            foreach (ContextTypeData? predefined in arguments.ContextTypes.Values.Where(t => t.IsPredefined)) {
+                foreach (KeyValuePair<string, MethodDefinition> kv in predefined.PredefinedMethodMap) {
+                    MethodDefinition method = kv.Value;
                     convertedMethodOrigMap.Add(kv.Key, method);
                     contextBoundMethods.Add(method.GetIdentifier(), method);
                     this.AddPredefineMethodUsedContext(kv.Key);
                 }
             }
-            foreach (var context in arguments.ContextTypes.Values.Where(t => !t.IsReusedSingleton)) {
+            foreach (ContextTypeData? context in arguments.ContextTypes.Values.Where(t => !t.IsReusedSingleton)) {
                 contextBoundMethods.Add(context.constructor.GetIdentifier(), context.constructor);
             }
-            foreach (var reused in arguments.ContextTypes.Values.Where(t => t.IsReusedSingleton)) {
+            foreach (ContextTypeData? reused in arguments.ContextTypes.Values.Where(t => t.IsReusedSingleton)) {
                 var originalCtorId = reused.constructor.GetIdentifier(true, arguments.RootContextDef);
                 convertedMethodOrigMap.Add(originalCtorId, reused.constructor);
                 contextBoundMethods.Add(reused.constructor.GetIdentifier(), reused.constructor);
             }
-            foreach (var interfAdapt in arguments.RootContextFieldToAdaptExternalInterface) {
-                foreach (var ctor in module.GetType(interfAdapt.Key).Methods.Where(m => m.IsConstructor && !m.IsStatic)) {
+            foreach (KeyValuePair<string, FieldDefinition> interfAdapt in arguments.RootContextFieldToAdaptExternalInterface) {
+                foreach (MethodDefinition? ctor in module.GetType(interfAdapt.Key).Methods.Where(m => m.IsConstructor && !m.IsStatic)) {
                     var originalCtorId = ctor.GetIdentifier(true, arguments.RootContextDef);
                     convertedMethodOrigMap.Add(originalCtorId, ctor);
                     contextBoundMethods.Add(ctor.GetIdentifier(), ctor);
@@ -87,25 +87,25 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             Dictionary<string, MethodDefinition> workQueue = [];
 
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
                 if (!type.Name.OrdinalStartsWith("<")) {
-                    foreach (var method in type.Methods) {
+                    foreach (MethodDefinition? method in type.Methods) {
                         if (!method.HasBody || method.Name == ".cctor" || method.Name.OrdinalStartsWith("<")) {
                             continue;
                         }
                         workQueue.Add(method.GetIdentifier(), method);
                     }
                 }
-                foreach (var method in type.Methods) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
-                    foreach (var inst in method.Body.Instructions) {
+                    foreach (Instruction? inst in method.Body.Instructions) {
                         if (inst.OpCode.Code is not Code.Ldftn and not Code.Ldvirtftn) {
                             continue;
                         }
                         var targetRef = (MethodReference)inst.Operand;
-                        var usages = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
+                        Instruction[] usages = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
                         if (usages.Length != 1 || usages[0].OpCode.Code is not Code.Newobj) {
                             continue;
                         }
@@ -117,7 +117,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             continue;
                         }
                         // If the delegate takes an injected context, the target must be context-aware.
-                        var targetDef = targetRef.TryResolve();
+                        MethodDefinition? targetDef = targetRef.TryResolve();
                         if (targetDef is null) {
                             continue;
                         }
@@ -131,12 +131,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             int iteration = 0;
             while (workQueue.Count > 0) {
                 iteration++;
-                var currentWorkBatch = workQueue.ToArray();
+                KeyValuePair<string, MethodDefinition>[] currentWorkBatch = workQueue.ToArray();
 
                 for (int progress = 0; progress < currentWorkBatch.Length; progress++) {
-                    var method = currentWorkBatch[progress].Value;
+                    MethodDefinition method = currentWorkBatch[progress].Value;
                     var removeKey = currentWorkBatch[progress].Key;
-                    var modifiedMethod = method;
+                    MethodDefinition modifiedMethod = method;
 
                     var methodId = method.GetIdentifier();
 
@@ -147,7 +147,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         originalToContextMethod: convertedMethodOrigMap,
                         contextBoundMethods: contextBoundMethods,
                         modifiedMethod,
-                        out var modifyMode
+                        out MethodModifyMode modifyMode
                     );
                     workQueue.Remove(removeKey);
 
@@ -156,7 +156,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     }
 
                     AddNextIterationMethod(arguments, workQueue, mappedMethods, method, modifyMode, iteration, progress, currentWorkBatch.Length);
-                    var anotherAccessor = FindAnotherAccessor(method);
+                    MethodDefinition? anotherAccessor = FindAnotherAccessor(method);
                     if (anotherAccessor is not null && modifyMode is not MethodModifyMode.InstanceConverted) {
                         if (anotherAccessor.Parameters.Count == 0 || anotherAccessor.Parameters[0].ParameterType.FullName != arguments.RootContextDef.FullName) {
                             var rootParam = new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef);
@@ -209,18 +209,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             MethodModifyMode modifyMode,
             int iteration, int progress, int total) {
 
-            var module = arguments.MainModule;
+            ModuleDefinition module = arguments.MainModule;
             var id = processedMethod.GetIdentifier();
-            var graph = callGraph.MediatedCallGraph;
-            var root = arguments.RootContextDef;
-            var convertedTypes = arguments.ContextTypes;
+            Dictionary<string, MethodCallData> graph = callGraph.MediatedCallGraph;
+            TypeDefinition root = arguments.RootContextDef;
+            FrozenDictionary<string, ContextTypeData> convertedTypes = arguments.ContextTypes;
 
-            var vanillaMethod = PatchingCommon.GetVanillaMethodRef(root, convertedTypes, processedMethod);
+            MethodReference vanillaMethod = PatchingCommon.GetVanillaMethodRef(root, convertedTypes, processedMethod);
             var methodOrigId = vanillaMethod.GetIdentifier();
 
-            if (graph.TryGetValue(id, out var callers) || graph.TryGetValue(methodOrigId, out callers)) {
+            if (graph.TryGetValue(id, out MethodCallData? callers) || graph.TryGetValue(methodOrigId, out callers)) {
 
-                foreach (var caller in callers.UsedByMethods) {
+                foreach (MethodDefinition caller in callers.UsedByMethods) {
 
                     // skip delegate closures, they will be handled by the InvocationCtxAdaptorPatcher
                     if (caller.DeclaringType.Name.OrdinalStartsWith('<')) {
@@ -231,11 +231,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         continue;
                     }
 
-                    var redirectedCaller = caller;
+                    MethodDefinition redirectedCaller = caller;
                     var callerId = caller.GetIdentifier();
 
                     // If the method has a context-bound version, redirect to the context-bound method
-                    if (mappedMethods.originalToContextBound.TryGetValue(callerId, out var instanceConvdMethod)) {
+                    if (mappedMethods.originalToContextBound.TryGetValue(callerId, out MethodDefinition? instanceConvdMethod)) {
                         redirectedCaller = instanceConvdMethod;
                         callerId = redirectedCaller.GetIdentifier();
                     }
@@ -250,8 +250,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 HashSet<MethodDefinition> lowestBaseMethods = [];
 
-                if (methodInheritanceGraph.ImmediateInheritanceChains.TryGetValue(vanillaMethod.GetIdentifier(), out var immediateInheritanceChain)) {
-                    foreach (var baseMethod in immediateInheritanceChain) {
+                if (methodInheritanceGraph.ImmediateInheritanceChains.TryGetValue(vanillaMethod.GetIdentifier(), out MethodDefinition[]? immediateInheritanceChain)) {
+                    foreach (MethodDefinition baseMethod in immediateInheritanceChain) {
                         if (!baseMethod.DeclaringType.IsInterface) {
                             continue;
                         }
@@ -272,14 +272,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     }
 
                     MethodDefinition? baseMethod = null;
-                    foreach (var m in resolvedBaseType.Methods) {
+                    foreach (MethodDefinition? m in resolvedBaseType.Methods) {
                         if (!m.IsVirtual) {
                             continue;
                         }
                         if (m.Name != vanillaMethod.Name) {
                             continue;
                         }
-                        var typed = MonoModCommon.Structure.CreateInstantiatedMethod(m, baseType);
+                        MethodReference typed = MonoModCommon.Structure.CreateInstantiatedMethod(m, baseType);
                         if (typed.GetIdentifier(false) != vanillaMethod.GetIdentifier(false)) {
                             continue;
                         }
@@ -295,9 +295,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     lowestBaseMethods.Add(lowestBaseMethod);
                 }
 
-                foreach (var baseMethod in lowestBaseMethods) {
-                    if (methodInheritanceGraph.RawMethodImplementationChains.TryGetValue(baseMethod.GetIdentifier(), out var inheritedMethods)) {
-                        foreach (var inheritedMethod in inheritedMethods) {
+                foreach (MethodDefinition baseMethod in lowestBaseMethods) {
+                    if (methodInheritanceGraph.RawMethodImplementationChains.TryGetValue(baseMethod.GetIdentifier(), out MethodDefinition[]? inheritedMethods)) {
+                        foreach (MethodDefinition inheritedMethod in inheritedMethods) {
                             var inheritedMethodId = inheritedMethod.GetIdentifier();
                             if (mappedMethods.originalToContextBound.ContainsKey(inheritedMethodId) || mappedMethods.contextBoundMethods.ContainsKey(inheritedMethodId)) {
                                 continue;
@@ -309,7 +309,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             else {
                                 inheritedMethod.Parameters.Insert(0, rootParam);
                                 if (inheritedMethod.HasOverrides) {
-                                    foreach (var overrides in inheritedMethod.Overrides) {
+                                    foreach (MethodReference? overrides in inheritedMethod.Overrides) {
                                         overrides.Parameters.Insert(0, rootParam);
                                     }
                                 }
@@ -318,7 +318,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             mappedMethods.originalToContextBound.Add(inheritedMethodId, inheritedMethod);
                             mappedMethods.contextBoundMethods.Add(inheritedMethod.GetIdentifier(), inheritedMethod);
                             if (graph.TryGetValue(inheritedMethodId, out callers)) {
-                                foreach (var caller in callers.UsedByMethods) {
+                                foreach (MethodDefinition caller in callers.UsedByMethods) {
                                     // skip delegate closures, these will be handled by the InvocationAdaptorPatcher
                                     if (caller.DeclaringType.Name.OrdinalStartsWith('<')) {
                                         continue;
@@ -328,9 +328,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                                         continue;
                                     }
 
-                                    var redirectedCaller = caller;
+                                    MethodDefinition redirectedCaller = caller;
                                     var callerId = caller.GetIdentifier();
-                                    if (mappedMethods.originalToContextBound.TryGetValue(callerId, out var convertedCaller)) {
+                                    if (mappedMethods.originalToContextBound.TryGetValue(callerId, out MethodDefinition? convertedCaller)) {
                                         redirectedCaller = convertedCaller;
                                         callerId = convertedCaller.GetIdentifier();
                                     }
@@ -382,15 +382,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             if (method.DeclaringType.FullName == arguments.RootContextDef.FullName) {
                 return;
             }
-            if (arguments.ContextTypes.TryGetValue(method.DeclaringType.FullName, out var predefined) && predefined.IsPredefined) {
+            if (arguments.ContextTypes.TryGetValue(method.DeclaringType.FullName, out ContextTypeData? predefined) && predefined.IsPredefined) {
                 return;
             }
             var methodId = method.GetIdentifier();
 
-            if (arguments.OriginalToContextType.TryGetValue(method.DeclaringType.FullName, out var contextType)
+            if (arguments.OriginalToContextType.TryGetValue(method.DeclaringType.FullName, out ContextTypeData? contextType)
                 || arguments.ContextTypes.TryGetValue(method.DeclaringType.FullName, out contextType)) {
 
-                if (originalToContextMethod.TryGetValue(method.GetIdentifier(), out var convertedMethod) && !contextType.IsReusedSingleton) {
+                if (originalToContextMethod.TryGetValue(method.GetIdentifier(), out MethodDefinition? convertedMethod) && !contextType.IsReusedSingleton) {
                     throw new Exception($"The method {method.GetDebugName()} has already been bound with context to {convertedMethod.GetDebugName()}, shouldn't be add to work queue");
                 }
 
@@ -439,7 +439,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
 
-            foreach (var instruction in method.Body.Instructions.ToArray()) {
+            foreach (Instruction? instruction in method.Body.Instructions.ToArray()) {
 
                 switch (instruction.OpCode.Code) {
                     case Code.Ldsfld:
@@ -502,7 +502,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 addedParam = false;
                 var fieldRef = (FieldReference)instruction.Operand;
-                var field = fieldRef.TryResolve();
+                FieldDefinition? field = fieldRef.TryResolve();
 
                 if (field is null) {
                     return;
@@ -510,7 +510,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 FieldDefinition? instanceConvdField;
                 // If the loading field is just an context, it must come from a singleton field redirection
-                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
+                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out ContextTypeData? instanceConvdType) && instanceConvdType.IsReusedSingleton) {
                     // If it is loading the field value but address, and tail method is an instance method of the context
                     // Just use 'this'
                     if (method.DeclaringType.FullName == instanceConvdType.ContextTypeDef.FullName
@@ -534,28 +534,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 // If the loading field is a member field of a context but context itself
                 else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
-                    var declaringType = instanceConvdField.DeclaringType;
+                    TypeDefinition declaringType = instanceConvdField.DeclaringType;
                     // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
                 else {
                     return;
                 }
-                var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out addedParam);
+                Instruction[] loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out addedParam);
                 this.InjectContextFieldLoadInstanceLoads(arguments, ref instruction, out _, isAddress, method, instanceConvdField, fieldRef, loadInstanceInsts);
             }
 
             void HandleStoreStaticField(Instruction instruction, MethodDefinition method, out bool addedParam) {
                 addedParam = false;
                 var fieldRef = (FieldReference)instruction.Operand;
-                var field = fieldRef.TryResolve();
+                FieldDefinition? field = fieldRef.TryResolve();
                 if (field is null) {
                     return;
                 }
 
                 FieldDefinition? instanceConvdField;
                 // If the loading field is just an context, it must come from a singleton field redirection
-                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
+                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out ContextTypeData? instanceConvdType) && instanceConvdType.IsReusedSingleton) {
 
                     // Load the field by tail: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> tail field **
 
@@ -570,7 +570,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 // If the loading field is a member field of a context but context itself
                 else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
-                    var declaringType = instanceConvdField.DeclaringType;
+                    TypeDefinition declaringType = instanceConvdField.DeclaringType;
                     // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
@@ -578,7 +578,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     return;
                 }
 
-                var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out addedParam);
+                Instruction[] loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out addedParam);
                 this.InjectContextFieldStoreInstanceLoads(arguments, ref instruction, out _, method, instanceConvdField, fieldRef, loadInstanceInsts);
             }
 
@@ -586,8 +586,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 addedParam = false;
 
                 var calleeRefToAdjust = (MethodReference)methodCallInstruction.Operand;
-                if (this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out _, out var vanillaCallee, out var contextType)) {
-                    var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
+                if (this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out _, out MethodReference? vanillaCallee, out ContextTypeData? contextType)) {
+                    Instruction[] loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
                     this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
                     return;
                 }
@@ -596,24 +596,24 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     if (gim.GenericArguments.Single() is not GenericParameter gp) {
                         return;
                     }
-                    var typeConstr = gp.Constraints
+                    TypeDefinition? typeConstr = gp.Constraints
                         .Select(c => c.ConstraintType?.Resolve())
                         .FirstOrDefault(x => x is not null && !x.IsInterface && !x.IsValueType);
                     if (typeConstr is null || !arguments.NewConstraintInjectedCtx.ContainsKey(typeConstr.FullName)) {
                         return;
                     }
 
-                    var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
+                    Instruction[] loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out addedParam);
 
                     methodCallInstruction.OpCode = OpCodes.Ldtoken;
                     methodCallInstruction.Operand = gp;
 
-                    var il = caller.Body.GetILProcessor();
+                    ILProcessor il = caller.Body.GetILProcessor();
 
                     var sysType = new TypeReference(nameof(System), nameof(Type), module, module.TypeSystem.CoreLibrary);
                     var rtHandleType = new TypeReference(nameof(System), nameof(RuntimeTypeHandle), module, module.TypeSystem.CoreLibrary);
                     var activatorType = new TypeReference(nameof(System), nameof(Activator), module, module.TypeSystem.CoreLibrary);
-                    var typeOfT = module.ImportReference(sysType.Resolve().Methods.Single(m => m.Name == nameof(Type.GetTypeFromHandle)));
+                    MethodReference typeOfT = module.ImportReference(sysType.Resolve().Methods.Single(m => m.Name == nameof(Type.GetTypeFromHandle)));
 
                     var createInstance = new MethodReference(nameof(Activator.CreateInstance), module.TypeSystem.Object, activatorType);
                     createInstance.Parameters.AddRange([

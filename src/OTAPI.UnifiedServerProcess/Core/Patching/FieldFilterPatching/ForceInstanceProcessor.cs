@@ -23,7 +23,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             // "Terraria.ObjectData.TileObjectData",
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
-            foreach (var fieldId in fields) {
+            foreach (string fieldId in fields) {
                 if (source.UnmodifiedStaticFields.TryGetValue(fieldId, out var field) || source.InitialStaticFields.TryGetValue(fieldId, out field)) {
                     source.ModifiedStaticFields.TryAdd(fieldId, field);
                     source.UnmodifiedStaticFields.Remove(fieldId);
@@ -32,10 +32,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             }
             var typeSets = types.ToHashSet();
             foreach (var fieldKV in source.UnmodifiedStaticFields.Concat(source.InitialStaticFields).ToArray()) {
-                if (typeSets.Contains(fieldKV.Value.DeclaringType.FullName) || 
+                if (typeSets.Contains(fieldKV.Value.DeclaringType.FullName) ||
                     fieldKV.Value.FieldType.FullName is "System.Diagnostics.Stopwatch") {
                     var field = fieldKV.Value;
-                    var fieldId = fieldKV.Key;
+                    string fieldId = fieldKV.Key;
                     source.ModifiedStaticFields.TryAdd(fieldId, field);
                     source.UnmodifiedStaticFields.Remove(fieldId);
                     source.InitialStaticFields.Remove(fieldId);

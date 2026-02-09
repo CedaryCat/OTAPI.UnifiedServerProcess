@@ -17,11 +17,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public override string Name => nameof(AdjustPropertiesPatcher);
 
         public override void Patch(PatcherArguments arguments) {
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
-                foreach (var theEvent in type.Events.ToArray()) {
-                    var adder = type.Methods.FirstOrDefault(x => x.Name == "add_" + theEvent.Name);
-                    var remover = type.Methods.FirstOrDefault(x => x.Name == "remove_" + theEvent.Name);
-                    var innerField = type.Fields.FirstOrDefault(x => x.Name == theEvent.Name && x.FieldType.FullName == theEvent.EventType.FullName);
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
+                foreach (EventDefinition? theEvent in type.Events.ToArray()) {
+                    MethodDefinition? adder = type.Methods.FirstOrDefault(x => x.Name == "add_" + theEvent.Name);
+                    MethodDefinition? remover = type.Methods.FirstOrDefault(x => x.Name == "remove_" + theEvent.Name);
+                    FieldDefinition? innerField = type.Fields.FirstOrDefault(x => x.Name == theEvent.Name && x.FieldType.FullName == theEvent.EventType.FullName);
 
                     bool shouldRemove = adder is null && remover is null;
 
@@ -36,7 +36,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         theEvent.DeclaringType = type;
                     }
                 }
-                foreach (var method in type.Methods) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.IsSpecialName) {
                         continue;
                     }
@@ -55,11 +55,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         theEventName = method.Name["remove_".Length..];
                     }
 
-                    var theEvent = type.Events.FirstOrDefault(x => x.Name == theEventName);
+                    EventDefinition? theEvent = type.Events.FirstOrDefault(x => x.Name == theEventName);
 
-                    var innerField = type.Fields.FirstOrDefault(x => x.Name == theEventName);
+                    FieldDefinition? innerField = type.Fields.FirstOrDefault(x => x.Name == theEventName);
                     if (innerField is not null) {
-                        var nullableAtt = innerField.CustomAttributes.FirstOrDefault(x => x.AttributeType.FullName == "System.Runtime.CompilerServices.NullableAttribute");
+                        CustomAttribute? nullableAtt = innerField.CustomAttributes.FirstOrDefault(x => x.AttributeType.FullName == "System.Runtime.CompilerServices.NullableAttribute");
                         if (nullableAtt is not null) {
                             innerField.CustomAttributes.Remove(nullableAtt);
                         }

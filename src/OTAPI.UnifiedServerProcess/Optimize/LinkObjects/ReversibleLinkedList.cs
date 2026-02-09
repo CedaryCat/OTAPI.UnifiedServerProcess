@@ -14,7 +14,7 @@
             if (tail is null) {
                 return [];
             }
-            var current = tail;
+            Node? current = tail;
             var result = new TItem[current.currentIndex + 1];
 
             var indexMax = current.currentIndex;
@@ -29,7 +29,7 @@
             if (tail is null) {
                 return [];
             }
-            var curr = tail;
+            Node? curr = tail;
             var result = new TItem[curr.currentIndex + 1];
             while (curr != null) {
                 result[curr.currentIndex] = curr.item;

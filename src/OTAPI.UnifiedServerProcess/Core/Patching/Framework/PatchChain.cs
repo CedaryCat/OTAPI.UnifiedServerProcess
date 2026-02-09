@@ -115,7 +115,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
             private readonly Patcher<TArgument> patcher = patcher;
             public sealed override string Name => patcher.Name;
             public sealed override void Execute() {
-                var arg = argument.Generate();
+                TArgument arg = argument.Generate();
                 Info("Patching...");
                 patcher.Patch(arg);
             }

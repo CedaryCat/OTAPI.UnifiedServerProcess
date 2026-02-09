@@ -1,4 +1,5 @@
-﻿using OTAPI.UnifiedServerProcess.Loggers;
+﻿using Mono.Cecil;
+using OTAPI.UnifiedServerProcess.Loggers;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -35,10 +36,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             // global singleton
             "Terraria.Localization.LocalizedText.Empty",
             // lazy loading cache, should be global
-            "Terraria.Localization.LocalizedText._propertyLookupCache", 
+            "Terraria.Localization.LocalizedText._propertyLookupCache",
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
-            foreach (var modified in source.ModifiedStaticFields.ToArray()) {
+            foreach (KeyValuePair<string, FieldDefinition> modified in source.ModifiedStaticFields.ToArray()) {
                 // thread static field will not be shared across threads
                 if (modified.Value.CustomAttributes.Any(x => x.AttributeType.FullName == "System.ThreadStaticAttribute")) {
                     source.ModifiedStaticFields.Remove(modified.Key);

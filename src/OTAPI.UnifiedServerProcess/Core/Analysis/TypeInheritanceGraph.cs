@@ -15,15 +15,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             _derivedTypeTrees = new(StringComparer.Ordinal);
 
             // Precompute upward inheritance chains (base types + interfaces) for fast lookups.
-            foreach (var type in GetTypesInInheritanceOrder(module))
+            foreach (TypeDefinition type in GetTypesInInheritanceOrder(module))
                 GetInheritanceTypes(type);
 
             // Build a "base -> direct derived types" index (classes only) for descendant tree queries.
-            foreach (var type in module.GetAllTypes())
+            foreach (TypeDefinition? type in module.GetAllTypes())
                 IndexDerivedType(type);
 
             // Stabilize output order.
-            foreach (var list in _directDerivedTypes.Values)
+            foreach (List<TypeDefinition> list in _directDerivedTypes.Values)
                 list.Sort((a, b) => StringComparer.Ordinal.Compare(a.FullName, b.FullName));
         }
 
@@ -33,17 +33,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
         /// </summary>
         public Dictionary<string, TypeDefinition> GetInheritanceTypes(TypeDefinition type) {
 
-            if (_typeInheritanceChains.TryGetValue(type.FullName, out var cached))
+            if (_typeInheritanceChains.TryGetValue(type.FullName, out Dictionary<string, TypeDefinition>? cached))
                 return cached;
 
             var types = new Dictionary<string, TypeDefinition>(StringComparer.Ordinal);
-            var currentType = type;
+            TypeDefinition? currentType = type;
 
             while (currentType != null) {
                 types.TryAdd(currentType.FullName, currentType);
 
-                foreach (var iface in currentType.Interfaces) {
-                    var resolved = iface.InterfaceType.TryResolve();
+                foreach (InterfaceImplementation? iface in currentType.Interfaces) {
+                    TypeDefinition? resolved = iface.InterfaceType.TryResolve();
                     if (resolved is null) continue;
                     types.TryAdd(resolved.FullName, resolved);
                 }
@@ -71,10 +71,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             // Exclude interfaces so System.Object won't incorrectly "own" all interfaces as children.
             if (type is null || type.IsInterface) return;
 
-            var baseType = type.BaseType?.TryResolve();
+            TypeDefinition? baseType = type.BaseType?.TryResolve();
             if (baseType is null) return;
 
-            if (!_directDerivedTypes.TryGetValue(baseType.FullName, out var list)) {
+            if (!_directDerivedTypes.TryGetValue(baseType.FullName, out List<TypeDefinition>? list)) {
                 list = new List<TypeDefinition>();
                 _directDerivedTypes.Add(baseType.FullName, list);
             }
@@ -83,13 +83,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
         }
 
         private TypeTreeNode BuildDerivedTypeTree(TypeDefinition root) {
-            if (_derivedTypeTrees.TryGetValue(root.FullName, out var cached))
+            if (_derivedTypeTrees.TryGetValue(root.FullName, out TypeTreeNode? cached))
                 return cached;
 
             var children = new List<TypeTreeNode>();
 
-            if (_directDerivedTypes.TryGetValue(root.FullName, out var directChildren)) {
-                foreach (var child in directChildren)
+            if (_directDerivedTypes.TryGetValue(root.FullName, out List<TypeDefinition>? directChildren)) {
+                foreach (TypeDefinition child in directChildren)
                     children.Add(BuildDerivedTypeTree(child));
             }
 
@@ -106,7 +106,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             var visited = new HashSet<TypeDefinition>();
             var sorted = new List<TypeDefinition>();
 
-            foreach (var type in module.GetAllTypes())
+            foreach (TypeDefinition? type in module.GetAllTypes())
                 VisitType(type, visited, sorted);
 
             return sorted;
@@ -115,12 +115,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
         private static void VisitType(TypeDefinition type, HashSet<TypeDefinition> visited, List<TypeDefinition> sorted) {
             if (type is null || visited.Contains(type)) return;
 
-            var baseType = type.BaseType?.TryResolve();
+            TypeDefinition? baseType = type.BaseType?.TryResolve();
             if (baseType != null && !visited.Contains(baseType))
                 VisitType(baseType, visited, sorted);
 
-            foreach (var iface in type.Interfaces) {
-                var ifaceType = iface.InterfaceType.TryResolve();
+            foreach (InterfaceImplementation? iface in type.Interfaces) {
+                TypeDefinition? ifaceType = iface.InterfaceType.TryResolve();
                 if (ifaceType is null) continue;
                 VisitType(ifaceType, visited, sorted);
             }
@@ -167,14 +167,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
         private static IEnumerable<TypeDefinition> PreOrder(TypeTreeNode node) {
             yield return node.Type;
-            foreach (var child in node.Children)
-                foreach (var t in PreOrder(child))
+            foreach (TypeTreeNode child in node.Children)
+                foreach (TypeDefinition t in PreOrder(child))
                     yield return t;
         }
 
         private static IEnumerable<TypeDefinition> PostOrder(TypeTreeNode node) {
-            foreach (var child in node.Children)
-                foreach (var t in PostOrder(child))
+            foreach (TypeTreeNode child in node.Children)
+                foreach (TypeDefinition t in PostOrder(child))
                     yield return t;
             yield return node.Type;
         }
@@ -184,10 +184,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             q.Enqueue(node);
 
             while (q.Count > 0) {
-                var cur = q.Dequeue();
+                TypeTreeNode cur = q.Dequeue();
                 yield return cur.Type;
 
-                foreach (var child in cur.Children)
+                foreach (TypeTreeNode child in cur.Children)
                     q.Enqueue(child);
             }
         }

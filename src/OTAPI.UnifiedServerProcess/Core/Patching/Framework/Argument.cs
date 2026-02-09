@@ -5,14 +5,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
     public class Argument
     {
         public TValue LoadVariable<TValue>() where TValue : new() {
-            var index = VariableIndexMap.GetIndex<TValue>();
+            int index = VariableIndexMap.GetIndex<TValue>();
             while (index >= variables.Count) {
                 variables.Add(null);
             }
             return (TValue)(variables[index] ??= new TValue());
         }
         public void StoreVariable<TValue>(TValue value) where TValue : new() {
-            var index = VariableIndexMap.GetIndex<TValue>();
+            int index = VariableIndexMap.GetIndex<TValue>();
             while (index >= variables.Count) {
                 variables.Add(null);
             }

@@ -21,7 +21,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
         public static string GenerateStackKey(MethodDefinition method, Instruction instruction) {
             if (instruction.OpCode == OpCodes.Ldfld || instruction.OpCode == OpCodes.Ldsfld) {
-                var fieldRef = (FieldReference)instruction.Operand;
+                FieldReference fieldRef = (FieldReference)instruction.Operand;
                 return $"Field#{fieldRef.DeclaringType.FullName}→{fieldRef.Name}";
             }
 

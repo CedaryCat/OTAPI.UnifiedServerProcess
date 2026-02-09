@@ -42,8 +42,8 @@ class TileSystemPatchLogic
         if (type is ByReferenceType byReferenceType) {
             return handleByRef && IsTileType(byReferenceType.ElementType);
         }
-        return type.FullName == tileTypeDef.FullName 
-            || type.FullName == refTileTypeDef.FullName 
+        return type.FullName == tileTypeDef.FullName
+            || type.FullName == refTileTypeDef.FullName
             || type.FullName == tileTypeOldDef.FullName
             || (includingOriginal && type.FullName == tileTypeImplDef.FullName);
     }
@@ -87,7 +87,7 @@ class TileSystemPatchLogic
         tileCollectionDefOld = tileCollectionFieldDefInMain.FieldType;
         tileCollectionFieldDefInMain.FieldType = tileCollectionDef;
 
-        var oldTileFullName = tileTypeOldDef.FullName;
+        string oldTileFullName = tileTypeOldDef.FullName;
 
         tileNameMap = new() {
             { oldTileFullName, tileTypeDef.FullName },
@@ -111,7 +111,7 @@ class TileSystemPatchLogic
 
         Analyze_ComponentsNeedAdjust(modder, modifiedTileParameters, out var fieldShouldAdjust, out var methodShouldAdjust);
 
-        var oldTileFullName = tileTypeOldDef.FullName;
+        string oldTileFullName = tileTypeOldDef.FullName;
 
         Dictionary<string, MethodDefinition> allMethods = modder.Module
             .GetAllTypes()
@@ -211,7 +211,7 @@ class TileSystemPatchLogic
 
             Dictionary<string, MethodDefinition> usedFields = [];
 
-            var currentMethodOldId = currentMethod.GetIdentifier();
+            string currentMethodOldId = currentMethod.GetIdentifier();
             Instruction[] instArray = currentMethod.Body.Instructions.ToArray();
             for (int i = 0; i < instArray.Length; i++) {
                 Instruction? inst = instArray[i];
@@ -305,7 +305,7 @@ class TileSystemPatchLogic
                     rawLoadTile.OpCode = newInst.OpCode;
                     rawLoadTile.Operand = newInst.Operand;
 
-                    var skipCount = Array.IndexOf(source.Instructions, rawLoadTile) + 1;
+                    int skipCount = Array.IndexOf(source.Instructions, rawLoadTile) + 1;
                     if (skipCount == 0) {
                         throw new Exception();
                     }
@@ -318,7 +318,7 @@ class TileSystemPatchLogic
                     return true;
                 }
                 else if (rawLoadTile.OpCode == OpCodes.Call || rawLoadTile.OpCode == OpCodes.Callvirt) {
-                    var id = ((MethodReference)rawLoadTile.Operand).GetIdentifier();
+                    string id = ((MethodReference)rawLoadTile.Operand).GetIdentifier();
                     if (retRefModelMethodMaps.TryGetValue(id, out var retRefModelMethod)) {
                         rawLoadTile.Operand = retRefModelMethod.refVersion;
                         if (!retRefModelMethod.applied) {
@@ -357,7 +357,7 @@ class TileSystemPatchLogic
                     rawLoadTile.OpCode = newInst.OpCode;
                     rawLoadTile.Operand = newInst.Operand;
 
-                    var skipCount = Array.IndexOf(source.Instructions, rawLoadTile) + 1;
+                    int skipCount = Array.IndexOf(source.Instructions, rawLoadTile) + 1;
                     if (skipCount == 0) {
                         throw new Exception();
                     }
@@ -864,7 +864,7 @@ class TileSystemPatchLogic
 
                                     if (modifiedTileParameters.TryGetValue(calleeDef.GetIdentifier(), out var theseParametersWillBeEdit)) {
                                         foreach (var methodCallPath in methodCallPaths) {
-                                            foreach (var pIndex in theseParametersWillBeEdit) {
+                                            foreach (int pIndex in theseParametersWillBeEdit) {
                                                 var paths = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(
                                                     method,
                                                     methodCallPath.ParametersSources[pIndex].Instructions.Last(),
@@ -1112,8 +1112,8 @@ class TileSystemPatchLogic
 
                                     modifiedTileParameters.TryGetValue(calleeDef.GetIdentifier(), out var theseParametersWillBeEdit);
                                     theseParametersWillBeEdit ??= [];
-                                    for (var i = 0; i < calleeDef.Parameters.Count; i++) {
-                                        var pIndex = i + (calleeDef.HasThis ? 1 : 0);
+                                    for (int i = 0; i < calleeDef.Parameters.Count; i++) {
+                                        int pIndex = i + (calleeDef.HasThis ? 1 : 0);
 
                                         if (IsTileType(calleeDef.Parameters[i].ParameterType) && !(theseParametersWillBeEdit?.Contains(pIndex) ?? false)) {
 
@@ -1471,7 +1471,7 @@ class TileSystemPatchLogic
         fieldReferences = [];
         methodsReferences = [];
 
-        var oldTileFullName = tileTypeOldDef.FullName;
+        string oldTileFullName = tileTypeOldDef.FullName;
         // relink method calls and thisfieldReference
         foreach (var type in modder.Module.GetAllTypes()) {
             foreach (var method in type.Methods) {
@@ -1496,8 +1496,8 @@ class TileSystemPatchLogic
                             HashSet<int> shouldBeReferenceExculdeThis = [];
 
                             if (modifiedTileParameters.TryGetValue(calleeRef.GetIdentifier(), out var byRefParamIndexesInculdeThis)) {
-                                foreach (var indexInculdeThis in byRefParamIndexesInculdeThis) {
-                                    var paramIndex = indexInculdeThis;
+                                foreach (int indexInculdeThis in byRefParamIndexesInculdeThis) {
+                                    int paramIndex = indexInculdeThis;
                                     if (calleeRef.HasThis && instruction.OpCode != OpCodes.Newobj) {
                                         paramIndex -= 1;
                                     }
@@ -1567,7 +1567,7 @@ class TileSystemPatchLogic
 
                     if (instruction.OpCode == OpCodes.Callvirt || instruction.OpCode == OpCodes.Call || instruction.OpCode == OpCodes.Newobj) {
                         var callee = (MethodReference)instruction.Operand!;
-                        var calleeId = callee.GetIdentifier();
+                        string calleeId = callee.GetIdentifier();
                         if (!methodsReferences.TryGetValue(calleeId, out var whoCalls)) {
                             methodsReferences[calleeId] = whoCalls = [];
                         }
@@ -1599,7 +1599,7 @@ class TileSystemPatchLogic
                     }
 
                     if (instruction.Operand is FieldReference tileField) {
-                        var tileFieldId = tileField.GetIdentifier();
+                        string tileFieldId = tileField.GetIdentifier();
                         if (!fieldReferences.TryGetValue(tileFieldId, out var thisfieldReference)) {
                             fieldReferences[tileFieldId] = thisfieldReference = [];
                         }
@@ -1655,12 +1655,12 @@ class TileSystemPatchLogic
                         else if (calleeRef.DeclaringType.FullName == oldTileFullName) {
 
                             if (calleeRef.Name.OrdinalStartsWith("get_")) {
-                                var fieldName = calleeRef.Name.Substring(4);
+                                string fieldName = calleeRef.Name.Substring(4);
                                 instruction.OpCode = OpCodes.Ldfld;
                                 instruction.Operand = tileTypeDef.FindField(fieldName) ?? throw new NotSupportedException($"Field {fieldName} not found");
                             }
                             else if (calleeRef.Name.OrdinalStartsWith("set_")) {
-                                var fieldName = calleeRef.Name.Substring(4);
+                                string fieldName = calleeRef.Name.Substring(4);
                                 instruction.OpCode = OpCodes.Stfld;
                                 instruction.Operand = tileTypeDef.FindField(fieldName) ?? throw new NotSupportedException($"Field {fieldName} not found");
                             }
@@ -1697,7 +1697,7 @@ class TileSystemPatchLogic
         out Dictionary<string, MethodDefinition> methodShouldAdjust) {
         fieldShouldAdjust = [];
         methodShouldAdjust = [];
-        var oldTileFullName = tileTypeOldDef.FullName;
+        string oldTileFullName = tileTypeOldDef.FullName;
 
         foreach (var type in modder.Module.GetAllTypes()) {
             foreach (var field in type.Fields) {
@@ -1711,7 +1711,7 @@ class TileSystemPatchLogic
                     fieldShouldAdjust.TryAdd(field.GetIdentifier(), field);
                 }
                 if (fieldType.HasGenericParameters) {
-                    var anyEdit = false;
+                    bool anyEdit = false;
                     foreach (var parameter in fieldType.GenericParameters) {
                         foreach (var c in parameter.Constraints) {
                             if (c.ConstraintType.FullName == oldTileFullName) {
@@ -1769,8 +1769,8 @@ class TileSystemPatchLogic
                     bool paramIsTileRef = parameter.ParameterType is ByReferenceType referenceType && IsTileType(referenceType.ElementType);
 
                     if (parameter.ParameterType.FullName == oldTileFullName || paramIsTileRef) {
-                        var index = method.Parameters.IndexOf(parameter);
-                        var indexInculdeThis = index;
+                        int index = method.Parameters.IndexOf(parameter);
+                        int indexInculdeThis = index;
                         if (method.HasThis) {
                             indexInculdeThis += 1;
                         }
@@ -2090,8 +2090,8 @@ class TileSystemPatchLogic
 
                     List<Instruction> refParameterAssignments = [];
 
-                    foreach (var index in indexes) {
-                        var paramIndexExculdeThis = index;
+                    foreach (int index in indexes) {
+                        int paramIndexExculdeThis = index;
                         if (method.HasThis) {
                             paramIndexExculdeThis--;
                         }
@@ -2198,7 +2198,7 @@ class TileSystemPatchLogic
         }
 
         Console.WriteLine($"Initially found {modifiedTileParameter.Count} non-readonly methods:");
-        foreach (var method in modifiedTileParameter.Keys) {
+        foreach (string method in modifiedTileParameter.Keys) {
             Console.WriteLine(" " + method);
         }
         Analyze_NonReadOnlyParameter(modder.Module.GetAllTypes(), ref modifiedTileParameter);
@@ -2238,7 +2238,7 @@ class TileSystemPatchLogic
             if (type is not GenericInstanceType gen) {
                 return;
             }
-            var etName = gen.ElementType.FullName;
+            string etName = gen.ElementType.FullName;
             bool isAction = etName.StartsWith("System.Action`");
             bool isFunc = etName.StartsWith("System.Func`");
 
@@ -2363,7 +2363,7 @@ class TileSystemPatchLogic
                 }
 
 
-                foreach(var local in method.Body.Variables) {
+                foreach (var local in method.Body.Variables) {
                     Transform(local.VariableType, n => local.VariableType = n, modder.Module);
                 }
 
@@ -2386,7 +2386,7 @@ class TileSystemPatchLogic
                                     }
                                     var targetMethodRef = (MethodReference)ldftn.Operand;
                                     var targetMethodDef = targetMethodRef.Resolve();
-                                    foreach(var p in targetMethodRef.Parameters) {
+                                    foreach (var p in targetMethodRef.Parameters) {
                                         if (IsTileType(p.ParameterType, handleByRef: false, includingOriginal: true)) {
                                             p.ParameterType = tileTypeDef.MakeByReferenceType();
                                         }
@@ -2460,7 +2460,7 @@ class TileSystemPatchLogic
 
                     for (int i = 0; i < method.Parameters.Count; i++) {
                         if (method.Parameters[i].ParameterType is ByReferenceType byReferenceType && IsTileType(byReferenceType.ElementType)) {
-                            var index = i + (method.HasThis ? 1 : 0);
+                            int index = i + (method.HasThis ? 1 : 0);
                             if (!database.TryGetValue(method.GetIdentifier(), out var indexes)) {
                                 anyModify = true;
                                 database.Add(method.GetIdentifier(), indexes = [index]);
@@ -2512,7 +2512,7 @@ class TileSystemPatchLogic
                                     var calleeRef = (MethodReference)instruction.Operand!;
                                     if (database.TryGetValue(calleeRef.GetIdentifier(), out var theseParametersWillBeEdit)) {
                                         foreach (var methodCallPath in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpTargets)) {
-                                            foreach (var index in theseParametersWillBeEdit) {
+                                            foreach (int index in theseParametersWillBeEdit) {
 
                                                 var paths = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(
                                                     method,
@@ -2602,7 +2602,7 @@ class TileSystemPatchLogic
                                         break;
                                     }
 
-                                    var index = thisInstruction.OpCode.Code switch {
+                                    int index = thisInstruction.OpCode.Code switch {
                                         Code.Ldarg_0 => 0,
                                         Code.Ldarg_1 => 1,
                                         Code.Ldarg_2 => 2,
@@ -2669,8 +2669,8 @@ class TileSystemPatchLogic
             foreach (var method in type.Methods) {
                 if (database.TryGetValue(method.GetIdentifier(), out var byRefParamIndexesInculdeThis)) {
                     HashSet<int> byRefParamIndexesExculdeThis = [];
-                    foreach (var index in byRefParamIndexesInculdeThis) {
-                        var paramIndex = index;
+                    foreach (int index in byRefParamIndexesInculdeThis) {
+                        int paramIndex = index;
                         if (method.HasThis) {
                             paramIndex -= 1;
                         }
@@ -2682,7 +2682,7 @@ class TileSystemPatchLogic
                     }
 
                     // Intermediate step of transform
-                    var newerMethodKey = method.GetIdentifier(true, [], byRefParamIndexesExculdeThis);
+                    string newerMethodKey = method.GetIdentifier(true, [], byRefParamIndexesExculdeThis);
                     if (!database.TryAdd(newerMethodKey, byRefParamIndexesInculdeThis)) {
                         database[newerMethodKey] = byRefParamIndexesInculdeThis;
                     }

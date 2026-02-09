@@ -27,7 +27,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
 
             Dictionary<string, DelegateInvocationData> delegateTraces = [];
 
-            var workQueue = new Dictionary<string, MethodDefinition>(
+            Dictionary<string, MethodDefinition> workQueue = new Dictionary<string, MethodDefinition>(
                 module.GetAllTypes()
                     .SelectMany(t => t.Methods)
                     .Where(m => m.HasBody)
@@ -80,7 +80,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
 
             global::OTAPI.UnifiedServerProcess.Core.Analysis.AnalysisRemap.RemapDictionaryKeysInPlace(AllInvocations, oldToNew, nameof(AllInvocations));
 
-            var remappedTraces = new Dictionary<string, DelegateInvocationData>(TracedDelegates.Count, StringComparer.Ordinal);
+            Dictionary<string, DelegateInvocationData> remappedTraces = new Dictionary<string, DelegateInvocationData>(TracedDelegates.Count, StringComparer.Ordinal);
             foreach (var (key, value) in TracedDelegates) {
                 var newKey = global::OTAPI.UnifiedServerProcess.Core.Analysis.AnalysisRemap.RemapModeMethodStackKey(key, oldToNew);
                 if (!remappedTraces.TryAdd(newKey, value)) {
@@ -161,14 +161,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                             }
                         case Code.Stfld:
                         case Code.Stsfld: {
-                                var field = (FieldReference)instruction.Operand;
+                                FieldReference field = (FieldReference)instruction.Operand;
                                 var fieldType = field.FieldType.TryResolve();
 
                                 if (fieldType is null || !fieldType.IsDelegate()) {
                                     break;
                                 }
 
-                                var loadField = Instruction.Create(instruction.OpCode == OpCodes.Stfld ? OpCodes.Ldfld : OpCodes.Ldsfld, field);
+                                Instruction loadField = Instruction.Create(instruction.OpCode == OpCodes.Stfld ? OpCodes.Ldfld : OpCodes.Ldsfld, field);
 
                                 if (!delegateTraces.TryGetValue(DelegateInvocationData.GenerateStackKey(processingMethod, loadField), out var trace)) {
                                     trace = new DelegateInvocationData(processingMethod, loadField);
@@ -237,7 +237,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                         }
                                     }
 
-                                    var loadField = Instruction.Create(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field);
+                                    Instruction loadField = Instruction.Create(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field);
 
                                     if (!delegateTraces.TryGetValue(DelegateInvocationData.GenerateStackKey(processingMethod, loadField), out var trace)) {
                                         trace = new DelegateInvocationData(processingMethod, loadField);
@@ -267,7 +267,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                                         }
                                     }
 
-                                    var loadField = Instruction.Create(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field);
+                                    Instruction loadField = Instruction.Create(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field);
 
                                     if (!delegateTraces.TryGetValue(DelegateInvocationData.GenerateStackKey(processingMethod, loadField), out var trace)) {
                                         trace = new DelegateInvocationData(processingMethod, loadField);

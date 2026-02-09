@@ -15,20 +15,20 @@ using Terraria;
 void NetplayConnectionCheck(ModFwModder modder) {
     Console.WriteLine("Rewrited Terraria.RemoteClient.ResetSections");
 
-    var remoteClientDef = modder.Module.GetType("Terraria.RemoteClient");
-    var mfwh_orig_ResetMDef = remoteClientDef.GetMethod("mfwh_orig_Reset");
-    var jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(mfwh_orig_ResetMDef);
+    TypeDefinition remoteClientDef = modder.Module.GetType("Terraria.RemoteClient");
+    MethodDefinition mfwh_orig_ResetMDef = remoteClientDef.GetMethod("mfwh_orig_Reset");
+    System.Collections.Generic.Dictionary<Instruction, System.Collections.Generic.List<Instruction>> jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(mfwh_orig_ResetMDef);
 
-    var clearArrayInst = mfwh_orig_ResetMDef.Body.Instructions.Select(inst => {
+    Instruction[] clearArrayInst = mfwh_orig_ResetMDef.Body.Instructions.Select(inst => {
         if (inst is not Instruction { OpCode.Code: Code.Call, Operand: MethodReference { DeclaringType.FullName: "System.Array", Name: "Clear" } }) {
             return null;
         }
-        var path = MonoModCommon.Stack.AnalyzeParametersSources(mfwh_orig_ResetMDef, inst, jumpSites);
+        MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] path = MonoModCommon.Stack.AnalyzeParametersSources(mfwh_orig_ResetMDef, inst, jumpSites);
         if (path.Length != 1) {
             return null;
         }
-        if (path[0].ParametersSources[0].Instructions.Last() is not Instruction { 
-            OpCode.Code: Code.Ldfld, 
+        if (path[0].ParametersSources[0].Instructions.Last() is not Instruction {
+            OpCode.Code: Code.Ldfld,
             Operand: FieldReference { Name: nameof(RemoteClient.TileSections) or nameof(RemoteClient.TileSectionsCheckTime) }
         }) {
             return null;
@@ -38,7 +38,7 @@ void NetplayConnectionCheck(ModFwModder modder) {
 
     }).SelectMany(x => x ?? []).ToArray();
 
-    foreach (var inst in clearArrayInst) {
+    foreach (Instruction? inst in clearArrayInst) {
         mfwh_orig_ResetMDef.Body.Instructions.Remove(inst);
     }
 

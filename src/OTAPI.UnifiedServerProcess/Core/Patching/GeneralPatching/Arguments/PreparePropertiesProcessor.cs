@@ -1,4 +1,5 @@
-﻿using Mono.Cecil.Rocks;
+﻿using Mono.Cecil;
+using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
@@ -19,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         public MethodCallGraph MethodCallGraph => callGraph;
         public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {
 
-            var convertedTypes = source.OriginalToContextType.Values.ToDictionary(t => t.ContextTypeDef.FullName, t => t.ContextTypeDef).ToImmutableDictionary();
+            ImmutableDictionary<string, TypeDefinition> convertedTypes = source.OriginalToContextType.Values.ToDictionary(t => t.ContextTypeDef.FullName, t => t.ContextTypeDef).ToImmutableDictionary();
             foreach (var type in source.MainModule.GetAllTypes().ToArray()) {
                 if (type.Name.OrdinalStartsWith('<')) {
                     continue;

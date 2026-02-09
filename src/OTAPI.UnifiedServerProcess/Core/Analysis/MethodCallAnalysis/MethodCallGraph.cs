@@ -16,7 +16,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
     public class MethodCallGraph : Analyzer, IMethodImplementationFeature
     {
         public override string Name => "MethodCallGraph";
-        
+
         public readonly Dictionary<string, MethodCallData> MediatedCallGraph;
 
         readonly DelegateInvocationGraph delegateInvocationGraph;
@@ -29,9 +29,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
             methodInheritanceGraph = inheritanceGraph;
 
 
-            var usedMethodsDict = new Dictionary<string, HashSet<MethodReferenceData>>();
-            var usedByMethodsDict = new Dictionary<string, HashSet<MethodDefinition>>();
-            var unexpectedImplMissMethods = new Dictionary<string, MethodDefinition>();
+            Dictionary<string, HashSet<MethodReferenceData>> usedMethodsDict = new Dictionary<string, HashSet<MethodReferenceData>>();
+            Dictionary<string, HashSet<MethodDefinition>> usedByMethodsDict = new Dictionary<string, HashSet<MethodDefinition>>();
+            Dictionary<string, MethodDefinition> unexpectedImplMissMethods = new Dictionary<string, MethodDefinition>();
 
             foreach (var type in module.GetAllTypes()) {
                 foreach (var caller in type.Methods) {
@@ -48,7 +48,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                         if (instruction.OpCode != OpCodes.Call && instruction.OpCode != OpCodes.Callvirt && instruction.OpCode != OpCodes.Newobj)
                             continue;
 
-                        var calleeRef = (MethodReference)instruction.Operand;
+                        MethodReference calleeRef = (MethodReference)instruction.Operand;
 
                         MethodDefinition? calleeDef = calleeRef.TryResolve();
                         if (calleeDef is null) {
@@ -92,7 +92,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                                         logger.Warn(this, 1, $"Ignore: [type:{stackType.Name}|callee: {calleeRef.GetDebugName()}] by {caller.GetDebugName()}");
                                         continue;
                                     }
-                                    var m = stackType?.GetRuntimeMethods(true).FirstOrDefault(m => 
+                                    var m = stackType?.GetRuntimeMethods(true).FirstOrDefault(m =>
                                         m.GetIdentifier(false).OrdinalEndsWith("." + calleeDef.GetIdentifier(false)) || // implict interface impl
                                         m.GetIdentifier(false) == calleeDef.GetIdentifier(false));
                                     if (m is not null) {
@@ -173,7 +173,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
                 }
             }
 
-            var methodCallsBuilder = new Dictionary<string, MethodCallData>();
+            Dictionary<string, MethodCallData> methodCallsBuilder = new Dictionary<string, MethodCallData>();
             foreach (var method in allMethods.Values) {
 
                 var methodId = method.GetIdentifier();

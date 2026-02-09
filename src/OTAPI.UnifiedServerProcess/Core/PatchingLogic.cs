@@ -18,7 +18,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             new PatchCollision(module).Patch();
             new NetworkLogicPruner(module).Prune("Terraria.Player");
 
-            var analyzers = new AnalyzerGroups(logger, module);
+            AnalyzerGroups analyzers = new AnalyzerGroups(logger, module);
             // var cacheHelper = new CacheManager(logger);
 
             var main = module.GetType("Terraria.Main");

@@ -8,7 +8,6 @@ using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
-using System.IO;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
@@ -18,12 +17,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public override string Name => nameof(DelegateWithCtxParamPatcher);
 
         public override void Patch(PatcherArguments arguments) {
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
-                foreach (var method in type.Methods.ToArray()) {
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
+                foreach (MethodDefinition? method in type.Methods.ToArray()) {
                     if (!method.HasBody) {
                         continue;
                     }
-                    foreach (var inst in method.Body.Instructions) {
+                    foreach (Instruction? inst in method.Body.Instructions) {
                         if (inst.OpCode.Code is not Code.Ldftn and not Code.Ldvirtftn) {
                             continue;
                         }
@@ -31,7 +30,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         //if (!targetRef.Name.OrdinalStartsWith("<")) {
                         //    continue;
                         //}
-                        var consumers = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
+                        Instruction[] consumers = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
                         if (consumers.Length != 1 || consumers[0].OpCode.Code is not Code.Newobj) {
                             continue;
                         }
@@ -42,9 +41,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         if (!PatchingCommon.IsDelegateInjectedCtxParam(ctorRef.DeclaringType)) {
                             continue;
                         }
-                        var targetDef = targetRef.TryResolve();
-                        if (targetDef is not null && 
-                            !arguments.OriginalToContextType.ContainsKey(targetRef.DeclaringType.FullName) && 
+                        MethodDefinition? targetDef = targetRef.TryResolve();
+                        if (targetDef is not null &&
+                            !arguments.OriginalToContextType.ContainsKey(targetRef.DeclaringType.FullName) &&
                             !arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(targetRef.DeclaringType.FullName)) {
                             throw new NotImplementedException();
                         }
@@ -57,30 +56,30 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                         targetRef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                         targetDef = targetRef.TryResolve();
-                        if (targetDef is not null) { 
+                        if (targetDef is not null) {
                             continue; // already created
                         }
 
                         // Create a method with a static root context parameter to adapt to the signature,
                         // but the implementation is merely to forward to the instance method of the corresponding context.
-                        if (!targetRef.HasThis && arguments.OriginalToContextType.TryGetValue(targetRef.DeclaringType.FullName, out var contextTypeData)) {
-                            var transfieredMethod = contextTypeData.ContextTypeDef.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == originalId);
+                        if (!targetRef.HasThis && arguments.OriginalToContextType.TryGetValue(targetRef.DeclaringType.FullName, out ContextTypeData? contextTypeData)) {
+                            MethodDefinition transfieredMethod = contextTypeData.ContextTypeDef.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == originalId);
 
-                            var att = transfieredMethod.Attributes;
+                            MethodAttributes att = transfieredMethod.Attributes;
                             att |= MethodAttributes.Static;
                             var methodWithRootParam = new MethodDefinition(transfieredMethod.Name, att, transfieredMethod.ReturnType);
 
                             methodWithRootParam.Parameters.Add(new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
-                            foreach (var p in transfieredMethod.Parameters) {
+                            foreach (ParameterDefinition? p in transfieredMethod.Parameters) {
                                 methodWithRootParam.Parameters.Add(p.Clone());
                             }
 
-                            var body = methodWithRootParam.Body = new MethodBody(methodWithRootParam);
+                            MethodBody body = methodWithRootParam.Body = new MethodBody(methodWithRootParam);
                             body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-                            foreach (var fieldAccess in contextTypeData.nestedChain) {
+                            foreach (FieldDefinition fieldAccess in contextTypeData.nestedChain) {
                                 body.Instructions.Add(Instruction.Create(OpCodes.Ldfld, fieldAccess));
                             }
-                            foreach (var p in methodWithRootParam.Parameters.Skip(1)) {
+                            foreach (ParameterDefinition? p in methodWithRootParam.Parameters.Skip(1)) {
                                 body.Instructions.Add(MonoModCommon.IL.BuildParameterLoad(methodWithRootParam, body, p));
                             }
 
@@ -92,25 +91,25 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         }
 
                         // Create a overloaded method. The "root" parameter is not used and is only for compatibility with the signature.
-                        if (arguments.RootContextFieldToAdaptExternalInterface.TryGetValue(targetRef.DeclaringType.FullName, out var rootField)) {
-                            var typeDef = targetRef.DeclaringType.Resolve();
-                            var originalMethod = typeDef.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == originalId);
+                        if (arguments.RootContextFieldToAdaptExternalInterface.TryGetValue(targetRef.DeclaringType.FullName, out FieldDefinition? rootField)) {
+                            TypeDefinition typeDef = targetRef.DeclaringType.Resolve();
+                            MethodDefinition originalMethod = typeDef.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == originalId);
 
-                            var att = originalMethod.Attributes;
+                            MethodAttributes att = originalMethod.Attributes;
                             att &= ~MethodAttributes.Static;
                             var methodWithRootParam = new MethodDefinition(originalMethod.Name, att, originalMethod.ReturnType) {
                                 DeclaringType = typeDef
                             };
 
                             methodWithRootParam.Parameters.Add(new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
-                            foreach (var p in originalMethod.Parameters) {
+                            foreach (ParameterDefinition? p in originalMethod.Parameters) {
                                 methodWithRootParam.Parameters.Add(p.Clone());
                             }
 
-                            var body = methodWithRootParam.Body = new MethodBody(methodWithRootParam);
+                            MethodBody body = methodWithRootParam.Body = new MethodBody(methodWithRootParam);
 
                             body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-                            foreach (var p in methodWithRootParam.Parameters.Skip(1)) {
+                            foreach (ParameterDefinition? p in methodWithRootParam.Parameters.Skip(1)) {
                                 body.Instructions.Add(MonoModCommon.IL.BuildParameterLoad(methodWithRootParam, body, p));
                             }
 

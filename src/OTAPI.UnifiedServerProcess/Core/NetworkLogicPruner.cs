@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using Mono.Collections.Generic;
 using MonoMod.Cil;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System.Collections.Generic;
@@ -21,19 +22,19 @@ namespace OTAPI.UnifiedServerProcess.Core
         /// (especially exception handlers) by NOP'ing unreachable instructions in place.
         /// </summary>
         public void Prune(params string[] skippedTypeFullNames) {
-            var skipTypes = skippedTypeFullNames.ToHashSet();
+            HashSet<string> skipTypes = skippedTypeFullNames.ToHashSet();
 
-            foreach (var type in module.GetAllTypes()) {
+            foreach (TypeDefinition? type in module.GetAllTypes()) {
                 if (skipTypes.Contains(type.FullName)) {
                     continue;
                 }
 
-                foreach (var method in type.Methods.ToArray()) {
+                foreach (MethodDefinition? method in type.Methods.ToArray()) {
                     if (!method.HasBody) {
                         continue;
                     }
 
-                    var body = method.Body;
+                    MethodBody body = method.Body;
                     if (!ReferencesDedServ(body)) {
                         continue;
                     }
@@ -57,7 +58,7 @@ namespace OTAPI.UnifiedServerProcess.Core
         }
 
         bool ReferencesDedServ(MethodBody body) {
-            foreach (var instruction in body.Instructions) {
+            foreach (Instruction? instruction in body.Instructions) {
                 if (instruction.Operand is FieldReference fieldReference
                     && fieldReference.FullName == dedServ.FullName) {
                     return true;
@@ -99,7 +100,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             if (operand is ILLabel[] labels) {
                 var resolved = new List<Instruction>(labels.Length);
-                foreach (var label in labels) {
+                foreach (ILLabel label in labels) {
                     if (label.Target is not null) {
                         resolved.Add(label.Target);
                     }
@@ -114,10 +115,10 @@ namespace OTAPI.UnifiedServerProcess.Core
 
         bool FoldDedServConditionalBranches(MethodBody body, bool assumeDedServ) {
             bool changed = false;
-            var instructions = body.Instructions;
+            Collection<Instruction> instructions = body.Instructions;
 
             for (int i = 0; i < instructions.Count - 1; i++) {
-                var load = instructions[i];
+                Instruction load = instructions[i];
                 if (load.OpCode.Code != Code.Ldsfld) {
                     continue;
                 }
@@ -126,7 +127,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                     continue;
                 }
 
-                var branch = instructions[i + 1];
+                Instruction branch = instructions[i + 1];
                 if (!IsConditionalBranch(branch.OpCode)) {
                     continue;
                 }
@@ -208,7 +209,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                 return;
             }
 
-            foreach (var handler in body.ExceptionHandlers) {
+            foreach (ExceptionHandler? handler in body.ExceptionHandlers) {
                 if (handler.TryStart is null || !indexMap.TryGetValue(handler.TryStart, out var tryStart)) {
                     continue;
                 }
@@ -265,7 +266,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             removedHandlers = [];
             bool changed = false;
 
-            foreach (var info in infos) {
+            foreach (ExceptionHandlerInfo info in infos) {
                 if (!IsRangeFullyUnreachable(reachable, info.TryStart, info.TryEnd)) {
                     continue;
                 }
@@ -287,7 +288,7 @@ namespace OTAPI.UnifiedServerProcess.Core
         }
 
         bool NopUnreachableInstructions(MethodBody body) {
-            var instructions = body.Instructions;
+            Collection<Instruction> instructions = body.Instructions;
             if (instructions.Count == 0) {
                 return false;
             }
@@ -299,7 +300,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
             // Conservative EH edge: if any instruction in a try region is reachable, consider its handler/filter reachable too.
             // This is important for finally blocks (executed via "hidden" control-flow during leave/unwind).
-            GetEhInfos(body, indexMap, instructions.Count, out var exceptionHandlers);
+            GetEhInfos(body, indexMap, instructions.Count, out List<ExceptionHandlerInfo>? exceptionHandlers);
 
             var reachable = new bool[instructions.Count];
             var work = new Stack<int>();
@@ -308,9 +309,9 @@ namespace OTAPI.UnifiedServerProcess.Core
             work.Push(0);
 
             while (work.TryPop(out var currentIndex)) {
-                var current = instructions[currentIndex];
+                Instruction current = instructions[currentIndex];
 
-                foreach (var handler in exceptionHandlers) {
+                foreach (ExceptionHandlerInfo handler in exceptionHandlers) {
                     if (currentIndex < handler.TryStart || currentIndex >= handler.TryEnd) {
                         continue;
                     }
@@ -327,8 +328,8 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
 
                 if (current.OpCode.Code == Code.Switch) {
-                    if (TryResolveSwitchTargets(current.Operand, out var targets)) {
-                        foreach (var target in targets) {
+                    if (TryResolveSwitchTargets(current.Operand, out IReadOnlyList<Instruction>? targets)) {
+                        foreach (Instruction target in targets) {
                             if (indexMap.TryGetValue(target, out var targetIndex) && !reachable[targetIndex]) {
                                 reachable[targetIndex] = true;
                                 work.Push(targetIndex);
@@ -347,7 +348,7 @@ namespace OTAPI.UnifiedServerProcess.Core
 
                 switch (current.OpCode.FlowControl) {
                     case FlowControl.Branch: {
-                            if (TryResolveBranchTarget(current.Operand, out var target)
+                            if (TryResolveBranchTarget(current.Operand, out Instruction? target)
                                 && target is not null
                                 && indexMap.TryGetValue(target, out var targetIndex)
                                 && !reachable[targetIndex]) {
@@ -358,7 +359,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                         }
 
                     case FlowControl.Cond_Branch: {
-                            if (TryResolveBranchTarget(current.Operand, out var target)
+                            if (TryResolveBranchTarget(current.Operand, out Instruction? target)
                                 && target is not null
                                 && indexMap.TryGetValue(target, out var targetIndex)
                                 && !reachable[targetIndex]) {
@@ -389,10 +390,10 @@ namespace OTAPI.UnifiedServerProcess.Core
                 }
             }
 
-            bool changed = RemoveFullyUnreachableExceptionHandlers(body, exceptionHandlers, reachable, out var removedHandlers);
+            bool changed = RemoveFullyUnreachableExceptionHandlers(body, exceptionHandlers, reachable, out HashSet<ExceptionHandler>? removedHandlers);
 
             HashSet<int> preservedEhSkeletonInstructionIndices = [];
-            foreach (var handler in exceptionHandlers) {
+            foreach (ExceptionHandlerInfo handler in exceptionHandlers) {
                 if (removedHandlers.Contains(handler.Handler)) {
                     continue;
                 }
@@ -422,7 +423,7 @@ namespace OTAPI.UnifiedServerProcess.Core
                     continue;
                 }
 
-                var instruction = instructions[i];
+                Instruction instruction = instructions[i];
                 if (instruction.OpCode.Code is Code.Nop && instruction.Operand is null) {
                     continue;
                 }

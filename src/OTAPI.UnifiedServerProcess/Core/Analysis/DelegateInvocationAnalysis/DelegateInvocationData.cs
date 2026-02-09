@@ -34,22 +34,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
 
             bool anyModifered = false;
 
-            foreach (var invocation in invocations) {
+            foreach (KeyValuePair<string, MethodDefinition> invocation in invocations) {
                 if (other.invocations.TryAdd(invocation.Key, invocation.Value)) {
                     anyModifered = true;
                 }
             }
 
-            var datasFromMe = combinedFromMap[invocations];
+            HashSet<DelegateInvocationData> datasFromMe = combinedFromMap[invocations];
             combinedFromMap.Remove(invocations);
 
             invocations = other.invocations;
 
-            var datasFromOther = combinedFromMap[other.invocations];
+            HashSet<DelegateInvocationData> datasFromOther = combinedFromMap[other.invocations];
 
             // Make sure the invocations are pointing to the same dictionary instance
             // so that Mutations to one will naturally affect the other
-            foreach (var oldData in datasFromMe) {
+            foreach (DelegateInvocationData oldData in datasFromMe) {
 
                 if (datasFromOther.Add(oldData)) {
                     anyModifered = true;
@@ -71,11 +71,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis
                 var field = (FieldReference)loadDelegateInst.Operand;
                 return $"Field#{field.DeclaringType.FullName}→{field.Name}";
             }
-            if (MonoModCommon.IL.TryGetReferencedParameter(method, loadDelegateInst, out var parameter)) {
+            if (MonoModCommon.IL.TryGetReferencedParameter(method, loadDelegateInst, out ParameterDefinition? parameter)) {
                 return $"Param#{method.GetIdentifier()}→{parameter.GetDebugName()}";
             }
             if (method.HasBody) {
-                if (MonoModCommon.IL.TryGetReferencedVariable(method, loadDelegateInst, out var variable)) {
+                if (MonoModCommon.IL.TryGetReferencedVariable(method, loadDelegateInst, out VariableDefinition? variable)) {
                     return $"Variable#{method.GetIdentifier()}→V_{variable.Index}";
                 }
             }

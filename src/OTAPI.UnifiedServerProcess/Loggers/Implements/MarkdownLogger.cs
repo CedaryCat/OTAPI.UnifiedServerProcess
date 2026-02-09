@@ -12,7 +12,7 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements
         private static readonly Lock mdLock = new();
 
         public MarkdownLogger(string filePrefix = "Log", string? folder = null) {
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             if (folder is not null) {
                 filePath = Path.Combine(folder, $"{filePrefix}_{timestamp}.md");
             }
@@ -36,8 +36,8 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements
         private static string ProcessSegments(ReadOnlyMemory<ColoredSegment> segments) {
             var sb = new StringBuilder();
             foreach (var segment in segments.Span) {
-                var fgColor = GetHexColor(segment.ForegroundColor);
-                var bgColor = $"background-color:{GetHexColor(segment.BackgroundColor)}";
+                string fgColor = GetHexColor(segment.ForegroundColor);
+                string bgColor = $"background-color:{GetHexColor(segment.BackgroundColor)}";
 
                 sb.Append($"<span style=\"color:{fgColor};{bgColor}\">");
                 sb.Append(segment.Text.Replace("<", "&lt;").Replace(">", "&gt;"));

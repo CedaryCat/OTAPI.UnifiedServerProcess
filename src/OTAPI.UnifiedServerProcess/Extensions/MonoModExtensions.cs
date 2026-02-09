@@ -1,7 +1,6 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using MonoMod.Cil;
-using OTAPI.UnifiedServerProcess.Commons;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -13,7 +12,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
     {
         [MonoMod.MonoModIgnore]
         public static void MakeMethodVirtual(this TypeDefinition type, params MethodDefinition[] ignores) {
-            var methods = type.Methods.Where(m => !m.IsConstructor && !m.IsStatic && m.Name != "cctor" && m.Name != "ctor").ToList();
+            List<MethodDefinition> methods = type.Methods.Where(m => !m.IsConstructor && !m.IsStatic && m.Name != "cctor" && m.Name != "ctor").ToList();
             methods.AddRange(type.Properties.Select(p => p.SetMethod).Where(m => m != null && !m.IsStatic));
             methods.AddRange(type.Properties.Select(p => p.GetMethod).Where(m => m != null && !m.IsStatic));
             foreach (var method in methods) {
@@ -32,7 +31,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 if (method.Name != "cctor" && method.Name != "ctor"/* && !method.IsVirtual*/) {
                     //CreateForThisType the new replacement method that will take place of the tail method.
                     //So we must ensure we clone to meet the signatures.
-                    var wrapped = new MethodDefinition(method.Name, method.Attributes.Remove(Mono.Cecil.MethodAttributes.Virtual), method.ReturnType);
+                    MethodDefinition wrapped = new MethodDefinition(method.Name, method.Attributes.Remove(Mono.Cecil.MethodAttributes.Virtual), method.ReturnType);
                     wrapped.IsVirtual = false;
                     wrapped.IsNewSlot = false;
                     var instanceMethod = (method.Attributes & Mono.Cecil.MethodAttributes.Static) == 0;
@@ -109,7 +108,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             if (typeDef is null)
                 return CacheAndReturn(cacheKey, false);
 
-            var genericInstance = type as GenericInstanceType;
+            GenericInstanceType? genericInstance = type as GenericInstanceType;
 
             foreach (FieldDefinition field in typeDef.Fields) {
                 if (field.IsStatic)
@@ -171,7 +170,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         }
 
         private static GenericInstanceType InflateGenericInstance(GenericInstanceType generic, TypeReference inflatedElement, GenericInstanceType context) {
-            var newGeneric = new GenericInstanceType(inflatedElement);
+            GenericInstanceType newGeneric = new GenericInstanceType(inflatedElement);
             foreach (TypeReference arg in generic.GenericArguments)
                 newGeneric.GenericArguments.Add(InflateGenericParameters(arg, context));
             return newGeneric;
@@ -288,7 +287,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             var baseType = typeDef.BaseType?.TryResolve();
             if (baseType is not null)
                 foreach (var interfDef in typeDef.BaseType!.GetAllInterfaces())
-                    if(visited.Add(interfDef.idef.FullName))
+                    if (visited.Add(interfDef.idef.FullName))
                         yield return interfDef;
         }
 
@@ -326,7 +325,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                         jumpSite.Operand = first;
                     }
                     else {
-                        var jumpTargets = (Instruction[])jumpSite.Operand;
+                        Instruction[] jumpTargets = (Instruction[])jumpSite.Operand;
                         for (int i = 0; i < jumpTargets.Length; i++) {
                             if (jumpTargets[i] == target) {
                                 jumpTargets[i] = first;
@@ -352,7 +351,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         }
 
         public static Instruction Clone(this Instruction instruction) {
-            var clone = Instruction.Create(OpCodes.Nop);
+            Instruction clone = Instruction.Create(OpCodes.Nop);
             clone.OpCode = instruction.OpCode;
             clone.Operand = instruction.Operand;
             return clone;
@@ -362,7 +361,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             instruction.Operand = null;
         }
         public static Instruction CloneAndClear(this Instruction instruction) {
-            var clone = Instruction.Create(OpCodes.Nop);
+            Instruction clone = Instruction.Create(OpCodes.Nop);
             clone.OpCode = instruction.OpCode;
             clone.Operand = instruction.Operand;
 
@@ -423,7 +422,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             }
 
             // --- Step 4: Append Original Target as New Instruction ---
-            var restoredOriginal = Instruction.Create(OpCodes.Nop);
+            Instruction restoredOriginal = Instruction.Create(OpCodes.Nop);
             restoredOriginal.OpCode = originalOpCode;
             restoredOriginal.Operand = originalOperand;
             ilProcessor.InsertAfter(current, restoredOriginal);

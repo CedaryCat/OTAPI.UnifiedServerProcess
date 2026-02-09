@@ -9,8 +9,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
         public sealed override string Name => Member.Name;
         public sealed override string FullName => Member.FullName;
         public sealed override TypeReference DeclaringType => Member.DeclaringType;
-        public sealed override TypeReference MemberType => Member switch
-        {
+        public sealed override TypeReference MemberType => Member switch {
             FieldReference field => field.FieldType,
             PropertyReference property => property.PropertyType,
             _ => throw new NotSupportedException($"Unsupported member type: {Member.GetType().FullName}"),

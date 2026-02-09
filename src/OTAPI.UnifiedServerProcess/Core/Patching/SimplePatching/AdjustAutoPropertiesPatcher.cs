@@ -1,4 +1,5 @@
 ﻿using Mono.Cecil;
+using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -16,8 +17,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 
             Dictionary<string, string> nameMap = [];
 
-            foreach (var type in module.GetAllTypes()) {
-                foreach (var method in type.Methods) {
+            foreach (TypeDefinition? type in module.GetAllTypes()) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
@@ -36,7 +37,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 
                     var propertyName = method.Name.Substring(4);
 
-                    var autoField = type.Fields.FirstOrDefault(f => f.Name == string.Concat("<", propertyName, ">k__BackingField"));
+                    FieldDefinition? autoField = type.Fields.FirstOrDefault(f => f.Name == string.Concat("<", propertyName, ">k__BackingField"));
                     if (autoField == null) {
                         continue;
                     }
@@ -46,13 +47,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
                     autoField.Name = newName;
                 }
             }
-            foreach (var type in module.GetAllTypes()) {
-                foreach (var method in type.Methods) {
+            foreach (TypeDefinition? type in module.GetAllTypes()) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
 
-                    foreach (var inst in method.Body.Instructions) {
+                    foreach (Instruction? inst in method.Body.Instructions) {
                         if (inst.Operand is FieldReference fr && nameMap.TryGetValue(fr.GetIdentifier(), out string? value)) {
                             fr.Name = value;
                         }

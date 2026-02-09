@@ -1,5 +1,6 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
+using Mono.Collections.Generic;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
@@ -13,16 +14,16 @@ public class PatchProjHookSets(ModuleDefinition module)
 {
     public void Patch() {
 
-        var setDefaultsMDef = module.GetType("Terraria.Projectile").GetMethod(nameof(Projectile.mfwh_SetDefaults));
+        MethodDefinition setDefaultsMDef = module.GetType("Terraria.Projectile").GetMethod(nameof(Projectile.mfwh_SetDefaults));
 
         static List<StyleExtractor.Rule> CoalesceByAssignmentSite(IEnumerable<StyleExtractor.Rule> rules) {
             return [.. rules
                 .GroupBy(r => (r.ILOffset, r.AiStyle))
                 .Select(g => {
-                    using var it = g.GetEnumerator();
+                    using IEnumerator<StyleExtractor.Rule> it = g.GetEnumerator();
                     if (!it.MoveNext()) throw new InvalidOperationException("Unexpected empty rule group.");
 
-                    var td = it.Current.TypeConstraint.Clone();
+                    StyleExtractor.TypeDomain td = it.Current.TypeConstraint.Clone();
                     while (it.MoveNext()) td.UnionWith(it.Current.TypeConstraint);
                     return new StyleExtractor.Rule(td, g.Key.AiStyle, g.Key.ILOffset);
                 })
@@ -32,19 +33,19 @@ public class PatchProjHookSets(ModuleDefinition module)
             if (d.Possible != null) return d.Possible.Contains(id);
             return !d.Excluded.Contains(id);
         }
-        var rules = CoalesceByAssignmentSite(StyleExtractor.Extract(setDefaultsMDef));
+        List<StyleExtractor.Rule> rules = CoalesceByAssignmentSite(StyleExtractor.Extract(setDefaultsMDef));
 
 
-        var mainTDef = module.GetType("Terraria.Main");
+        TypeDefinition mainTDef = module.GetType("Terraria.Main");
         var initProjHookMDef = new MethodDefinition("Initialize_ProjHook", MethodAttributes.Public | MethodAttributes.Static, module.TypeSystem.Void);
-        var body = initProjHookMDef.Body = new MethodBody(initProjHookMDef);
-        var il = body.GetILProcessor();
+        MethodBody body = initProjHookMDef.Body = new MethodBody(initProjHookMDef);
+        ILProcessor il = body.GetILProcessor();
 
         mainTDef.Methods.Add(initProjHookMDef);
 
-        var mfwh_Initialize_AlmostEverything = mainTDef.GetMethod(nameof(Main.mfwh_Initialize_AlmostEverything));
+        MethodDefinition mfwh_Initialize_AlmostEverything = mainTDef.GetMethod(nameof(Main.mfwh_Initialize_AlmostEverything));
 
-        var field = mainTDef.GetField("projHook");
+        FieldDefinition field = mainTDef.GetField("projHook");
 
         //for (int i = 0; i < ProjectileID.Count; i++) {
         //    var proj = new Projectile();
@@ -61,7 +62,7 @@ public class PatchProjHookSets(ModuleDefinition module)
             int? bestAi = null;
             int bestOff = int.MinValue;
 
-            foreach (var r in rules) {
+            foreach (StyleExtractor.Rule r in rules) {
                 if (!Matches(r.TypeConstraint, id)) continue;
                 if (r.ILOffset >= bestOff) {
                     bestOff = r.ILOffset;
@@ -81,7 +82,7 @@ public class PatchProjHookSets(ModuleDefinition module)
         il.Append(Instruction.Create(OpCodes.Ret));
 
         il = mfwh_Initialize_AlmostEverything.Body.GetILProcessor();
-        var inst = mfwh_Initialize_AlmostEverything.Body.Instructions[0];
+        Instruction inst = mfwh_Initialize_AlmostEverything.Body.Instructions[0];
         if (Match(ref inst,
             i => i is Instruction { OpCode.Code: Code.Ldfld, Operand: FieldReference { Name: "aiStyle" } },
             i => i.OpCode == OpCodes.Ldc_I4_7,
@@ -104,9 +105,10 @@ public class PatchProjHookSets(ModuleDefinition module)
         }
 
         if (Match(ref inst,
-            i => i is Instruction { 
-                OpCode.Code: Code.Ldsfld, 
-                Operand: FieldReference { DeclaringType.FullName: "Terraria.ID.ProjectileID", Name: "Count" } },
+            i => i is Instruction {
+                OpCode.Code: Code.Ldsfld,
+                Operand: FieldReference { DeclaringType.FullName: "Terraria.ID.ProjectileID", Name: "Count" }
+            },
             i => i.OpCode.Code is Code.Blt_S or Code.Blt
         )) {
             il.InsertAfter(inst.Next, Instruction.Create(OpCodes.Call, initProjHookMDef));
@@ -118,13 +120,13 @@ public class PatchProjHookSets(ModuleDefinition module)
     static bool Match(ref Instruction cur, params Span<Predicate<Instruction>> predicates) {
         if (predicates.Length == 0)
             return true;
-        for (var start = cur; start != null; start = start.Next) {
-            var ins = start;
+        for (Instruction start = cur; start != null; start = start.Next) {
+            Instruction ins = start;
             int i = 0;
             while (i < predicates.Length) {
                 if (ins == null) break;
 
-                var pred = predicates[i];
+                Predicate<Instruction> pred = predicates[i];
                 if (pred == null || !pred(ins)) break;
 
                 ins = ins.Next;
@@ -197,7 +199,7 @@ public class PatchProjHookSets(ModuleDefinition module)
 
                 if (this.Possible != null && other.Possible == null) {
                     // P ∪ (U\E) = U\(E \ P)
-                    var finite = this.Possible;
+                    HashSet<int> finite = this.Possible;
                     this.Possible = null;
                     this.Excluded = [.. other.Excluded];
                     this.Excluded.ExceptWith(finite);
@@ -252,7 +254,7 @@ public class PatchProjHookSets(ModuleDefinition module)
 
         public static List<Rule> Extract(MethodDefinition m) {
             if (!m.HasBody) throw new ArgumentException("Method has no body.");
-            var cfg = BuildCfg(m);
+            List<Block> cfg = BuildCfg(m);
 
             // Disjunctive states per block: we don't merge different AiStyle values (keeps precision for mapping).
             var inStates = cfg.ToDictionary(b => b, _ => new List<State>());
@@ -262,15 +264,15 @@ public class PatchProjHookSets(ModuleDefinition module)
                 if (s.Type.IsEmpty()) return;
 
                 // merge only if AiStyle matches; union type domains
-                var list = inStates[b];
+                List<State> list = inStates[b];
                 for (int i = 0; i < list.Count; i++) {
                     if (list[i].AiStyle == s.AiStyle) {
-                        var mergedType = list[i].Type.Clone();
+                        TypeDomain mergedType = list[i].Type.Clone();
                         if (!mergedType.UnionWith(s.Type)) {
                             return; // no change => no need to reprocess
                         }
 
-                        var merged = list[i] with { Type = mergedType };
+                        State merged = list[i] with { Type = mergedType };
                         list[i] = merged;
                         work.Enqueue((b, merged));
                         return;
@@ -293,16 +295,16 @@ public class PatchProjHookSets(ModuleDefinition module)
                     throw new InvalidOperationException($"StyleExtractor.Extract exceeded {MaxWorkItems} work items; possible non-converging CFG traversal.");
                 }
 
-                var (b, inS) = work.Dequeue();
+                (Block? b, State? inS) = work.Dequeue();
 
                 // Skip stale states superseded by later merges.
-                var latest = inStates[b].FirstOrDefault(x => x.AiStyle == inS.AiStyle);
+                State? latest = inStates[b].FirstOrDefault(x => x.AiStyle == inS.AiStyle);
                 if (latest is null || !latest.Type.SetEquals(inS.Type)) continue;
 
                 // interpret block sequentially
                 var cur = new State(inS.Type.Clone(), inS.AiStyle);
 
-                foreach (var ins in b.Insns) {
+                foreach (Instruction ins in b.Insns) {
                     if (IsAiStyleStore(ins, out var aiConst)) {
                         cur = cur with { AiStyle = aiConst };
                         rules.Add(new Rule(cur.Type.Clone(), aiConst, ins.Offset));
@@ -310,10 +312,10 @@ public class PatchProjHookSets(ModuleDefinition module)
                 }
 
                 // propagate to successors with condition refinement
-                foreach (var e in b.Succ) {
-                    var next = cur;
+                foreach (Edge e in b.Succ) {
+                    State next = cur;
                     if (e.Condition is Cond c) {
-                        var td = next.Type.Clone();
+                        TypeDomain td = next.Type.Clone();
                         if (c.IsEq) td.ApplyEq(c.K);
                         else td.ApplyNeq(c.K);
                         next = next with { Type = td };
@@ -327,7 +329,7 @@ public class PatchProjHookSets(ModuleDefinition module)
         private static List<Rule> CoalesceRules(List<Rule> rules) {
             var seen = new HashSet<string>();
             var outList = new List<Rule>();
-            foreach (var r in rules) {
+            foreach (Rule r in rules) {
                 var key = $"{r.ILOffset}:{r.AiStyle}:{r.TypeConstraint}";
                 if (seen.Add(key)) outList.Add(r);
             }
@@ -340,7 +342,7 @@ public class PatchProjHookSets(ModuleDefinition module)
             if (stfldInsn.Operand is not FieldReference fr) return false;
             if (!string.Equals(fr.Name, "aiStyle", StringComparison.Ordinal)) return false;
 
-            var prev = stfldInsn.Previous;
+            Instruction prev = stfldInsn.Previous;
             return prev != null && TryGetI4(prev, out aiConst);
         }
 
@@ -364,19 +366,19 @@ public class PatchProjHookSets(ModuleDefinition module)
         }
 
         private static List<Block> BuildCfg(MethodDefinition m) {
-            var ins = m.Body.Instructions;
+            Collection<Instruction> ins = m.Body.Instructions;
             if (ins.Count == 0) return [];
 
             // leaders: first, branch targets, fallthrough after branch/switch
             var leaders = new HashSet<Instruction> { ins[0] };
 
-            foreach (var i in ins) {
+            foreach (Instruction? i in ins) {
                 if (i.Operand is Instruction t) {
                     leaders.Add(t);
                     if (i.Next != null) leaders.Add(i.Next);
                 }
                 else if (i.Operand is Instruction[] ts) {
-                    foreach (var t2 in ts) leaders.Add(t2);
+                    foreach (Instruction t2 in ts) leaders.Add(t2);
                     if (i.Next != null) leaders.Add(i.Next);
                 }
             }
@@ -387,7 +389,7 @@ public class PatchProjHookSets(ModuleDefinition module)
             Block? cur = null;
 
             int id = 0;
-            foreach (var i in ins) {
+            foreach (Instruction? i in ins) {
                 if (leaders.Contains(i)) {
                     cur = new Block { Id = id++, First = i };
                     blocks.Add(cur);
@@ -395,11 +397,11 @@ public class PatchProjHookSets(ModuleDefinition module)
                 cur!.Insns.Add(i);
                 map[i] = cur;
             }
-            foreach (var b in blocks) b.Last = b.Insns[^1];
+            foreach (Block b in blocks) b.Last = b.Insns[^1];
 
             // add edges
-            foreach (var b in blocks) {
-                var last = b.Last;
+            foreach (Block b in blocks) {
+                Instruction last = b.Last;
                 if (last.OpCode.FlowControl == FlowControl.Return ||
                     last.OpCode.FlowControl == FlowControl.Throw) {
                     continue;
@@ -425,7 +427,7 @@ public class PatchProjHookSets(ModuleDefinition module)
                     }
                     else if (last.OpCode.Code == Code.Switch) {
                         var tgts = (Instruction[])last.Operand;
-                        foreach (var t in tgts) b.Succ.Add(new Edge(map[t], null));
+                        foreach (Instruction t in tgts) b.Succ.Add(new Edge(map[t], null));
                         if (last.Next != null) b.Succ.Add(new Edge(map[last.Next], null));
                     }
                     continue;
@@ -448,8 +450,8 @@ public class PatchProjHookSets(ModuleDefinition module)
 
             if (branch.Previous == null || branch.Previous.Previous == null) return null;
 
-            var cst = branch.Previous;
-            var lhs = branch.Previous.Previous;
+            Instruction cst = branch.Previous;
+            Instruction lhs = branch.Previous.Previous;
 
             if (!TryGetI4(cst, out int k)) return null;
             if (!IsLoadNpcType(lhs)) return null;

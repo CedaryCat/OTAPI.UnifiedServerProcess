@@ -32,7 +32,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             }
             isDelegateInvocation = false;
 
-            var callee = ((MethodReference)callInstruction.Operand).TryResolve();
+            MethodDefinition? callee = ((MethodReference)callInstruction.Operand).TryResolve();
 
             if (callee is null) {
                 if (!noWarings) point.Warn(1, "Could not resolve {0}", callInstruction.Operand);
@@ -42,8 +42,8 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             if (callee.DeclaringType.IsDelegate() && (callee.Name == nameof(Action.Invoke) || callee.Name == nameof(Action.BeginInvoke))) {
                 isDelegateInvocation = true;
                 Dictionary<string, Instruction> keys = [];
-                foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(caller, callInstruction, jumpSites)) {
-                    foreach (var loadValue in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
+                foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(caller, callInstruction, jumpSites)) {
+                    foreach (MonoModCommon.Stack.StackTopTypePath loadValue in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
                         if (loadValue.StackTopType?.IsDelegate() ?? false) {
                             var delegateLoadKey = DelegateInvocationData.GenerateStackKey(caller, loadValue.RealPushValueInstruction);
                             keys.TryAdd(delegateLoadKey, loadValue.RealPushValueInstruction);
@@ -51,9 +51,9 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                     }
                 }
                 Dictionary<string, MethodDefinition> result = [];
-                foreach (var keyValuePair in keys) {
-                    if (point.DelegateInvocationGraph.TracedDelegates.TryGetValue(keyValuePair.Key, out var traceData)) {
-                        foreach (var invocation in traceData.Invocations) {
+                foreach (KeyValuePair<string, Instruction> keyValuePair in keys) {
+                    if (point.DelegateInvocationGraph.TracedDelegates.TryGetValue(keyValuePair.Key, out DelegateInvocationData? traceData)) {
+                        foreach (KeyValuePair<string, MethodDefinition> invocation in traceData.Invocations) {
                             result.Add(invocation.Key, invocation.Value);
                         }
                     }
@@ -69,11 +69,11 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 MethodDefinition realCallee;
                 if (!callee.IsStatic && callee.IsVirtual && callInstruction.OpCode == OpCodes.Callvirt) {
                     HashSet<Instruction> loadInstances = [];
-                    foreach (var callPath in MonoModCommon.Stack.AnalyzeParametersSources(caller, callInstruction, jumpSites)) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> callPath in MonoModCommon.Stack.AnalyzeParametersSources(caller, callInstruction, jumpSites)) {
                         loadInstances.Add(callPath.ParametersSources[0].Instructions.Last());
                     }
                     if (loadInstances.Count == 1) {
-                        var type = MonoModCommon.Stack.AnalyzeStackTopType(caller, loadInstances.First(), jumpSites);
+                        TypeReference? type = MonoModCommon.Stack.AnalyzeStackTopType(caller, loadInstances.First(), jumpSites);
                         realCallee = type?.TryResolve()?.Methods.FirstOrDefault(m => m.GetIdentifier(false) == callee.GetIdentifier(false)) ?? callee;
                     }
                     else {
@@ -83,7 +83,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 else {
                     realCallee = callee;
                 }
-                if (point.MethodInheritanceGraph.CheckedMethodImplementationChains.TryGetValue(realCallee.GetIdentifier(), out var implementations)) {
+                if (point.MethodInheritanceGraph.CheckedMethodImplementationChains.TryGetValue(realCallee.GetIdentifier(), out MethodDefinition[]? implementations)) {
                     return implementations;
                 }
 

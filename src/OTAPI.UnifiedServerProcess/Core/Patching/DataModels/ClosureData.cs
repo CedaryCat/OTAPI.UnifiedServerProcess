@@ -1,5 +1,6 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
+using Mono.Collections.Generic;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
@@ -33,7 +34,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
         public bool Applied { get; private set; } = false;
 
         public void Apply(TypeDefinition declaringType, MethodDefinition containingMethod, Dictionary<Instruction, List<Instruction>> jumpSites) {
-            var ilProcessor = containingMethod.Body.GetILProcessor();
+            ILProcessor ilProcessor = containingMethod.Body.GetILProcessor();
             Instruction closureInitInsertBeforetarget;
             if (!IsReusedClosure) {
                 declaringType.NestedTypes.Add(ClosureType);
@@ -47,7 +48,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             }
             else {
                 if (declaringType.HasGenericParameters) {
-                    foreach (var capture in Captures) {
+                    foreach (ClosureCaptureData capture in Captures) {
                         capture.CaptureField.FieldType = MonoModCommon.Structure.DeepMapTypeReference(
                             capture.CaptureField.FieldType,
                             MonoModCommon.Structure.MapOption.Create(providers: [(declaringType, ClosureType)]));
@@ -62,14 +63,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                     .Next
                     .Next;
                 closureInitInsertBeforetarget = containingMethod.Body.Instructions
-                    .FirstOrDefault(i => 
+                    .FirstOrDefault(i =>
                         i is Instruction { OpCode.Code: Code.Stfld, Operand: FieldReference { Name: "<>4__this" } fr } &&
                         fr.DeclaringType.Resolve()?.FullName == ClosureType.FullName)
                     ?.Next
                     ?? closureInitInsertBeforetarget;
             }
 
-            foreach (var capture in Captures) {
+            foreach (ClosureCaptureData capture in Captures) {
                 if (capture.CaptureVariable is ParameterDefinition param) {
                     // load closure obj
                     ilProcessor.InsertBefore(closureInitInsertBeforetarget, MonoModCommon.IL.BuildVariableLoad(containingMethod, containingMethod.Body, Closure));
@@ -79,8 +80,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                     ilProcessor.InsertBefore(closureInitInsertBeforetarget, Instruction.Create(OpCodes.Stfld, new FieldReference(capture.CaptureField.Name, capture.CaptureField.FieldType, Closure.VariableType)));
                 }
                 else if (capture.CaptureVariable is VariableDefinition capturedLocal) {
-                    foreach (var instruction in containingMethod.Body.Instructions.ToArray()) {
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(containingMethod, instruction, out var local)) {
+                    foreach (Instruction? instruction in containingMethod.Body.Instructions.ToArray()) {
+                        if (!MonoModCommon.IL.TryGetReferencedVariable(containingMethod, instruction, out VariableDefinition? local)) {
                             continue;
                         }
                         if (local != capturedLocal) {
@@ -93,7 +94,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                             case Code.Ldloc_3:
                             case Code.Ldloc_S:
                             case Code.Ldloc: {
-                                    var target = instruction;
+                                    Instruction target = instruction;
                                     ilProcessor.InsertBeforeSeamlessly(ref target, MonoModCommon.IL.BuildVariableLoad(containingMethod, containingMethod.Body, Closure));
                                     target.OpCode = OpCodes.Ldfld;
                                     target.Operand = new FieldReference(capture.CaptureField.Name, capture.CaptureField.FieldType, Closure.VariableType);
@@ -101,7 +102,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                                 break;
                             case Code.Ldloca_S:
                             case Code.Ldloca: {
-                                    var target = instruction;
+                                    Instruction target = instruction;
                                     ilProcessor.InsertBeforeSeamlessly(ref target, MonoModCommon.IL.BuildVariableLoad(containingMethod, containingMethod.Body, Closure));
                                     target.OpCode = OpCodes.Ldflda;
                                     target.Operand = new FieldReference(capture.CaptureField.Name, capture.CaptureField.FieldType, Closure.VariableType);
@@ -114,11 +115,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                             case Code.Stloc_S:
                             case Code.Stloc: {
                                     HashSet<Instruction> insertBefore = [];
-                                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(containingMethod, instruction, jumpSites)) {
+                                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(containingMethod, instruction, jumpSites)) {
                                         insertBefore.Add(path.ParametersSources[0].Instructions[0]);
                                     }
-                                    foreach (var beforeTarget in insertBefore) {
-                                        var target = beforeTarget;
+                                    foreach (Instruction beforeTarget in insertBefore) {
+                                        Instruction target = beforeTarget;
                                         ilProcessor.InsertBeforeSeamlessly(ref target, MonoModCommon.IL.BuildVariableLoad(containingMethod, containingMethod.Body, Closure));
                                     }
                                     instruction.OpCode = OpCodes.Stfld;
@@ -141,7 +142,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             }
             ProcessedMethods.Add(generatedMethod.GetIdentifier(), generatedMethod);
             if (!Applied) {
-                if(Closure.VariableType.FullName == containingMethod.DeclaringType.FullName) {
+                if (Closure.VariableType.FullName == containingMethod.DeclaringType.FullName) {
                     Applied = true;
                     return;
                 }
@@ -150,12 +151,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
         }
 
         private static void CreateClosureParam(PatcherArguments arguments, TypeDefinition declaringType, string closureTypeName, ClosureCaptureData[] captures, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition closure) {
-            var module = arguments.MainModule;
+            ModuleDefinition module = arguments.MainModule;
 
             closureTypeDef = new TypeDefinition("", closureTypeName, TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) {
                 DeclaringType = declaringType
             };
-            foreach (var genericParam in declaringType.GenericParameters) {
+            foreach (GenericParameter? genericParam in declaringType.GenericParameters) {
                 closureTypeDef.GenericParameters.Add(genericParam.Clone());
             }
 
@@ -165,13 +166,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             closureConstructor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, module.TypeSystem.Void);
             closureTypeDef.Methods.Add(closureConstructor);
             closureConstructor.Body = new MethodBody(closureConstructor);
-            var insts = closureConstructor.Body.Instructions;
+            Collection<Instruction> insts = closureConstructor.Body.Instructions;
             insts.Add(Instruction.Create(OpCodes.Ldarg_0));
             insts.Add(Instruction.Create(OpCodes.Call, new MethodReference(".ctor", module.TypeSystem.Void, module.TypeSystem.Object) { HasThis = true }));
             insts.Add(Instruction.Create(OpCodes.Ret));
 
             if (declaringType.HasGenericParameters) {
-                foreach (var capture in captures) {
+                foreach (ClosureCaptureData capture in captures) {
                     capture.CaptureField.FieldType = MonoModCommon.Structure.DeepMapTypeReference(
                         capture.CaptureField.FieldType,
                         MonoModCommon.Structure.MapOption.Create(providers: [(declaringType, closureTypeDef)]));
@@ -184,7 +185,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             TypeReference closureTypeRef = closureTypeDef;
             if (declaringType.HasGenericParameters) {
                 var genericClosureTypeRef = new GenericInstanceType(closureTypeRef);
-                foreach (var genericParam in declaringType.GenericParameters) {
+                foreach (GenericParameter? genericParam in declaringType.GenericParameters) {
                     genericClosureTypeRef.GenericArguments.Add(genericParam);
                 }
                 closureTypeRef = genericClosureTypeRef;
@@ -195,7 +196,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
 
         public static ClosureData CreateClosureByCaptureThis(PatcherArguments arguments, TypeDefinition declaringType, MethodDefinition containingMethod, string closureTypeName) {
             ClosureCaptureData[] datas = [new ClosureCaptureData(containingMethod, containingMethod.Body.ThisParameter)];
-            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out var closure);
+            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, datas);
         }
 
@@ -204,17 +205,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                 return CreateClosureByCaptureThis(arguments, declaringType, containingMethod, closureTypeName);
             }
             ClosureCaptureData[] datas = [new ClosureCaptureData(containingMethod, parameter)];
-            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out var closure);
+            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, datas);
         }
         public static ClosureData CreateClosureByCaptureLocal(PatcherArguments arguments, TypeDefinition declaringType, MethodDefinition containingMethod, string closureTypeName, VariableDefinition local, string localName) {
             ClosureCaptureData[] datas = [new ClosureCaptureData(localName, local)];
-            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out var closure);
+            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, datas);
         }
 
         public static ClosureData CreateClosureByCaptureVariables(PatcherArguments arguments, TypeDefinition declaringType, MethodDefinition containingMethod, string closureTypeName, params ClosureCaptureData[] captures) {
-            CreateClosureParam(arguments, declaringType, closureTypeName, captures, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out var closure);
+            CreateClosureParam(arguments, declaringType, closureTypeName, captures, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, captures);
         }
         public static ClosureData CreateClosureDataFromExisting(TypeDefinition closureTypeDef, VariableDefinition closure, params ClosureCaptureData[] additionalCaptures) {

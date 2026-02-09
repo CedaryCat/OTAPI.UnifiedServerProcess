@@ -26,12 +26,12 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements
         }
 
         private async Task ProcessLogMessagesAsync() {
-            await foreach (var message in channel.Reader.ReadAllAsync()) {
-                var originalFg = Console.ForegroundColor;
-                var originalBg = Console.BackgroundColor;
+            await foreach (LogMessage message in channel.Reader.ReadAllAsync()) {
+                ConsoleColor originalFg = Console.ForegroundColor;
+                ConsoleColor originalBg = Console.BackgroundColor;
 
                 try {
-                    foreach (var segment in message.Segments.Span) {
+                    foreach (ColoredSegment segment in message.Segments.Span) {
                         Console.ForegroundColor = segment.ForegroundColor;
                         Console.BackgroundColor = segment.BackgroundColor;
                         Console.Write(segment.Text);

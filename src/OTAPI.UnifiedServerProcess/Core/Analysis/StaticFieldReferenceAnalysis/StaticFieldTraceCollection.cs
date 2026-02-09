@@ -18,14 +18,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             bool modified = false;
-            foreach (var originGroup in newTrace.TracedStaticFields) {
-                if (!existingTrace.TracedStaticFields.TryGetValue(originGroup.Key, out var existingChains)) {
+            foreach (KeyValuePair<string, StaticFieldProvenance> originGroup in newTrace.TracedStaticFields) {
+                if (!existingTrace.TracedStaticFields.TryGetValue(originGroup.Key, out StaticFieldProvenance? existingChains)) {
                     existingTrace.TracedStaticFields[originGroup.Key] = new StaticFieldProvenance(originGroup.Value.TracingStaticField, originGroup.Value.PartTracingPaths);
                     modified = true;
                     continue;
                 }
 
-                foreach (var chain in originGroup.Value.PartTracingPaths) {
+                foreach (StaticFieldTracingChain chain in originGroup.Value.PartTracingPaths) {
                     if (existingChains.PartTracingPaths.Add(chain)) {
                         modified = true;
                     }
@@ -40,7 +40,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 _traces[key] = trace;
             }
 
-            if (!trace.TracedStaticFields.TryGetValue(chain.TracingStaticField.GetIdentifier(), out var singleStaticField)) {
+            if (!trace.TracedStaticFields.TryGetValue(chain.TracingStaticField.GetIdentifier(), out StaticFieldProvenance? singleStaticField)) {
                 singleStaticField = new(chain.TracingStaticField, []);
                 trace.TracedStaticFields[chain.TracingStaticField.GetIdentifier()] = singleStaticField;
             }
@@ -60,17 +60,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
             var remapped = new Dictionary<TKey, AggregatedStaticFieldProvenance>(_traces.Count);
 
-            foreach (var (key, trace) in _traces) {
-                var newKey = remapKey(key);
+            foreach ((TKey? key, AggregatedStaticFieldProvenance? trace) in _traces) {
+                TKey newKey = remapKey(key);
                 if (!remapped.TryAdd(newKey, trace)) {
-                    var existing = remapped[newKey];
-                    foreach (var originGroup in trace.TracedStaticFields) {
-                        if (!existing.TracedStaticFields.TryGetValue(originGroup.Key, out var existingChains)) {
+                    AggregatedStaticFieldProvenance existing = remapped[newKey];
+                    foreach (KeyValuePair<string, StaticFieldProvenance> originGroup in trace.TracedStaticFields) {
+                        if (!existing.TracedStaticFields.TryGetValue(originGroup.Key, out StaticFieldProvenance? existingChains)) {
                             existing.TracedStaticFields[originGroup.Key] = new StaticFieldProvenance(originGroup.Value.TracingStaticField, originGroup.Value.PartTracingPaths);
                             continue;
                         }
 
-                        foreach (var chain in originGroup.Value.PartTracingPaths) {
+                        foreach (StaticFieldTracingChain chain in originGroup.Value.PartTracingPaths) {
                             existingChains.PartTracingPaths.Add(chain);
                         }
                     }
@@ -78,7 +78,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             _traces.Clear();
-            foreach (var (key, trace) in remapped) {
+            foreach ((TKey? key, AggregatedStaticFieldProvenance? trace) in remapped) {
                 _traces.Add(key, trace);
             }
         }

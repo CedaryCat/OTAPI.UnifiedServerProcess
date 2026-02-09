@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
@@ -18,14 +18,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             bool modified = false;
-            foreach (var originGroup in newTrace.ReferencedParameters) {
-                if (!existingTrace.ReferencedParameters.TryGetValue(originGroup.Key, out var existingChains)) {
+            foreach (KeyValuePair<string, ParameterProvenance> originGroup in newTrace.ReferencedParameters) {
+                if (!existingTrace.ReferencedParameters.TryGetValue(originGroup.Key, out ParameterProvenance? existingChains)) {
                     existingTrace.ReferencedParameters[originGroup.Key] = new ParameterProvenance(originGroup.Value.TracedParameter, originGroup.Value.PartTracingPaths);
                     modified = true;
                     continue;
                 }
 
-                foreach (var chain in originGroup.Value.PartTracingPaths) {
+                foreach (ParameterTracingChain chain in originGroup.Value.PartTracingPaths) {
                     if (existingChains.PartTracingPaths.Add(chain)) {
                         modified = true;
                     }
@@ -40,7 +40,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 _traces[key] = trace;
             }
 
-            if (!trace.ReferencedParameters.TryGetValue(chain.TracingParameter.Name, out var singleParameter)) {
+            if (!trace.ReferencedParameters.TryGetValue(chain.TracingParameter.Name, out ParameterProvenance? singleParameter)) {
                 singleParameter = new(chain.TracingParameter, []);
                 trace.ReferencedParameters[chain.TracingParameter.Name] = singleParameter;
             }
@@ -60,18 +60,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
             var remapped = new Dictionary<TKey, AggregatedParameterProvenance>(_traces.Count);
 
-            foreach (var (key, trace) in _traces) {
-                var newKey = remapKey(key);
+            foreach ((TKey? key, AggregatedParameterProvenance? trace) in _traces) {
+                TKey newKey = remapKey(key);
                 if (!remapped.TryAdd(newKey, trace)) {
                     // Merge into existing trace under the remapped key.
-                    var existing = remapped[newKey];
-                    foreach (var originGroup in trace.ReferencedParameters) {
-                        if (!existing.ReferencedParameters.TryGetValue(originGroup.Key, out var existingChains)) {
+                    AggregatedParameterProvenance existing = remapped[newKey];
+                    foreach (KeyValuePair<string, ParameterProvenance> originGroup in trace.ReferencedParameters) {
+                        if (!existing.ReferencedParameters.TryGetValue(originGroup.Key, out ParameterProvenance? existingChains)) {
                             existing.ReferencedParameters[originGroup.Key] = new ParameterProvenance(originGroup.Value.TracedParameter, originGroup.Value.PartTracingPaths);
                             continue;
                         }
 
-                        foreach (var chain in originGroup.Value.PartTracingPaths) {
+                        foreach (ParameterTracingChain chain in originGroup.Value.PartTracingPaths) {
                             existingChains.PartTracingPaths.Add(chain);
                         }
                     }
@@ -79,7 +79,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             _traces.Clear();
-            foreach (var (key, trace) in remapped) {
+            foreach ((TKey? key, AggregatedParameterProvenance? trace) in remapped) {
                 _traces.Add(key, trace);
             }
         }

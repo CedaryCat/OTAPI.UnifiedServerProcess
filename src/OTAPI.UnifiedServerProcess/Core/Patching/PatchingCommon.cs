@@ -19,8 +19,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 return false;
             }
             if (type is GenericInstanceType genericInstance) {
-                var declaringType = genericInstance.ElementType.Resolve();
-                var paramType = declaringType.GetMethod(nameof(Action.Invoke)).Parameters.FirstOrDefault()?.ParameterType;
+                TypeDefinition declaringType = genericInstance.ElementType.Resolve();
+                TypeReference? paramType = declaringType.GetMethod(nameof(Action.Invoke)).Parameters.FirstOrDefault()?.ParameterType;
                 if (paramType is null) {
                     return false;
                 }
@@ -37,7 +37,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 return genericInstance.GenericArguments[index].FullName is Constants.RootContextFullName;
             }
             else {
-                var declaringType = type.Resolve();
+                TypeDefinition declaringType = type.Resolve();
                 return declaringType.GetMethod(nameof(Action.Invoke)).Parameters.FirstOrDefault()
                     ?.ParameterType.FullName is Constants.RootContextFullName;
             }
@@ -63,9 +63,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 InsertParamAt0AndRemapIndices(newMethod.Body, InsertParamMode.MakeInstance);
             }
             else {
-                if (staticMethod.DeclaringType.Name is "WorldGenerationOptions") {
-
-                }
                 newMethod = new MethodDefinition(staticMethod.Name, staticMethod.Attributes, staticMethod.ReturnType);
                 newMethod.CustomAttributes.AddRange(staticMethod.CustomAttributes.Select(c => c.Clone()));
 
@@ -75,7 +72,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                     newMethod.GenericParameters.Add(genericParameter.Clone());
                 }
                 foreach (ParameterDefinition parameter in staticMethod.Parameters) {
-                    var param = parameter.Clone();
+                    ParameterDefinition param = parameter.Clone();
                     newMethod.Parameters.Add(param);
                 }
 
@@ -114,7 +111,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                     throw new ArgumentNullException($"The {nameof(definition)} is required when {nameof(mode)} is {InsertParamMode.Insert}");
                 }
                 if (body.Method.HasOverrides) {
-                    foreach (var overrides in body.Method.Overrides) {
+                    foreach (MethodReference? overrides in body.Method.Overrides) {
                         overrides.Parameters.Insert(0, new ParameterDefinition("", definition.Attributes, definition.ParameterType));
                     }
                 }
@@ -192,7 +189,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
         public static void InsertParamAndRemapIndices(MethodBody body, int index, ParameterDefinition definition) {
             body.Method.Parameters.Insert(index, definition);
             if (body.Method.HasOverrides) {
-                foreach (var overrides in body.Method.Overrides) {
+                foreach (MethodReference? overrides in body.Method.Overrides) {
                     overrides.Parameters.Insert(index, new ParameterDefinition("", definition.Attributes, definition.ParameterType));
                 }
             }
@@ -400,7 +397,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 
             List<Instruction> result = [];
 
-            if (!callerBody.Method.IsStatic && arguments.RootContextFieldToAdaptExternalInterface.TryGetValue(callerBody.Method.DeclaringType.FullName, out var rootContextField)) {
+            if (!callerBody.Method.IsStatic && arguments.RootContextFieldToAdaptExternalInterface.TryGetValue(callerBody.Method.DeclaringType.FullName, out FieldDefinition? rootContextField)) {
                 if (callerBody.Method.IsConstructor) {
                     result.Add(Instruction.Create(OpCodes.Ldarg_1));
                 }
@@ -412,7 +409,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 
             // If method is an context-bound method, we could create a variable of root context to easily access
             // unless the method is the constructor, then just use root context param
-            else if (arguments.ContextTypes.TryGetValue(callerBody.Method.DeclaringType.FullName, out var callerDeclaringInstanceConvdType)
+            else if (arguments.ContextTypes.TryGetValue(callerBody.Method.DeclaringType.FullName, out ContextTypeData? callerDeclaringInstanceConvdType)
                 && callerBody.Method != callerDeclaringInstanceConvdType.constructor
                 && !callerBody.Method.IsConstructor) {
 
@@ -421,8 +418,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                     variable = new VariableDefinition(arguments.RootContextDef);
                     InsertAtVar0AndRemapIndices(callerBody, variable);
 
-                    var processor = callerBody.GetILProcessor();
-                    var firstInst = callerBody.Instructions[0];
+                    ILProcessor processor = callerBody.GetILProcessor();
+                    Instruction firstInst = callerBody.Instructions[0];
                     processor.InsertBefore(firstInst, Instruction.Create(OpCodes.Ldarg_0));
                     processor.InsertBefore(firstInst, Instruction.Create(OpCodes.Ldfld, callerDeclaringInstanceConvdType.rootContextField));
                     processor.InsertBefore(firstInst, MonoModCommon.IL.BuildVariableStore(callerBody.Method, callerBody, variable));
@@ -443,7 +440,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             }
 
             if (instanceConvdType is not null) {
-                foreach (var field in instanceConvdType.nestedChain) {
+                foreach (FieldDefinition field in instanceConvdType.nestedChain) {
                     result.Add(Instruction.Create(OpCodes.Ldfld, field));
                 }
             }
@@ -454,8 +451,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             TypeReference declaringType = method.DeclaringType;
             bool hasThis = method.HasThis;
 
-            if (instanceConvdTypes.TryGetValue(method.DeclaringType.FullName, out var instanceConvdType)) {
-                var originalTypeDef = instanceConvdType.originalType;
+            if (instanceConvdTypes.TryGetValue(method.DeclaringType.FullName, out ContextTypeData? instanceConvdType)) {
+                TypeDefinition originalTypeDef = instanceConvdType.originalType;
                 declaringType = new TypeReference(originalTypeDef.Namespace, originalTypeDef.Name, originalTypeDef.Module, originalTypeDef.Scope);
                 declaringType.GenericParameters.AddRange(method.DeclaringType.GenericParameters.Select(p => p.Clone()));
 
@@ -473,10 +470,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
             };
 
             // Clone parameters excluding context parameters
-            foreach (var param in method.Parameters) {
+            foreach (ParameterDefinition? param in method.Parameters) {
                 if (param.ParameterType is GenericParameter genericParameter) {
                     if (genericParameter.Owner is MethodReference genericOwnerMethod) {
-                        if (method is GenericInstanceMethod gMethod && 
+                        if (method is GenericInstanceMethod gMethod &&
                             gMethod.GenericArguments[genericParameter.Position].FullName == rootContextType.FullName) {
                             continue;
                         }

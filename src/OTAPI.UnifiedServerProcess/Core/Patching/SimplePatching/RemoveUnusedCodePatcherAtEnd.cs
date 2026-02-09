@@ -1,8 +1,6 @@
 ﻿using Mono.Cecil;
-using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Core.Patching.Framework;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
 {

@@ -17,14 +17,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
         public override string Name => nameof(SimplifyMacrosPatcher);
 
         public override void Patch() {
-            foreach (var type in module.GetAllTypes()) {
-                foreach (var method in type.Methods) {
+            foreach (TypeDefinition? type in module.GetAllTypes()) {
+                foreach (MethodDefinition? method in type.Methods) {
                     if (!method.HasBody) {
                         continue;
                     }
                     // method.Body.SimplifyMacros();
 
-                    foreach (var instruction in method.Body.Instructions) {
+                    foreach (Instruction? instruction in method.Body.Instructions) {
                         switch (instruction.OpCode.Code) {
                             case Code.Br_S:
                                 instruction.OpCode = OpCodes.Br;

@@ -10,7 +10,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
         public static void ValidateMethodIdRemap(IReadOnlyDictionary<string, string> oldToNew) {
             ArgumentNullException.ThrowIfNull(oldToNew);
 
-            foreach (var (oldId, newId) in oldToNew) {
+            foreach ((string? oldId, string? newId) in oldToNew) {
                 if (string.IsNullOrWhiteSpace(oldId)) {
                     throw new ArgumentException("Method identifier remap contains an empty old identifier.", nameof(oldToNew));
                 }
@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 }
             }
 
-            var duplicateNew = oldToNew
+            IGrouping<string, KeyValuePair<string, string>>? duplicateNew = oldToNew
                 .GroupBy(kv => kv.Value, StringComparer.Ordinal)
                 .FirstOrDefault(g => g.Count() > 1);
             if (duplicateNew is not null) {
@@ -49,7 +49,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             dictionaryName ??= dictionary.GetType().Name;
 
             var remapped = new Dictionary<string, TValue>(dictionary.Count, StringComparer.Ordinal);
-            foreach (var (key, value) in dictionary) {
+            foreach ((string? key, TValue? value) in dictionary) {
                 var newKey = RemapMethodId(key, oldToNew);
                 if (!remapped.TryAdd(newKey, value)) {
                     throw new InvalidOperationException($"Remapping '{dictionaryName}' produced a duplicate key '{newKey}'.");
@@ -57,7 +57,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             }
 
             dictionary.Clear();
-            foreach (var (key, value) in remapped) {
+            foreach ((string? key, TValue? value) in remapped) {
                 dictionary.Add(key, value);
             }
         }
@@ -76,8 +76,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
             dictionaryName ??= dictionary.GetType().Name;
 
-            var builder = ImmutableDictionary.CreateBuilder<string, TValue>();
-            foreach (var (key, value) in dictionary) {
+            ImmutableDictionary<string, TValue>.Builder builder = ImmutableDictionary.CreateBuilder<string, TValue>();
+            foreach ((string? key, TValue? value) in dictionary) {
                 var newKey = RemapMethodId(key, oldToNew);
                 if (builder.ContainsKey(newKey)) {
                     throw new InvalidOperationException($"Remapping '{dictionaryName}' produced a duplicate key '{newKey}'.");

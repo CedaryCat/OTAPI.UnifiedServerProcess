@@ -15,7 +15,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return CreateEncapsulatedInstance(newMember, null);
         }
         public AggregatedStaticFieldProvenance CreateEncapsulatedInstance(MemberReference newMember, TypeFlowSccIndex? sccIndex) {
-            var result = new AggregatedStaticFieldProvenance();
+            AggregatedStaticFieldProvenance result = new AggregatedStaticFieldProvenance();
             foreach (var origin in TracedStaticFields) {
                 result.TracedStaticFields.Add(
                     origin.Key,
@@ -33,7 +33,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return CreateEncapsulatedArrayInstance(arrayType, null);
         }
         public AggregatedStaticFieldProvenance CreateEncapsulatedArrayInstance(ArrayType arrayType, TypeFlowSccIndex? sccIndex) {
-            var result = new AggregatedStaticFieldProvenance();
+            AggregatedStaticFieldProvenance result = new AggregatedStaticFieldProvenance();
             foreach (var origin in TracedStaticFields) {
                 result.TracedStaticFields.Add(
                     origin.Key,
@@ -47,7 +47,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return CreateEncapsulatedCollectionInstance(collectionType, elementType, null);
         }
         public AggregatedStaticFieldProvenance CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex) {
-            var result = new AggregatedStaticFieldProvenance();
+            AggregatedStaticFieldProvenance result = new AggregatedStaticFieldProvenance();
             foreach (var origin in TracedStaticFields) {
                 result.TracedStaticFields.Add(
                     origin.Key,
@@ -58,7 +58,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return result;
         }
         public AggregatedStaticFieldProvenance? CreateEncapsulatedEnumeratorInstance() {
-            var result = new AggregatedStaticFieldProvenance();
+            AggregatedStaticFieldProvenance result = new AggregatedStaticFieldProvenance();
             foreach (var origin in TracedStaticFields) {
                 result.TracedStaticFields.Add(
                     origin.Key,
@@ -79,7 +79,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in TracedStaticFields) {
-                var newChains = new HashSet<StaticFieldTracingChain>();
+                HashSet<StaticFieldTracingChain> newChains = new HashSet<StaticFieldTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryExtendTracingWithMemberAccess(member, sccIndex, out StaticFieldTracingChain? newChain)) {
@@ -105,7 +105,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in TracedStaticFields) {
-                var newChains = new HashSet<StaticFieldTracingChain>();
+                HashSet<StaticFieldTracingChain> newChains = new HashSet<StaticFieldTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryExtendTracingWithArrayAccess(arrayType, sccIndex, out StaticFieldTracingChain? newChain)) {
@@ -131,7 +131,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in TracedStaticFields) {
-                var newChains = new HashSet<StaticFieldTracingChain>();
+                HashSet<StaticFieldTracingChain> newChains = new HashSet<StaticFieldTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryExtendTracingWithCollectionAccess(collectionType, elementType, sccIndex, out StaticFieldTracingChain? newChain)) {
@@ -156,7 +156,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in TracedStaticFields) {
-                var newChains = new HashSet<StaticFieldTracingChain>();
+                HashSet<StaticFieldTracingChain> newChains = new HashSet<StaticFieldTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryTraceEnumeratorCurrent(out StaticFieldTracingChain? newChain)) {

@@ -21,16 +21,16 @@ namespace OTAPI.UnifiedServerProcess
         public readonly string NuspecFilePath = Path.Combine(nugetDocPath, packageName + ".nuspec");
 
         public void Build(ModFwModder modder, string otapiVersion, DirectoryInfo outputDir) {
-            var nuspec_xml = File.ReadAllText(NuspecFilePath);
-            var md = File.ReadAllText(PackageMDFilePath);
+            string nuspec_xml = File.ReadAllText(NuspecFilePath);
+            string md = File.ReadAllText(PackageMDFilePath);
 
             md = md.Replace("[INJECT_OTAPI_VERSION]", otapiVersion);
             nuspec_xml = nuspec_xml.Replace("[INJECT_OTAPI_VERSION]", otapiVersion);
 
-            var version = GetNugetVersionFromAssembly<Patcher>();
-            var gitIndex = version.IndexOf('+');
+            string version = GetNugetVersionFromAssembly<Patcher>();
+            int gitIndex = version.IndexOf('+');
             if (gitIndex > -1) {
-                var gitCommitSha = version[(gitIndex + 1)..];
+                string gitCommitSha = version[(gitIndex + 1)..];
                 version = version[..gitIndex];
                 nuspec_xml = nuspec_xml.Replace("[INJECT_GIT_HASH]", $" git#{gitCommitSha}");
             }
@@ -39,7 +39,7 @@ namespace OTAPI.UnifiedServerProcess
             }
             nuspec_xml = nuspec_xml.Replace("[INJECT_VERSION]", version);
 
-            var platforms = new[] { "net9.0" };
+            string[] platforms = new[] { "net9.0" };
             var steamworks = modder.Module.AssemblyReferences.First(x => x.Name == "Steamworks.NET");
             var newtonsoft = modder.Module.AssemblyReferences.First(x => x.Name == "Newtonsoft.Json");
             var dependencies = new[]
@@ -51,9 +51,9 @@ namespace OTAPI.UnifiedServerProcess
                 (newtonsoft.Name, Version: GetNugetVersionFromAssembly<Newtonsoft.Json.JsonConverter>().Split('+')[0]  ),
             };
 
-            var xml_dependency = string.Join("", dependencies.Select(dep => $"\n\t    <dependency id=\"{dep.Name}\" version=\"{dep.Version}\" />"));
-            var xml_group = string.Join("", platforms.Select(platform => $"\n\t<group targetFramework=\"{platform}\">{xml_dependency}\n\t</group>"));
-            var xml_dependencies = $"<dependencies>{xml_group}\n    </dependencies>";
+            string xml_dependency = string.Join("", dependencies.Select(dep => $"\n\t    <dependency id=\"{dep.Name}\" version=\"{dep.Version}\" />"));
+            string xml_group = string.Join("", platforms.Select(platform => $"\n\t<group targetFramework=\"{platform}\">{xml_dependency}\n\t</group>"));
+            string xml_dependencies = $"<dependencies>{xml_group}\n    </dependencies>";
 
             nuspec_xml = nuspec_xml.Replace("[INJECT_DEPENDENCIES]", xml_dependencies);
 
@@ -69,8 +69,8 @@ namespace OTAPI.UnifiedServerProcess
 
                 packageBuilder.AddFiles(outputDir.FullName, "COPYING.txt", "");
 
-                foreach (var platform in platforms) {
-                    var dest = Path.Combine("lib", platform);
+                foreach (string? platform in platforms) {
+                    string dest = Path.Combine("lib", platform);
                     packageBuilder.AddFiles(outputDir.FullName, "OTAPI.dll", dest);
                     packageBuilder.AddFiles(outputDir.FullName, "OTAPI.Runtime.dll", dest);
                 }

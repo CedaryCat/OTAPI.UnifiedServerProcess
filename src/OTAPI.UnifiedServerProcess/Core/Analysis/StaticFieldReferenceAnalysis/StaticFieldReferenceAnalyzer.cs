@@ -42,12 +42,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             this.methodInheritanceGraph = methodInherance;
             this.typeFlowSccIndex = TypeFlowSccIndex.Build(module);
 
-            var methodStackTraces = new Dictionary<string, StaticFieldTraceCollection<string>>();
-            var methodStaticFieldTraces = new Dictionary<string, StaticFieldTraceCollection<string>>();
-            var methodLocalVariableTraces = new Dictionary<string, StaticFieldTraceCollection<VariableDefinition>>();
-            var methodReturnTraces = new StaticFieldTraceCollection<string>();
+            Dictionary<string, StaticFieldTraceCollection<string>> methodStackTraces = new Dictionary<string, StaticFieldTraceCollection<string>>();
+            Dictionary<string, StaticFieldTraceCollection<string>> methodStaticFieldTraces = new Dictionary<string, StaticFieldTraceCollection<string>>();
+            Dictionary<string, StaticFieldTraceCollection<VariableDefinition>> methodLocalVariableTraces = new Dictionary<string, StaticFieldTraceCollection<VariableDefinition>>();
+            StaticFieldTraceCollection<string> methodReturnTraces = new StaticFieldTraceCollection<string>();
 
-            var workQueue = module.GetAllTypes()
+            Dictionary<string, MethodDefinition> workQueue = module.GetAllTypes()
                 .SelectMany(t => t.Methods)
                 .Where(m => m.HasBody)
                 .ToDictionary(m => m.GetIdentifier());
@@ -291,7 +291,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             void HandleLoadField(Instruction instruction) {
-                var fieldRef = (FieldReference)instruction.Operand;
+                FieldReference fieldRef = (FieldReference)instruction.Operand;
                 if (fieldRef.FieldType.IsTruelyValueType()) return;
 
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
@@ -316,7 +316,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             void HandleStoreField(Instruction instruction) {
-                var fieldRef = (FieldReference)instruction.Operand;
+                FieldReference fieldRef = (FieldReference)instruction.Operand;
                 if (fieldRef.FieldType.IsValueType) return;
 
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
@@ -481,11 +481,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         valueSingleParamTrace = new(instanceSingleFieldTraceKV.Value.TracingStaticField, []);
                     }
                     foreach (var chain in instanceSingleFieldTraceKV.Value.PartTracingPaths) {
-                            if (chain.TryExtendTracingWithArrayAccess((ArrayType)instancePath.StackTopType, typeFlowSccIndex, out var newChain)
-                                && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
-                                hasInnerChange = true;
-                                valueTraceHasChange = true;
-                            }
+                        if (chain.TryExtendTracingWithArrayAccess((ArrayType)instancePath.StackTopType, typeFlowSccIndex, out var newChain)
+                            && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
+                            hasInnerChange = true;
+                            valueTraceHasChange = true;
+                        }
                     }
                     valueTrace.TracedStaticFields[instanceSingleFieldTraceKV.Key] = valueSingleParamTrace;
                 }
@@ -524,7 +524,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             void HandleLoadCollectionElement(Instruction instruction) {
-                var callingMethod = (MemberReference)instruction.Operand;
+                MemberReference callingMethod = (MemberReference)instruction.Operand;
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                     foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
                         if (loadInstance.StackTopType is null) {
@@ -690,7 +690,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
             void HandleMethodCall(Instruction instruction) {
                 var isNewObj = instruction.OpCode == OpCodes.Newobj;
-                var methodRef = (MethodReference)instruction.Operand;
+                MethodReference methodRef = (MethodReference)instruction.Operand;
                 var resolvedCallee = methodRef.TryResolve();
 
                 if (resolvedCallee is null) {
@@ -827,7 +827,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
                     // Static field from the parameters (including side-effects on arguments).
                     foreach (var paramGroup in loadParamsInEveryPaths) {
-                        var callerArgsByCalleeParamName = new Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedStaticFieldProvenance? Trace)>();
+                        Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedStaticFieldProvenance? Trace)> callerArgsByCalleeParamName = new Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedStaticFieldProvenance? Trace)>();
 
                         for (int paramIndex = 0; paramIndex < paramGroup.Length; paramIndex++) {
 
@@ -907,12 +907,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
                                 foreach (var outerPart in origin.Trace.TracedStaticFields.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
                                     foreach (var innerPart in originGroup.Value.PartTracingPaths) {
-                                        var selector = new StaticFieldTracingChain(
+                                        StaticFieldTracingChain selector = new StaticFieldTracingChain(
                                             outerPart.TracingStaticField,
                                             innerPart.EncapsulationHierarchy,
                                             innerPart.ComponentAccessPath);
 
-                                        var substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, selector, typeFlowSccIndex);
+                                        StaticFieldTracingChain? substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, selector, typeFlowSccIndex);
                                         if (substitution is not null
                                             && stackTrace.TryAddOriginChain(StaticFieldUsageTrack.GenerateStackKey(method, instruction), substitution)) {
                                             hasInnerChange = true;
@@ -970,12 +970,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
                                     foreach (var outerPart in origin.Trace.TracedStaticFields.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
                                         foreach (var innerPart in originGroup.Value.PartTracingPaths) {
-                                            var selector = new StaticFieldTracingChain(
+                                            StaticFieldTracingChain selector = new StaticFieldTracingChain(
                                                 outerPart.TracingStaticField,
                                                 innerPart.EncapsulationHierarchy,
                                                 innerPart.ComponentAccessPath);
 
-                                            var substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, selector, typeFlowSccIndex);
+                                            StaticFieldTracingChain? substitution = StaticFieldTracingChain.CombineStaticFieldTraces(outerPart, selector, typeFlowSccIndex);
                                             if (substitution is null) {
                                                 continue;
                                             }

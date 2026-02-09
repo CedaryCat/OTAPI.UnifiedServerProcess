@@ -19,18 +19,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public override string Name => nameof(AdjustAccessModifiersPatcher);
 
         public override void Patch(PatcherArguments arguments) {
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
-                foreach (var caller in type.Methods.ToArray()) {
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
+                foreach (MethodDefinition? caller in type.Methods.ToArray()) {
                     if (!caller.HasBody) {
                         continue;
                     }
-                    foreach (var inst in caller.Body.Instructions) {
+                    foreach (Instruction? inst in caller.Body.Instructions) {
                         switch (inst.OpCode.Code) {
                             case Code.Call:
                             case Code.Callvirt:
                             case Code.Newobj: {
                                     var calleeRef = (MethodReference)inst.Operand;
-                                    var calleeDef = calleeRef.TryResolve();
+                                    MethodDefinition? calleeDef = calleeRef.TryResolve();
                                     if (calleeDef is null) {
                                         continue;
                                     }
@@ -42,7 +42,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             case Code.Stsfld:
                             case Code.Stfld: {
                                     var fieldRef = (FieldReference)inst.Operand;
-                                    var fieldDef = fieldRef.TryResolve();
+                                    FieldDefinition? fieldDef = fieldRef.TryResolve();
                                     if (fieldDef is null) {
                                         continue;
                                     }
@@ -53,11 +53,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                                             var getInnerFieldMethodName = "SetEventImpl_" + fieldDef.Name;
 
-                                            var methodDef = fieldDef.DeclaringType.Methods.FirstOrDefault(m => m.Name == getInnerFieldMethodName);
+                                            MethodDefinition? methodDef = fieldDef.DeclaringType.Methods.FirstOrDefault(m => m.Name == getInnerFieldMethodName);
                                             if (methodDef is null) {
                                                 methodDef = new MethodDefinition(getInnerFieldMethodName, MethodAttributes.Public, arguments.MainModule.TypeSystem.Void);
                                                 methodDef.Parameters.Add(new ParameterDefinition(fieldDef.FieldType));
-                                                var body = methodDef.Body = new MethodBody(methodDef);
+                                                MethodBody body = methodDef.Body = new MethodBody(methodDef);
                                                 body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0)); // this
                                                 body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_1)); // value
                                                 body.Instructions.Add(Instruction.Create(OpCodes.Stfld, fieldDef));
@@ -76,7 +76,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             case Code.Ldsfld:
                             case Code.Ldfld: {
                                     var fieldRef = (FieldReference)inst.Operand;
-                                    var fieldDef = fieldRef.TryResolve();
+                                    FieldDefinition? fieldDef = fieldRef.TryResolve();
                                     if (fieldDef is null) {
                                         continue;
                                     }
@@ -87,10 +87,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                                             var getInnerFieldMethodName = "GetEventImpl_" + fieldDef.Name;
 
-                                            var methodDef = fieldDef.DeclaringType.Methods.FirstOrDefault(m => m.Name == getInnerFieldMethodName);
+                                            MethodDefinition? methodDef = fieldDef.DeclaringType.Methods.FirstOrDefault(m => m.Name == getInnerFieldMethodName);
                                             if (methodDef is null) {
                                                 methodDef = new MethodDefinition(getInnerFieldMethodName, MethodAttributes.Public, fieldDef.FieldType);
-                                                var body = methodDef.Body = new MethodBody(methodDef);
+                                                MethodBody body = methodDef.Body = new MethodBody(methodDef);
                                                 body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0)); // this
 
                                                 body.Instructions.Add(Instruction.Create(OpCodes.Ldfld, fieldDef));
@@ -109,7 +109,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             case Code.Ldsflda:
                             case Code.Ldflda: {
                                     var fieldRef = (FieldReference)inst.Operand;
-                                    var fieldDef = fieldRef.TryResolve();
+                                    FieldDefinition? fieldDef = fieldRef.TryResolve();
                                     if (fieldDef is null) {
                                         continue;
                                     }
@@ -120,10 +120,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                                             var getInnerFieldMethodName = "GetEventImplAddress_" + fieldDef.Name;
 
-                                            var methodDef = fieldDef.DeclaringType.Methods.FirstOrDefault(m => m.Name == getInnerFieldMethodName);
+                                            MethodDefinition? methodDef = fieldDef.DeclaringType.Methods.FirstOrDefault(m => m.Name == getInnerFieldMethodName);
                                             if (methodDef is null) {
                                                 methodDef = new MethodDefinition(getInnerFieldMethodName, MethodAttributes.Public, new ByReferenceType(fieldDef.FieldType));
-                                                var body = methodDef.Body = new MethodBody(methodDef);
+                                                MethodBody body = methodDef.Body = new MethodBody(methodDef);
                                                 body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0)); // this
 
                                                 body.Instructions.Add(Instruction.Create(OpCodes.Ldflda, fieldDef));
@@ -152,8 +152,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             if (caller is null || calleeDef is null)
                 return false;
 
-            var callerType = caller.DeclaringType;
-            var calleeTypeDef = calleeDef.DeclaringType;
+            TypeDefinition callerType = caller.DeclaringType;
+            TypeDefinition? calleeTypeDef = calleeDef.DeclaringType;
 
             if (calleeTypeDef is null)
                 return false;
@@ -188,8 +188,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             if (caller is null || fieldDef is null)
                 return false;
 
-            var callerType = caller.DeclaringType;
-            var calleeTypeDef = fieldDef.DeclaringType;
+            TypeDefinition callerType = caller.DeclaringType;
+            TypeDefinition? calleeTypeDef = fieldDef.DeclaringType;
 
             if (calleeTypeDef is null)
                 return false;

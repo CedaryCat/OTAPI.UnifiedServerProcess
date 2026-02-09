@@ -24,7 +24,7 @@ namespace OTAPI.UnifiedServerProcess
         /// For now, the intention is to replace the entire both with "return new string[0];" to prevent the GAC IL from being used (which it isn't anyway)
         /// </summary>
         public static void PatchMonoMod() {
-            var bin = File.ReadAllBytes("MonoMod.dll");
+            byte[] bin = File.ReadAllBytes("MonoMod.dll");
             using MemoryStream ms = new(bin);
             var asm = AssemblyDefinition.ReadAssembly(ms);
             var modder = asm.MainModule.Types.Single(x => x.FullName == "MonoMod.MonoModder");
@@ -61,11 +61,11 @@ namespace OTAPI.UnifiedServerProcess
 
         public bool Patch(DirectoryInfo outputDir) {
             outputDir.Create();
-            var output = Path.Combine(outputDir.FullName, "OTAPI.dll");
-            var hookOutput = Path.Combine(outputDir.FullName, "OTAPI.Runtime.dll");
+            string output = Path.Combine(outputDir.FullName, "OTAPI.dll");
+            string hookOutput = Path.Combine(outputDir.FullName, "OTAPI.Runtime.dll");
 
-            var input = typeof(Terraria.Main).Assembly.Location;
-            var version = typeof(Terraria.Main).Assembly
+            string input = typeof(Terraria.Main).Assembly.Location;
+            string version = typeof(Terraria.Main).Assembly
                 .GetCustomAttribute<AssemblyInformationalVersionAttribute>()
                 ?.InformationalVersion ?? throw new NullReferenceException();
 
@@ -95,9 +95,9 @@ namespace OTAPI.UnifiedServerProcess
 
             List<MethodDefinition> virtualMaked = [];
 
-            var embeddedResources = modcontext.ExtractResources(input);
+            string embeddedResources = modcontext.ExtractResources(input);
 
-            var pluginsPath = Path.Combine(modcontext.BaseDirectory, "modifications");
+            string pluginsPath = Path.Combine(modcontext.BaseDirectory, "modifications");
             Directory.CreateDirectory(pluginsPath);
             modcontext.PluginLoader.AddFromFolder(pluginsPath);
 
@@ -133,7 +133,7 @@ namespace OTAPI.UnifiedServerProcess
                 return ModContext.EApplyResult.Continue;
             };
 
-            var status = "OTAPI";
+            string status = "OTAPI";
 
             mm.Read();
             mm.MapDependencies();

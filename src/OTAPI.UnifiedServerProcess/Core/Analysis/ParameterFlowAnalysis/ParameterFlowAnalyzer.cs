@@ -43,12 +43,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             this.typeInheritance = typeInheritance;
             this.typeFlowSccIndex = TypeFlowSccIndex.Build(module);
 
-            var methodStackTraces = new Dictionary<string, ParameterTraceCollection<string>>();
-            var methodParameterTraces = new Dictionary<string, ParameterTraceCollection<string>>();
-            var methodLocalVariableTraces = new Dictionary<string, ParameterTraceCollection<VariableDefinition>>();
-            var methodReturnTraces = new ParameterTraceCollection<string>();
+            Dictionary<string, ParameterTraceCollection<string>> methodStackTraces = new Dictionary<string, ParameterTraceCollection<string>>();
+            Dictionary<string, ParameterTraceCollection<string>> methodParameterTraces = new Dictionary<string, ParameterTraceCollection<string>>();
+            Dictionary<string, ParameterTraceCollection<VariableDefinition>> methodLocalVariableTraces = new Dictionary<string, ParameterTraceCollection<VariableDefinition>>();
+            ParameterTraceCollection<string> methodReturnTraces = new ParameterTraceCollection<string>();
 
-            var workQueue = new Dictionary<string, MethodDefinition>(
+            Dictionary<string, MethodDefinition> workQueue = new Dictionary<string, MethodDefinition>(
                 module.GetAllTypes()
                     .SelectMany(t => t.Methods)
                     .Where(m => m.HasBody)
@@ -139,10 +139,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             ParameterTraceCollection<string> returnTraces,
             out bool dataChanged) {
             dataChanged = false;
-
-            if (method.Name is "NewTextInternal") {
-
-            }
 
             var hasExternalChange = false;
             if (!method.HasBody) return;
@@ -263,7 +259,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 var parameter = MonoModCommon.IL.GetReferencedParameter(method, instruction);
                 if (parameter.ParameterType.IsTruelyValueType()) return;
 
-                var chain = new ParameterTracingChain(parameter, [], []);
+                ParameterTracingChain chain = new ParameterTracingChain(parameter, [], []);
                 var stackKey = ParameterUsageTrack.GenerateStackKey(method, instruction);
 
                 if (stackTrace.TryAddOriginChain(stackKey, chain)) {
@@ -302,7 +298,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             void HandleLoadField(Instruction instruction) {
-                var fieldRef = (FieldReference)instruction.Operand;
+                FieldReference fieldRef = (FieldReference)instruction.Operand;
                 if (fieldRef.FieldType.IsTruelyValueType()) return;
 
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
@@ -321,7 +317,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             void HandleStoreField(Instruction instruction) {
-                var fieldRef = (FieldReference)instruction.Operand;
+                FieldReference fieldRef = (FieldReference)instruction.Operand;
                 if (fieldRef.FieldType.IsTruelyValueType()) return;
 
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
@@ -523,7 +519,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
 
             void HandleLoadCollectionElement(Instruction instruction) {
-                var callingMethod = (MemberReference)instruction.Operand;
+                MemberReference callingMethod = (MemberReference)instruction.Operand;
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                     foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
                         if (loadInstance.StackTopType is null) {
@@ -696,7 +692,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
             void HandleMethodCall(Instruction instruction) {
                 bool isNewObj = instruction.OpCode == OpCodes.Newobj;
-                var methodRef = (MethodReference)instruction.Operand;
+                MethodReference methodRef = (MethodReference)instruction.Operand;
                 var resolvedMethod = methodRef.TryResolve();
 
 
@@ -823,7 +819,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         // 1) Pick the correct caller argument for each mutated callee parameter (target selection).
                         // 2) Substitute origin parameters referenced in the callee summary with the caller's actual
                         //    argument traces (origin substitution).
-                        var callerArgTracesByCalleeParamName = new Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedParameterProvenance Trace)>();
+                        Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedParameterProvenance Trace)> callerArgTracesByCalleeParamName = new Dictionary<string, (MonoModCommon.Stack.StackTopTypePath LoadParam, AggregatedParameterProvenance Trace)>();
                         for (int paramIndex = 0; paramIndex < paramGroup.Length; paramIndex++) {
 
                             var paramIndexInImpl = paramIndex;
@@ -898,7 +894,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
                                 foreach (var outerPart in loadingParamStackValue.ReferencedParameters.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
                                     foreach (var innerPart in paramParts.PartTracingPaths) {
-                                        var substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart, typeFlowSccIndex);
+                                        ParameterTracingChain? substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart, typeFlowSccIndex);
                                         if (substitution is not null && stackTrace.TryAddOriginChain(ParameterUsageTrack.GenerateStackKey(method, instruction), substitution)) {
                                             hasExternalChange = true;
                                         }
@@ -942,7 +938,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
                                     foreach (var outerPart in originTrace.Trace.ReferencedParameters.Values.SelectMany(v => v.PartTracingPaths).ToArray()) {
                                         foreach (var innerPart in originGroup.Value.PartTracingPaths) {
-                                            var substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart, typeFlowSccIndex);
+                                            ParameterTracingChain? substitution = ParameterTracingChain.CombineParameterTraces(outerPart, innerPart, typeFlowSccIndex);
                                             if (substitution is null) {
                                                 continue;
                                             }

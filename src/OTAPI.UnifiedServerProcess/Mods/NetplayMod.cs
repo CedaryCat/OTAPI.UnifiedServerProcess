@@ -15,8 +15,8 @@ using Terraria;
 void NetplayConnectionCheck(ModFwModder modder) {
 
     List<MethodDefinition> methods = [];
-    foreach (var type in modder.Module.GetAllTypes()) { 
-        foreach (var method in type.Methods) {
+    foreach (TypeDefinition? type in modder.Module.GetAllTypes()) {
+        foreach (MethodDefinition? method in type.Methods) {
             if (!method.HasBody || method.Name == nameof(NetMessage.CheckCanSend)) {
                 continue;
             }
@@ -28,10 +28,10 @@ void NetplayConnectionCheck(ModFwModder modder) {
     }
 
 
-    var netplay = modder.Module.GetType("Terraria.Netplay");
-    var checkConnectionMDef = modder.Module.ImportReference(typeof(NetMessage).GetMethod(nameof(NetMessage.CheckCanSend))!);
-    foreach (var method in methods) {
-        var cursor = method.GetILCursor();
+    TypeDefinition netplay = modder.Module.GetType("Terraria.Netplay");
+    MethodReference checkConnectionMDef = modder.Module.ImportReference(typeof(NetMessage).GetMethod(nameof(NetMessage.CheckCanSend))!);
+    foreach (MethodDefinition method in methods) {
+        ILCursor cursor = method.GetILCursor();
 
         while (cursor.TryGotoNext(MoveType.Before,
             inst => inst.MatchLdsfld("Terraria.Netplay", "Clients"),
@@ -39,10 +39,10 @@ void NetplayConnectionCheck(ModFwModder modder) {
             inst => inst.MatchLdelemRef(),
             inst => inst.MatchCallvirt("Terraria.RemoteClient", "IsConnected"))) {
 
-            var loadClients = cursor.Next!;
-            var loadIndex = cursor.Next!.Next!;
-            var loadElement = cursor.Next!.Next!.Next;
-            var checkConnection = cursor.Next!.Next!.Next!.Next;
+            Instruction loadClients = cursor.Next!;
+            Instruction loadIndex = cursor.Next!.Next!;
+            Instruction loadElement = cursor.Next!.Next!.Next;
+            Instruction checkConnection = cursor.Next!.Next!.Next!.Next;
 
             loadClients.OpCode = OpCodes.Nop;
             loadClients.Operand = null;

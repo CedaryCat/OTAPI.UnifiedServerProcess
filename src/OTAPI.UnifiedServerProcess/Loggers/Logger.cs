@@ -41,7 +41,7 @@ namespace OTAPI.UnifiedServerProcess.Loggers
                 return [new ColoredSegment(log, ConsoleColor.Gray)];
             }
 
-            var segments = new List<ColoredSegment>();
+            List<ColoredSegment> segments = new List<ColoredSegment>();
             var parts = log.Split(["{", "}"], StringSplitOptions.None);
 
             for (int i = 0; i < parts.Length; i++) {

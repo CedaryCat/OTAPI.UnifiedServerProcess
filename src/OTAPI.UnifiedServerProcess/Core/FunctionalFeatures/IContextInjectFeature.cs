@@ -28,7 +28,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
             originalMethodRef = methodRefToAdjust;
             contextProvider = null;
-            var calleeId = methodRefToAdjust.GetIdentifier();
+            string calleeId = methodRefToAdjust.GetIdentifier();
 
             // Handle delegate-injected context parameters for Action.Invoke / Action.BeginInvoke
             if ((methodRefToAdjust.Name == nameof(Action.Invoke) || methodRefToAdjust.Name == nameof(Action.BeginInvoke))
@@ -54,7 +54,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                     // Map generic parameter from the delegate type
                     var genericOwner = ((GenericInstanceType)methodRefToAdjust.DeclaringType).ElementType;
 
-                    var duplicate = new MethodReference(methodRefToAdjust.Name, methodRefToAdjust.ReturnType, methodRefToAdjust.DeclaringType) { 
+                    var duplicate = new MethodReference(methodRefToAdjust.Name, methodRefToAdjust.ReturnType, methodRefToAdjust.DeclaringType) {
                         HasThis = methodRefToAdjust.HasThis,
                     };
                     duplicate.Parameters.Add(new ParameterDefinition(genericOwner.GenericParameters[genericParameter.Position]));
@@ -383,7 +383,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 .SelectMany(p => p.ParametersSources.Skip(1)) // ignore 'this' parameter
                 .SelectMany(s => s.Instructions)
                 .Any(x => MonoModCommon.IL.TryGetReferencedVariable(ctor, x, out _))) {
-                return; 
+                return;
             }
 
             List<Instruction> movedInstructions = [];

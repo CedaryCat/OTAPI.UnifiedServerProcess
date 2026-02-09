@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using Mono.Collections.Generic;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
@@ -26,14 +27,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public MethodCallGraph MethodCallGraph => methodCallGraph;
 
         public sealed override void Patch(PatcherArguments arguments) {
-            var module = arguments.MainModule;
-            var mappedMethod = arguments.LoadVariable<ContextBoundMethodMap>();
+            ModuleDefinition module = arguments.MainModule;
+            ContextBoundMethodMap mappedMethod = arguments.LoadVariable<ContextBoundMethodMap>();
 
             Dictionary<string, MethodDefinition> addedParamMethods = [];
 
-            foreach (var type in module.GetAllTypes().ToArray()) {
+            foreach (TypeDefinition? type in module.GetAllTypes().ToArray()) {
 
-                foreach (var method in type.Methods.ToArray()) {
+                foreach (MethodDefinition? method in type.Methods.ToArray()) {
                     if (!method.HasBody) {
                         continue;
                     }
@@ -41,7 +42,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     // Only context bound methods could process,
                     if (mappedMethod.originalToContextBound.ContainsKey(methodId)) {
                         // And only reused singleton methods could be context bound at same time existing in the original method map
-                        if (!arguments.ContextTypes.TryGetValue(type.FullName, out var singletonType)
+                        if (!arguments.ContextTypes.TryGetValue(type.FullName, out ContextTypeData? singletonType)
                             || !singletonType.IsReusedSingleton
                             || !singletonType.ReusedSingletonMethods.ContainsKey(methodId)) {
                             continue;
@@ -57,7 +58,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             MethodDefinition caller) {
 
             Dictionary<string, (TypeReference enumeratorRef, FieldReference contextFieldRef)> processedEnumerator = [];
-            foreach (var instruction in caller.Body.Instructions.ToArray()) {
+            foreach (Instruction? instruction in caller.Body.Instructions.ToArray()) {
                 if (instruction.OpCode != OpCodes.Newobj) {
                     continue;
                 }
@@ -65,7 +66,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (!ctor.DeclaringType.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
-                var enumeratorDef = ctor.DeclaringType.Resolve();
+                TypeDefinition? enumeratorDef = ctor.DeclaringType.Resolve();
                 if (enumeratorDef is null) {
                     continue;
                 }
@@ -73,7 +74,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     continue;
                 }
                 bool anyContextUsed = false;
-                foreach (var method in enumeratorDef.Methods) {
+                foreach (MethodDefinition? method in enumeratorDef.Methods) {
                     if (method.IsConstructor) {
                         continue;
                     }
@@ -92,30 +93,30 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 if (caller.DeclaringType.FullName != enumeratorDef.DeclaringType.FullName) {
                     var option = new MonoModCommon.Structure.MapOption(typeReplace: new() { { enumeratorDef.DeclaringType, caller.DeclaringType } });
-                    var oldEnumeratorDef = enumeratorDef;
+                    TypeDefinition oldEnumeratorDef = enumeratorDef;
                     enumeratorDef = MonoModCommon.Structure.MemberClonedType(enumeratorDef, enumeratorDef.Name, option.TypeReplaceMap);
 
                     static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
                         yield return (oldTypeDef, newTypeDef);
-                        foreach (var newNestedType in newTypeDef.NestedTypes) {
-                            var oldNestedType = oldTypeDef.NestedTypes.Single(ont => ont.Name == newNestedType.Name);
-                            foreach (var pair in GetTypeReplacePairs(oldNestedType, newNestedType)) {
+                        foreach (TypeDefinition? newNestedType in newTypeDef.NestedTypes) {
+                            TypeDefinition oldNestedType = oldTypeDef.NestedTypes.Single(ont => ont.Name == newNestedType.Name);
+                            foreach ((TypeDefinition otype, TypeDefinition ntype) pair in GetTypeReplacePairs(oldNestedType, newNestedType)) {
                                 yield return pair;
                             }
                         }
                     }
-                    foreach (var (otype, ntype) in GetTypeReplacePairs(oldEnumeratorDef, enumeratorDef)) {
-                        foreach (var method in ntype.Methods) {
+                    foreach ((TypeDefinition? otype, TypeDefinition? ntype) in GetTypeReplacePairs(oldEnumeratorDef, enumeratorDef)) {
+                        foreach (MethodDefinition? method in ntype.Methods) {
                             if (method.IsConstructor) {
                                 continue;
                             }
-                            var omethod = otype.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == method.GetIdentifier(withDeclaring: false));
+                            MethodDefinition omethod = otype.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == method.GetIdentifier(withDeclaring: false));
                             mappedMethod.contextBoundMethods.Add(method.GetIdentifier(), method);
                             mappedMethod.originalToContextBound.Add(omethod.GetIdentifier(), method);
                         }
                     }
 
-                    foreach (var redirectInst in caller.Body.Instructions) {
+                    foreach (Instruction? redirectInst in caller.Body.Instructions) {
                         if (redirectInst.Operand is TypeReference typeRef) {
                             redirectInst.Operand = MonoModCommon.Structure.DeepMapTypeReference(typeRef, option);
                         }
@@ -123,12 +124,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             redirectInst.Operand = MonoModCommon.Structure.DeepMapMethodReference(methodRef, option);
                         }
                         else if (redirectInst.Operand is FieldReference fieldRef) {
-                            var fieldDef = fieldRef.Resolve();
+                            FieldDefinition? fieldDef = fieldRef.Resolve();
                             if (fieldDef is null) {
                                 continue;
                             }
-                            var declaringType = fieldRef.DeclaringType;
-                            if (option.TypeReplaceMap.TryGetValue(declaringType.Resolve(), out var mappedDeclaringType)
+                            TypeReference declaringType = fieldRef.DeclaringType;
+                            if (option.TypeReplaceMap.TryGetValue(declaringType.Resolve(), out TypeDefinition? mappedDeclaringType)
                                 && mappedDeclaringType.Fields.Any(f => f.Name == fieldDef.Name && f.IsStatic == fieldDef.IsStatic)) {
                                 declaringType = MonoModCommon.Structure.DeepMapTypeReference(fieldRef.DeclaringType, option);
                             }
@@ -142,7 +143,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 FieldDefinition contextFieldDef;
                 ParameterDefinition captureParameter;
 
-                if (arguments.ContextTypes.TryGetValue(caller.DeclaringType.FullName, out var contextBoundType)) {
+                if (arguments.ContextTypes.TryGetValue(caller.DeclaringType.FullName, out ContextTypeData? contextBoundType)) {
                     contextFieldDef = new FieldDefinition("<>4__this", FieldAttributes.Public, contextBoundType.ContextTypeDef);
                     enumeratorDef.Fields.Add(contextFieldDef);
                     captureParameter = caller.Body.ThisParameter;
@@ -158,12 +159,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 TypeReference enumeratorRef;
                 FieldReference contextFieldRef;
-                if (!processedEnumerator.TryGetValue(enumeratorDef.FullName, out var enumeratorInfo)) {
+                if (!processedEnumerator.TryGetValue(enumeratorDef.FullName, out (TypeReference enumeratorRef, FieldReference contextFieldRef) enumeratorInfo)) {
                     enumeratorRef = enumeratorDef;
                     contextFieldRef = contextFieldDef;
                     if (enumeratorDef.DeclaringType.HasGenericParameters) {
                         var enumeratorGenericRef = new GenericInstanceType(enumeratorDef);
-                        foreach (var genericParam in enumeratorDef.DeclaringType.GenericParameters) {
+                        foreach (GenericParameter? genericParam in enumeratorDef.DeclaringType.GenericParameters) {
                             enumeratorGenericRef.GenericArguments.Add(genericParam);
                         }
                         enumeratorRef = enumeratorGenericRef;
@@ -176,11 +177,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     contextFieldRef = enumeratorInfo.contextFieldRef;
                 }
 
-                var afterCreateEnumerator = caller.Body.Instructions.Single(
+                Instruction afterCreateEnumerator = caller.Body.Instructions.Single(
                     x =>
                     x.OpCode == OpCodes.Newobj && ((MethodReference)x.Operand).DeclaringType.TryResolve()?.FullName == enumeratorDef.FullName)
                     .Next;
-                var ilProcessor = caller.Body.GetILProcessor();
+                ILProcessor ilProcessor = caller.Body.GetILProcessor();
                 ilProcessor.InsertBeforeSeamlessly(ref afterCreateEnumerator, [
                     Instruction.Create(OpCodes.Dup),
                     MonoModCommon.IL.BuildParameterLoad(caller, caller.Body, captureParameter),
@@ -189,19 +190,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 ProcessEnumeratorMethod(arguments, mappedMethod, enumeratorDef, contextFieldDef, caller);
 
-                foreach (var enumerMethod in enumeratorDef.Methods) {
+                foreach (MethodDefinition? enumerMethod in enumeratorDef.Methods) {
                     if (!enumerMethod.Name.OrdinalEndsWith(".GetEnumerator") || !enumerMethod.HasBody) {
                         continue;
                     }
-                    var body = enumerMethod.Body.Instructions;
-                    var createSelf = body.FirstOrDefault(
+                    Collection<Instruction> body = enumerMethod.Body.Instructions;
+                    Instruction? createSelf = body.FirstOrDefault(
                         x =>
                         x is Instruction { OpCode.Code: Code.Newobj, Operand: MethodReference mr } &&
                         mr.DeclaringType.FullName == enumeratorDef.FullName);
                     if (createSelf is null) {
                         continue;
                     }
-                    if (!MonoModCommon.IL.TryGetReferencedVariable(enumerMethod, createSelf.Next, out var local)) {
+                    if (!MonoModCommon.IL.TryGetReferencedVariable(enumerMethod, createSelf.Next, out VariableDefinition? local)) {
                         throw new Exception($"Failed to get created enumerator variable in {enumerMethod.GetDebugName()}");
                     }
                     body.InsertRange(
@@ -228,18 +229,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             FieldReference selfContextFieldRef = contextFieldDef;
             if (enumeratorDef.HasGenericParameters) {
                 var selfEnumeratorGenericRef = new GenericInstanceType(enumeratorDef);
-                foreach (var genericParam in enumeratorDef.GenericParameters) {
+                foreach (GenericParameter? genericParam in enumeratorDef.GenericParameters) {
                     selfEnumeratorGenericRef.GenericArguments.Add(genericParam);
                 }
                 selfEnumeratorRef = selfEnumeratorGenericRef;
                 selfContextFieldRef = new FieldReference(contextFieldDef.Name, contextFieldDef.FieldType, selfEnumeratorRef);
             }
 
-            foreach (var enumeratorMethod in enumeratorDef.Methods) {
+            foreach (MethodDefinition? enumeratorMethod in enumeratorDef.Methods) {
                 if (enumeratorMethod.IsConstructor) {
                     continue;
                 }
-                foreach (var inst in enumeratorMethod.Body.Instructions.ToArray()) {
+                foreach (Instruction? inst in enumeratorMethod.Body.Instructions.ToArray()) {
                     switch (inst.OpCode.Code) {
                         case Code.Ldsfld:
                             HandleLoadStaticField(inst, enumeratorMethod, false, arguments, contextFieldDef, selfContextFieldRef);
@@ -265,18 +266,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             var option = MonoModCommon.Structure.MapOption.Create(providers: [(enumeratorMethod.DeclaringType.DeclaringType, enumeratorMethod.DeclaringType)]);
             calleeRef = MonoModCommon.Structure.DeepMapMethodReference(calleeRef, option);
-            if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out var contextBoundMethodDef, out var vanillaCallee, out var contextProvider)) {
+            if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out MethodDefinition? contextBoundMethodDef, out MethodReference? vanillaCallee, out ContextTypeData? contextProvider)) {
                 return;
             }
 
             // Generate context loading instructions
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextProvider);
+            Instruction[] loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextProvider);
             this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, enumeratorMethod, calleeRef, vanillaCallee, contextProvider, loadInstanceInsts);
         }
 
         void HandleStoreStaticField(Instruction instruction, MethodDefinition generatedMethod, PatcherArguments arguments, FieldDefinition captureContextField, FieldReference captureContextFieldRef) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out FieldDefinition? contextBoundFieldDef)) {
                 return;
             }
 
@@ -285,13 +286,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
             }
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextType);
+            Instruction[] loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextType);
             this.InjectContextFieldStoreInstanceLoads(arguments, ref instruction, out _, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
 
         void HandleLoadStaticField(Instruction instruction, MethodDefinition generatedMethod, bool isAddress, PatcherArguments arguments, FieldDefinition captureContextField, FieldReference captureContextFieldRef) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out FieldDefinition? contextBoundFieldDef)) {
                 return;
             }
 
@@ -300,7 +301,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
             }
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextType);
+            Instruction[] loadInstanceInsts = BuildContextLoadInstrs(arguments, captureContextField, captureContextFieldRef, contextType);
             this.InjectContextFieldLoadInstanceLoads(arguments, ref instruction, out _, isAddress, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
         /// <summary>
@@ -314,7 +315,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         static Instruction[] BuildContextLoadInstrs(PatcherArguments arguments, FieldDefinition captureContextField, FieldReference captureContextFieldRef, ContextTypeData? requestedContextType) {
             List<Instruction> result = [];
 
-            var closureContextType = captureContextField.FieldType;
+            TypeReference closureContextType = captureContextField.FieldType;
 
             if (requestedContextType is not null && closureContextType.FullName == requestedContextType.ContextTypeDef.FullName) {
                 return [
@@ -323,7 +324,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ];
             }
             // If context of closure is member of root context
-            if (arguments.ContextTypes.TryGetValue(closureContextType.FullName, out var callerDeclaringInstanceConvdType)) {
+            if (arguments.ContextTypes.TryGetValue(closureContextType.FullName, out ContextTypeData? callerDeclaringInstanceConvdType)) {
                 result.Add(Instruction.Create(OpCodes.Ldarg_0));
                 result.Add(Instruction.Create(OpCodes.Ldfld, captureContextFieldRef));
                 result.Add(Instruction.Create(OpCodes.Ldfld, callerDeclaringInstanceConvdType.rootContextField));
@@ -338,7 +339,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             if (requestedContextType is not null) {
-                foreach (var field in requestedContextType.nestedChain) {
+                foreach (FieldDefinition field in requestedContextType.nestedChain) {
                     result.Add(Instruction.Create(OpCodes.Ldfld, field));
                 }
             }

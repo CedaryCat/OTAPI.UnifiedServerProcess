@@ -21,7 +21,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Infrastructure
                 return;
             }
 
-            analyzers.StaticFieldModificationAnalyzer.FetchModifiedFields(entryPoint, initOnlys, out var fields, out var initOnlyFields);
+            analyzers.StaticFieldModificationAnalyzer.FetchModifiedFields(entryPoint, initOnlys, out FieldDefinition[]? fields, out FieldDefinition[]? initOnlyFields);
             File.WriteAllLines(modifiedStaticFieldCacheFile, modifiedStaticFields = fields.Select(f => f.FullName).ToArray());
             File.WriteAllLines(initModifiedStaticFieldCacheFile, modifiedStaticFieldsWhenInit = initOnlyFields.Select(f => f.FullName).ToArray());
         }

@@ -33,14 +33,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             Dictionary<string, MethodDefinition> fixedInterfaceMethods = [];
             Dictionary<string, TypeDefinition> implicitContexts = [];
             Dictionary<string, TypeDefinition> implicitContextsIncremental = [];
-            var modules = source.MainModule;
+            ModuleDefinition modules = source.MainModule;
             var contextTypes = source.OriginalToContextType.Values.ToDictionary(t => t.ContextTypeDef.FullName, t => t.ContextTypeDef).ToImmutableDictionary();
 
-            foreach (var type in modules.GetAllTypes()) {
+            foreach (TypeDefinition? type in modules.GetAllTypes()) {
                 if (type.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
-                if (source.OriginalToContextType.TryGetValue(type.FullName, out var contextType) && contextType.IsReusedSingleton) {
+                if (source.OriginalToContextType.TryGetValue(type.FullName, out ContextTypeData? contextType) && contextType.IsReusedSingleton) {
                     continue;
                 }
                 if (contextTypes.ContainsKey(type.FullName)) {
@@ -56,15 +56,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         }
 
         private void ContextualStaticField(PatcherArgumentSource source, Dictionary<string, TypeDefinition> implicitContexts, ModuleDefinition modules, ImmutableDictionary<string, TypeDefinition> contextTypes) {
-            foreach (var type in modules.GetAllTypes().ToArray()) {
+            foreach (TypeDefinition? type in modules.GetAllTypes().ToArray()) {
                 if (type.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
-                foreach (var field in type.Fields) {
+                foreach (FieldDefinition? field in type.Fields) {
                     if (!field.IsStatic) {
                         continue;
                     }
-                    var fieldType = field.FieldType.TryResolve();
+                    TypeDefinition? fieldType = field.FieldType.TryResolve();
                     if (fieldType is null || !implicitContexts.ContainsKey(fieldType.FullName)) {
                         continue;
                     }
@@ -74,7 +74,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     if (source.OriginalToInstanceConvdField.ContainsKey(field.GetIdentifier())) {
                         continue;
                     }
-                    if (!source.OriginalToContextType.TryGetValue(field.DeclaringType.FullName, out var contextType)) {
+                    if (!source.OriginalToContextType.TryGetValue(field.DeclaringType.FullName, out ContextTypeData? contextType)) {
                         contextType = new ContextTypeData(field.DeclaringType, source.RootContextDef, methodCallGraph.MediatedCallGraph, ref source.OriginalToContextType);
                     }
                     var newfield = new FieldDefinition(field.Name, field.Attributes & ~FieldAttributes.Static, field.FieldType);
@@ -86,28 +86,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         }
 
         private void DiffusionFixInterface(PatcherArgumentSource source, Dictionary<string, MethodDefinition> fixedInterfaceMethods, Dictionary<string, TypeDefinition> implicitContexts, Dictionary<string, TypeDefinition> implicitContextsIncremental) {
-            foreach (var type in source.OriginalToContextType.Values) {
+            foreach (ContextTypeData type in source.OriginalToContextType.Values) {
                 implicitContextsIncremental.Add(type.ContextTypeDef.FullName, type.ContextTypeDef);
             }
 
             while (implicitContextsIncremental.Count > 0) {
-                var types = implicitContextsIncremental.Values.ToArray();
-                foreach (var type in types) {
+                TypeDefinition[] types = implicitContextsIncremental.Values.ToArray();
+                foreach (TypeDefinition? type in types) {
                     implicitContexts.TryAdd(type.FullName, type);
                 }
 
                 implicitContextsIncremental.Clear();
 
-                foreach (var type in types) {
-                    foreach (var method in type.Methods) {
+                foreach (TypeDefinition? type in types) {
+                    foreach (MethodDefinition? method in type.Methods) {
                         if (method.IsStatic) {
                             continue;
                         }
-                        if (!methodCallGraph.MethodInheritanceGraph.ImmediateInheritanceChains.TryGetValue(method.GetIdentifier(), out var baseMethods)) {
+                        if (!methodCallGraph.MethodInheritanceGraph.ImmediateInheritanceChains.TryGetValue(method.GetIdentifier(), out MethodDefinition[]? baseMethods)) {
                             continue;
                         }
                         List<MethodDefinition> interfaceMethods = [];
-                        foreach (var interfaceMethod in baseMethods) {
+                        foreach (MethodDefinition interfaceMethod in baseMethods) {
                             if (!interfaceMethod.DeclaringType.IsInterface) {
                                 continue;
                             }
@@ -122,9 +122,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         if (!this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, method)) {
                             continue;
                         }
-                        foreach (var interfaceMethod in interfaceMethods) {
+                        foreach (MethodDefinition interfaceMethod in interfaceMethods) {
                             fixedInterfaceMethods.TryAdd(interfaceMethod.GetIdentifier(), interfaceMethod);
-                            foreach (var impl in methodCallGraph.MethodInheritanceGraph.RawMethodImplementationChains[interfaceMethod.GetIdentifier()]) {
+                            foreach (MethodDefinition impl in methodCallGraph.MethodInheritanceGraph.RawMethodImplementationChains[interfaceMethod.GetIdentifier()]) {
                                 if (impl.DeclaringType.IsInterface) {
                                     continue;
                                 }
@@ -139,22 +139,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     }
                 }
 
-                foreach (var incremental in implicitContextsIncremental.Values) {
+                foreach (TypeDefinition incremental in implicitContextsIncremental.Values) {
                     AddRootContextField(source, incremental);
                 }
             }
         }
 
         private bool AnyExternalInterfaceUsedContext(PatcherArgumentSource source, TypeDefinition type, Dictionary<string, MethodDefinition> fixedInterfaceMethods) {
-            foreach (var methodDef in type.Methods) {
+            foreach (MethodDefinition? methodDef in type.Methods) {
                 Dictionary<string, MethodDefinition> allInheritances = [];
-                if (inheritanceGraph.ImmediateInheritanceChains.TryGetValue(methodDef.GetIdentifier(), out var baseMethods)) {
-                    foreach (var baseMethod in baseMethods) {
+                if (inheritanceGraph.ImmediateInheritanceChains.TryGetValue(methodDef.GetIdentifier(), out MethodDefinition[]? baseMethods)) {
+                    foreach (MethodDefinition baseMethod in baseMethods) {
                         allInheritances.TryAdd(baseMethod.GetIdentifier(), baseMethod);
                     }
                 }
-                if (inheritanceGraph.CheckedMethodImplementationChains.TryGetValue(methodDef.GetIdentifier(), out var implMethods)) {
-                    foreach (var implMethod in implMethods) {
+                if (inheritanceGraph.CheckedMethodImplementationChains.TryGetValue(methodDef.GetIdentifier(), out MethodDefinition[]? implMethods)) {
+                    foreach (MethodDefinition implMethod in implMethods) {
                         allInheritances.TryAdd(implMethod.GetIdentifier(), implMethod);
                     }
                 }
@@ -167,7 +167,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
         public bool AnyExternalInterfaceMethodUsedContext(PatcherArgumentSource source, MethodDefinition[] checkMethods, Dictionary<string, MethodDefinition> fixedInterfaceMethods) {
             bool anyExternalInterface = false;
-            foreach (var check in checkMethods) {
+            foreach (MethodDefinition check in checkMethods) {
                 if (check.DeclaringType.IsInterface && check.DeclaringType.Module.Name != source.MainModule.Name) {
                     fixedInterfaceMethods.TryAdd(check.GetIdentifier(), check);
                     anyExternalInterface = true;
@@ -175,7 +175,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 }
             }
             if (anyExternalInterface) {
-                foreach (var check in checkMethods) {
+                foreach (MethodDefinition check in checkMethods) {
                     if (this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, check)) {
                         return true;
                     }
@@ -185,7 +185,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         }
 
         private static void AddRootContextField(PatcherArgumentSource source, TypeDefinition type) {
-            var rootContextDef = source.RootContextDef;
+            TypeDefinition rootContextDef = source.RootContextDef;
             if (type.Fields.Any(f => f.FieldType.FullName == rootContextDef.FullName)) {
                 return;
             }
@@ -193,12 +193,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             type.Fields.Add(rootField);
             source.RootContextFieldToAdaptExternalInterface.Add(type.FullName, rootField);
 
-            foreach (var ctor in type.Methods.Where(m => m.IsConstructor && !m.IsStatic)) {
+            foreach (MethodDefinition? ctor in type.Methods.Where(m => m.IsConstructor && !m.IsStatic)) {
                 var rootParam = new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, rootContextDef);
                 PatchingCommon.InsertParamAt0AndRemapIndices(ctor.Body, PatchingCommon.InsertParamMode.Insert, rootParam);
-                var insertTarget = MonoModCommon.IL.GetBaseConstructorCall(ctor.Body)?.Next;
+                Instruction? insertTarget = MonoModCommon.IL.GetBaseConstructorCall(ctor.Body)?.Next;
                 insertTarget ??= ctor.Body.Instructions.First();
-                var ilProcessor = ctor.Body.GetILProcessor();
+                ILProcessor ilProcessor = ctor.Body.GetILProcessor();
                 ilProcessor.InsertBefore(insertTarget, Instruction.Create(OpCodes.Ldarg_0));
                 ilProcessor.InsertBefore(insertTarget, MonoModCommon.IL.BuildParameterLoad(ctor, ctor.Body, rootParam));
                 ilProcessor.InsertBefore(insertTarget, Instruction.Create(OpCodes.Stfld, rootField));

@@ -27,7 +27,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
             if (implicitCallMode == ImplicitCallMode.Inheritance && DirectlyCalledMethod.HasBody) {
                 yield return DirectlyCalledMethod;
             }
-            foreach (var method in ImplicitlyCalledMethods) {
+            foreach (MethodDefinition method in ImplicitlyCalledMethods) {
                 if (method.HasBody) {
                     yield return method;
                 }
@@ -37,7 +37,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis
             return DirectlyCalledMethod.GetIdentifier().GetHashCode();
         }
         public readonly bool Equals(MethodReferenceData other) => DirectlyCalledMethod.GetIdentifier() == other.DirectlyCalledMethod.GetIdentifier();
-        public readonly override string ToString() {
+        public override readonly string ToString() {
             return $"{DirectlyCalledMethod.GetDebugName()} ({implicitCallMode}, ImplicitCount: {ImplicitlyCalledMethods.Length})";
         }
     }

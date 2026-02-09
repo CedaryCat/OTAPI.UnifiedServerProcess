@@ -18,7 +18,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
         public readonly ParameterDefinition TracingParameter = parameter;
         public readonly ImmutableArray<MemberAccessStep> ModificationAccessPath = [.. accessChain];
         public override string ToString() {
-            var paramName = TracingParameter.GetDebugName();
+            string paramName = TracingParameter.GetDebugName();
             if (!ModificationAccessPath.IsEmpty) {
                 return $"{{ ${paramName}.{string.Join(".", ModificationAccessPath.Select(m => m.Name))} }}";
             }

@@ -53,8 +53,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 throw new ArgumentOutOfRangeException(nameof(parameterIndex), $"Parameter index {parameterIndex} is out of range for method '{method.GetIdentifier()}'.");
             }
 
-            var oldType = method.Parameters[parameterIndex].ParameterType.FullName;
-            var newType = newParameterType.FullName;
+            string oldType = method.Parameters[parameterIndex].ParameterType.FullName;
+            string newType = newParameterType.FullName;
 
             if (!_before.ContainsKey(method)) {
                 _before.Add(method, MethodSnapshot.Capture(method));
@@ -82,8 +82,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             ArgumentNullException.ThrowIfNull(method);
             ArgumentNullException.ThrowIfNull(newReturnType);
 
-            var oldType = method.ReturnType.FullName;
-            var newType = newReturnType.FullName;
+            string oldType = method.ReturnType.FullName;
+            string newType = newReturnType.FullName;
 
             if (string.Equals(oldType, newType, StringComparison.Ordinal)) {
                 return;
@@ -119,8 +119,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
                 ValidateCompatible(beforeSnapshot, afterSnapshot);
 
-                var hasPlannedParamChanges = _paramTypeChanges.TryGetValue(method, out var expectedParamChanges) && expectedParamChanges.Count > 0;
-                var hasPlannedReturnChange = _returnTypeChanges.ContainsKey(method);
+                bool hasPlannedParamChanges = _paramTypeChanges.TryGetValue(method, out var expectedParamChanges) && expectedParamChanges.Count > 0;
+                bool hasPlannedReturnChange = _returnTypeChanges.ContainsKey(method);
 
                 if (!hasPlannedParamChanges && !hasPlannedReturnChange) {
                     throw new InvalidOperationException($"Method '{beforeSnapshot.Identifier}' is in the session but has no planned signature changes.");
@@ -138,8 +138,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 }
                 ValidateOnlyExpectedReturnTypeChanges(beforeSnapshot, afterSnapshot, expectedReturnChange);
 
-                var oldId = beforeSnapshot.Identifier;
-                var newId = afterSnapshot.Identifier;
+                string oldId = beforeSnapshot.Identifier;
+                string newId = afterSnapshot.Identifier;
 
                 if (string.Equals(oldId, newId, StringComparison.Ordinal)) {
                     continue;
@@ -177,8 +177,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             Dictionary<int, (string OldType, string NewType)> expectedChanges) {
 
             for (int i = 0; i < before.ParameterTypeFullNames.Length; i++) {
-                var oldType = before.ParameterTypeFullNames[i];
-                var newType = after.ParameterTypeFullNames[i];
+                string oldType = before.ParameterTypeFullNames[i];
+                string newType = after.ParameterTypeFullNames[i];
 
                 if (expectedChanges.TryGetValue(i, out var expected)) {
                     if (!string.Equals(expected.OldType, oldType, StringComparison.Ordinal)) {
@@ -201,8 +201,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             MethodSnapshot after,
             (string OldType, string NewType)? expectedChange) {
 
-            var oldType = before.ReturnTypeFullName;
-            var newType = after.ReturnTypeFullName;
+            string oldType = before.ReturnTypeFullName;
+            string newType = after.ReturnTypeFullName;
 
             if (expectedChange is { } expected) {
                 if (!string.Equals(expected.OldType, oldType, StringComparison.Ordinal)) {

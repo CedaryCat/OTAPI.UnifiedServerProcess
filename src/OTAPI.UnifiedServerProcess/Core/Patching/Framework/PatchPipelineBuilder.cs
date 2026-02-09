@@ -18,7 +18,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
             where TSource : Argument, IArgumentSource<TSource, TResult>
             where TResult : Argument {
 
-            var result = new ArgumentConfigurator<TSource, TResult>(logger, this, (TSource)source);
+            ArgumentConfigurator<TSource, TResult> result = new ArgumentConfigurator<TSource, TResult>(logger, this, (TSource)source);
             return result;
         }
     }

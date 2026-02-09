@@ -17,7 +17,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.Framework
         public sealed override string Name => currentName;
         public TResult Build(TSource args) {
 
-            foreach (var processor in processors) {
+            foreach (IArgumentBuildProcessor<TSource> processor in processors) {
                 currentName = processor.GetType().Name;
                 processor.Apply(this, ref args);
             }

@@ -7,6 +7,7 @@ using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
+using OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -36,11 +37,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
         private void AnalyizeOrPatch(FilterArgumentSource source, bool patch, Dictionary<string, Dictionary<string, List<MethodDefinition>>> methodsCallStacks, Dictionary<string, int> multipleCalls) {
 
-            var globalInitializer = source.MainModule.GetType(Constants.GlobalInitializerTypeName);
-            var initializerAttribute = source.MainModule.GetType(Constants.InitializerAttributeTypeName);
+            TypeDefinition globalInitializer = source.MainModule.GetType(Constants.GlobalInitializerTypeName);
+            TypeDefinition initializerAttribute = source.MainModule.GetType(Constants.InitializerAttributeTypeName);
 
-            var main_PostContentLoadInitialize = source.MainModule.GetType("Terraria.Main").GetMethod("PostContentLoadInitialize");
-            var main_LoadPlayers = source.MainModule.GetType("Terraria.Main").GetMethod("LoadPlayers");
+            MethodDefinition main_PostContentLoadInitialize = source.MainModule.GetType("Terraria.Main").GetMethod("PostContentLoadInitialize");
+            MethodDefinition main_LoadPlayers = source.MainModule.GetType("Terraria.Main").GetMethod("LoadPlayers");
 
             var workQueue = new Stack<MethodDefinition>(source.InitialMethods);
             var visited = new Dictionary<string, MethodDefinition>() {
@@ -48,19 +49,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 {main_LoadPlayers.GetIdentifier(), main_LoadPlayers},
             };
 
-            while (workQueue.TryPop(out var method)) {
+            while (workQueue.TryPop(out MethodDefinition? method)) {
                 var mid = method.GetIdentifier();
                 if (!visited.TryAdd(mid, method)) {
                     continue;
                 }
 
-                if (!methodsCallStacks.TryGetValue(mid, out var callStacks)) {
+                if (!methodsCallStacks.TryGetValue(mid, out Dictionary<string, List<MethodDefinition>>? callStacks)) {
                     callStacks = new() {
                         { method.GetDebugName(), [method] },
                     };
                 }
 
-                var firstCallPath = callStacks.First();
+                KeyValuePair<string, List<MethodDefinition>> firstCallPath = callStacks.First();
 
                 ProcessMethod(
                     method,
@@ -70,17 +71,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     initializerAttribute,
                     firstCallPath.Value,
                     multipleCalls,
-                    out var addedCallees
+                    out MethodDefinition[]? addedCallees
                 );
 
-                foreach (var callee in addedCallees) {
+                foreach (MethodDefinition callee in addedCallees) {
                     var calleeID = callee.GetIdentifier();
                     if (visited.ContainsKey(calleeID)) {
                         continue;
                     }
 
                     var calleeCallStack = firstCallPath.Key + " → " + callee.GetDebugName();
-                    if (!methodsCallStacks.TryGetValue(calleeID, out var calleeCallPaths)) {
+                    if (!methodsCallStacks.TryGetValue(calleeID, out Dictionary<string, List<MethodDefinition>>? calleeCallPaths)) {
                         methodsCallStacks.Add(calleeID, calleeCallPaths = []);
                     }
 
@@ -108,27 +109,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 return;
             }
 
-            if (MethodCallGraph.MediatedCallGraph.TryGetValue(method.GetIdentifier(), out var calls)) {
-                foreach (var useds in calls.UsedMethods) {
-                    foreach (var call in useds.ImplementedMethods()) {
+            if (MethodCallGraph.MediatedCallGraph.TryGetValue(method.GetIdentifier(), out MethodCallData? calls)) {
+                foreach (MethodReferenceData useds in calls.UsedMethods) {
+                    foreach (MethodDefinition call in useds.ImplementedMethods()) {
                         myCalingMethods.TryAdd(call.GetIdentifier(), call);
                     }
                 }
             }
 
-            var staticFieldReferenceAnalyzer = analyzers.StaticFieldReferenceAnalyzer;
-            staticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(method.GetIdentifier(), out var staticFieldReferenceData);
-            var typeInheritanceGraph = analyzers.TypeInheritanceGraph;
-            var paramModificationAnalyzer = analyzers.ParamModificationAnalyzer;
+            StaticFieldReferenceAnalyzer staticFieldReferenceAnalyzer = analyzers.StaticFieldReferenceAnalyzer;
+            staticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(method.GetIdentifier(), out StaticFieldUsageTrack? staticFieldReferenceData);
+            TypeInheritanceGraph typeInheritanceGraph = analyzers.TypeInheritanceGraph;
+            ParamModificationAnalyzer paramModificationAnalyzer = analyzers.ParamModificationAnalyzer;
 
-            var jumpSites = this.GetMethodJumpSites(method);
+            Dictionary<Instruction, List<Instruction>> jumpSites = this.GetMethodJumpSites(method);
 
             Dictionary<string, HashSet<Instruction>> fieldModificationInstructions = [];
             Dictionary<string, HashSet<Instruction>> fieldReferenceInstructions = [];
 
             void AddFieldModification(MethodDefinition method, Dictionary<string, HashSet<Instruction>> dict, FieldDefinition field, Instruction instruction) {
                 var id = field.GetIdentifier();
-                if (!dict.TryGetValue(id, out var instructions)) {
+                if (!dict.TryGetValue(id, out HashSet<Instruction>? instructions)) {
                     dict.Add(id, instructions = []);
                 }
 
@@ -137,23 +138,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 if (MonoModCommon.Stack.GetPopCount(method.Body, instruction) > 0) {
                     ExtractSources(this, method, tmp, instruction);
                 }
-                foreach (var inst in tmp) {
+                foreach (Instruction inst in tmp) {
                     instructions.Add(inst);
                 }
 
                 if (MonoModCommon.Stack.GetPushCount(method.Body, instruction) > 0) {
                     TraceUsage(this, method, tmp, instruction);
                 }
-                foreach (var inst in tmp) {
+                foreach (Instruction inst in tmp) {
                     instructions.Add(inst);
                 }
             }
 
-            foreach (var instruction in method.Body.Instructions) {
+            foreach (Instruction? instruction in method.Body.Instructions) {
 
                 switch (instruction.OpCode.Code) {
                     case Code.Stfld: {
-                            var field = ((FieldReference)instruction.Operand).TryResolve();
+                            FieldDefinition? field = ((FieldReference)instruction.Operand).TryResolve();
                             if (field is null) {
                                 continue;
                             }
@@ -161,16 +162,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 continue;
                             }
 
-                            foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
-                                var loadModifyingInstance = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
+                            foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                                MonoModCommon.Stack.StackTopTypePath loadModifyingInstance = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)
                                     .First();
 
-                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var stackValueTrace)) {
+                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                     continue;
                                 }
 
-                                foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
-                                    foreach (var part in willBeModified.PartTracingPaths) {
+                                foreach (StaticFieldProvenance willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                    foreach (StaticFieldTracingChain part in willBeModified.PartTracingPaths) {
                                         if (part.EncapsulationHierarchy.Length == 0) {
                                             if (!source.InitialStaticFields.ContainsKey(willBeModified.TracingStaticField.GetIdentifier())) {
                                                 continue;
@@ -193,25 +194,25 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                             var isNewObj = instruction.OpCode == OpCodes.Newobj;
                             var calleeRef = (MethodReference)instruction.Operand;
-                            var resolvedCallee = calleeRef.TryResolve();
+                            MethodDefinition? resolvedCallee = calleeRef.TryResolve();
 
                             var calleeId = calleeRef.GetIdentifier();
                             multipleCalls.TryAdd(calleeId, 0);
                             multipleCalls[calleeId]++;
 
                             // Get all implementations of the called method
-                            var implementations = this.GetMethodImplementations(method, instruction, jumpSites, out _);
+                            MethodDefinition[] implementations = this.GetMethodImplementations(method, instruction, jumpSites, out _);
 
                             if (staticFieldReferenceData is null) {
                                 continue;
                             }
 
                             // Analyze the parameters of the called method
-                            var paramPaths = MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites);
+                            MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paramPaths = MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites);
                             MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths = new MonoModCommon.Stack.StackTopTypePath[paramPaths.Length][];
 
                             for (int i = 0; i < loadParamsInEveryPaths.Length; i++) {
-                                var path = paramPaths[i];
+                                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path = paramPaths[i];
                                 loadParamsInEveryPaths[i] = new MonoModCommon.Stack.StackTopTypePath[path.ParametersSources.Length];
                                 for (int j = 0; j < path.ParametersSources.Length; j++) {
                                     loadParamsInEveryPaths[i][j] = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[j].Instructions.Last(), jumpSites).First();
@@ -228,14 +229,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 // The called method return a reference
                                 || (calleeRef.ReturnType is ByReferenceType && calleeRef.Name is "get_Item")) {
 
-                                foreach (var paramGroup in loadParamsInEveryPaths) {
-                                    var loadInstance = paramGroup[0];
+                                foreach (MonoModCommon.Stack.StackTopTypePath[] paramGroup in loadParamsInEveryPaths) {
+                                    MonoModCommon.Stack.StackTopTypePath loadInstance = paramGroup[0];
 
-                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction), out var stackValueTrace)) {
+                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction), out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                    foreach (StaticFieldProvenance willBeModified in stackValueTrace.TracedStaticFields.Values) {
                                         if (!source.InitialStaticFields.ContainsKey(willBeModified.TracingStaticField.GetIdentifier())) {
                                             continue;
                                         }
@@ -254,9 +255,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 continue;
                             }
 
-                            foreach (var implCallee in implementations) {
+                            foreach (MethodDefinition implCallee in implementations) {
 
-                                foreach (var paramGroup in loadParamsInEveryPaths) {
+                                foreach (MonoModCommon.Stack.StackTopTypePath[] paramGroup in loadParamsInEveryPaths) {
                                     for (int paramIndex = 0; paramIndex < paramGroup.Length; paramIndex++) {
 
                                         var paramIndexInImpl = paramIndex;
@@ -280,33 +281,33 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                             continue;
                                         }
 
-                                        var loadParam = paramGroup[paramIndex];
+                                        MonoModCommon.Stack.StackTopTypePath loadParam = paramGroup[paramIndex];
 
                                         // If the callMethod do not modify any Parameter, skip
-                                        if (!paramModificationAnalyzer.ModifiedParameters.TryGetValue(implCallee.GetIdentifier(), out var modifiedParameters)) {
+                                        if (!paramModificationAnalyzer.ModifiedParameters.TryGetValue(implCallee.GetIdentifier(), out System.Collections.Immutable.ImmutableDictionary<int, ParameterMutationInfo>? modifiedParameters)) {
                                             continue;
                                         }
                                         // If the input argument is not modified by the callMethod, skip
-                                        if (!modifiedParameters.TryGetValue(paramIndex, out var modifiedParameter)) {
+                                        if (!modifiedParameters.TryGetValue(paramIndex, out ParameterMutationInfo? modifiedParameter)) {
                                             continue;
                                         }
 
                                         // If the input argument is not coming from a static staticField, skip
                                         if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
                                             StaticFieldUsageTrack.GenerateStackKey(method, loadParam.RealPushValueInstruction),
-                                            out var stackValueTrace)) {
+                                            out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                             continue;
                                         }
 
-                                        foreach (var referencedStaticField in stackValueTrace.TracedStaticFields.Values) {
+                                        foreach (StaticFieldProvenance referencedStaticField in stackValueTrace.TracedStaticFields.Values) {
                                             if (!source.InitialStaticFields.ContainsKey(referencedStaticField.TracingStaticField.GetIdentifier())) {
                                                 continue;
                                             }
 
                                             List<MemberAccessStep[]> chains = [];
-                                            foreach (var part in referencedStaticField.PartTracingPaths) {
-                                                foreach (var willBeModified in modifiedParameters.Values) {
-                                                    foreach (var modification in willBeModified.Mutations) {
+                                            foreach (StaticFieldTracingChain part in referencedStaticField.PartTracingPaths) {
+                                                foreach (ParameterMutationInfo willBeModified in modifiedParameters.Values) {
+                                                    foreach (ModifiedComponent modification in willBeModified.Mutations) {
                                                         if (part.EncapsulationHierarchy.Length > 0) {
                                                             if (modification.ModificationAccessPath.Length <= part.EncapsulationHierarchy.Length) {
                                                                 continue;
@@ -351,14 +352,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             goto case Code.Stsfld;
                         }
                     case Code.Stsfld: {
-                            var field = ((FieldReference)instruction.Operand).TryResolve();
+                            FieldDefinition? field = ((FieldReference)instruction.Operand).TryResolve();
                             if (field is null) {
                                 break;
                             }
                             if (!source.InitialStaticFields.ContainsKey(field.GetIdentifier())) {
                                 continue;
                             }
-                            var paths = MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites);
+                            MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource>[] paths = MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites);
                             AddFieldModification(
                                 method,
                                 fieldModificationInstructions,
@@ -387,20 +388,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 continue;
                             }
 
-                            foreach (var callPath in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
-                                foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, callPath.ParametersSources[0].Instructions.Last(), jumpSites)) {
+                            foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> callPath in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                                foreach (MonoModCommon.Stack.StackTopTypePath loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, callPath.ParametersSources[0].Instructions.Last(), jumpSites)) {
 
                                     if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
                                         StaticFieldUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction),
-                                        out var stackValueTrace)) {
+                                        out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                    foreach (StaticFieldProvenance willBeModified in stackValueTrace.TracedStaticFields.Values) {
                                         if (!source.InitialStaticFields.ContainsKey(willBeModified.TracingStaticField.GetIdentifier())) {
                                             continue;
                                         }
-                                        foreach (var part in willBeModified.PartTracingPaths) {
+                                        foreach (StaticFieldTracingChain part in willBeModified.PartTracingPaths) {
                                             if (part.EncapsulationHierarchy.Length == 0) {
                                                 AddFieldModification(
                                                     method,
@@ -419,12 +420,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap = [];
 
-            var loopBlocks = ExtractLoopBlock(method);
-            BuildConditionBranchMaps(method, out var conditionBranchInstructions, out var branchBlockMapToConditions);
+            Dictionary<VariableDefinition, LoopBlockData> loopBlocks = ExtractLoopBlock(method);
+            BuildConditionBranchMaps(method, out Dictionary<Instruction, HashSet<Instruction>>? conditionBranchInstructions, out Dictionary<Instruction, HashSet<Instruction>>? branchBlockMapToConditions);
             var ignoreExtractLocalModifications = loopBlocks.Keys.ToHashSet();
 
-            foreach (var blockData in loopBlocks.Values) {
-                foreach (var inst in blockData.OrigiLoopBody) {
+            foreach (LoopBlockData blockData in loopBlocks.Values) {
+                foreach (Instruction inst in blockData.OrigiLoopBody) {
                     if (inst.Operand is MethodReference multipleCall) {
                         multipleCalls[multipleCall.GetIdentifier()] = 999;
                     }
@@ -433,15 +434,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             HashSet<Instruction> extractDestinations = [];
 
-            foreach (var fieldModification in fieldModificationInstructions) {
-                var initFieldDef = source.InitialStaticFields[fieldModification.Key];
+            foreach (KeyValuePair<string, HashSet<Instruction>> fieldModification in fieldModificationInstructions) {
+                FieldDefinition initFieldDef = source.InitialStaticFields[fieldModification.Key];
 
                 ExpandBranchSourcesUntilStable(method, initFieldDef, fieldModification.Value, branchBlockMapToConditions, localMap, ignoreExtractLocalModifications);
 
                 Dictionary<string, FieldDefinition> referencedOtherStaticFields = [];
-                foreach (var modificationInst in fieldModification.Value.ToArray()) {
+                foreach (Instruction? modificationInst in fieldModification.Value.ToArray()) {
                     if (modificationInst.Operand is FieldReference referecedField) {
-                        var field = referecedField.TryResolve();
+                        FieldDefinition? field = referecedField.TryResolve();
                         if (field is null) {
                             continue;
                         }
@@ -452,7 +453,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     }
                 }
 
-                foreach (var inst in method.Body.Instructions) {
+                foreach (Instruction? inst in method.Body.Instructions) {
                     if (inst.Operand is not FieldReference checkField
                         || checkField.GetIdentifier() == initFieldDef.GetIdentifier()
                         || !referencedOtherStaticFields.ContainsKey(checkField.GetIdentifier())) {
@@ -468,27 +469,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             ExtractSources(this, method, initFieldDef, extractDestinations, localMap, [inst], ignoreExtractLocalModifications);
                             break;
                     }
-                    foreach (var dest in extractDestinations) {
+                    foreach (Instruction dest in extractDestinations) {
                         fieldModification.Value.Add(dest);
                     }
                 }
 
                 HashSet<VariableDefinition> referencedLocals = [];
-                foreach (var modificationInst in fieldModification.Value.ToArray()) {
-                    if (MonoModCommon.IL.TryGetReferencedVariable(method, modificationInst, out var referencedLocal)) {
+                foreach (Instruction? modificationInst in fieldModification.Value.ToArray()) {
+                    if (MonoModCommon.IL.TryGetReferencedVariable(method, modificationInst, out VariableDefinition? referencedLocal)) {
                         referencedLocals.Add(referencedLocal);
                     }
                 }
 
                 Dictionary<Instruction, LoopBlockData> origiBodyInstToLoopBlock = [];
-                foreach (var loopBlock in loopBlocks.Values) {
-                    foreach (var inst in loopBlock.OrigiLoopBody) {
+                foreach (LoopBlockData loopBlock in loopBlocks.Values) {
+                    foreach (Instruction inst in loopBlock.OrigiLoopBody) {
                         origiBodyInstToLoopBlock[inst] = loopBlock;
                     }
                 }
 
-                foreach (var inst in method.Body.Instructions) {
-                    if (origiBodyInstToLoopBlock.TryGetValue(inst, out var loopBlockData)) {
+                foreach (Instruction? inst in method.Body.Instructions) {
+                    if (origiBodyInstToLoopBlock.TryGetValue(inst, out LoopBlockData? loopBlockData)) {
 
                         var addLoopBody = fieldModification.Value.Contains(inst);
 
@@ -496,7 +497,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             extractDestinations.Clear();
                             ExtractSources(this, method, initFieldDef, extractDestinations, localMap, [inst], ignoreExtractLocalModifications);
 
-                            if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out var loopBodyInst)) {
+                            if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out HashSet<Instruction>? loopBodyInst)) {
                                 loopBodyInst = loopBlockData.FilteredLoopBody[fieldModification.Key] = [];
                             }
                             if (extractDestinations.Count > 0) {
@@ -505,9 +506,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             continue;
                         }
 
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(method, inst, out var local)) {
+                        if (!MonoModCommon.IL.TryGetReferencedVariable(method, inst, out VariableDefinition? local)) {
                             if (addLoopBody) {
-                                if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out var loopBodyInst)) {
+                                if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out HashSet<Instruction>? loopBodyInst)) {
                                     loopBodyInst = loopBlockData.FilteredLoopBody[fieldModification.Key] = [];
                                 }
                                 loopBodyInst.Add(inst);
@@ -527,10 +528,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             extractDestinations.Clear();
                             TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                             if (extractDestinations.Count > 0) {
-                                if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out var loopBodyInst)) {
+                                if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out HashSet<Instruction>? loopBodyInst)) {
                                     loopBodyInst = loopBlockData.FilteredLoopBody[fieldModification.Key] = [];
                                 }
-                                foreach (var extracted in extractDestinations) {
+                                foreach (Instruction extracted in extractDestinations) {
                                     loopBodyInst.Add(extracted);
                                 }
                             }
@@ -563,10 +564,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                         break;
                                 }
                                 if (extractDestinations.Count > 0) {
-                                    if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out var loopBodyInst)) {
+                                    if (!loopBlockData.FilteredLoopBody.TryGetValue(fieldModification.Key, out HashSet<Instruction>? loopBodyInst)) {
                                         loopBodyInst = loopBlockData.FilteredLoopBody[fieldModification.Key] = [];
                                     }
-                                    foreach (var extracted in extractDestinations) {
+                                    foreach (Instruction extracted in extractDestinations) {
                                         loopBodyInst.Add(extracted);
                                     }
                                 }
@@ -577,12 +578,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         extractDestinations.Clear();
                         if (fieldModification.Value.Contains(inst) && inst.OpCode == OpCodes.Dup) {
                             ExtractSources(this, method, initFieldDef, extractDestinations, localMap, [inst], ignoreExtractLocalModifications);
-                            foreach (var extracted in extractDestinations) {
+                            foreach (Instruction extracted in extractDestinations) {
                                 fieldModification.Value.Add(extracted);
                             }
                             continue;
                         }
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(method, inst, out var local)) {
+                        if (!MonoModCommon.IL.TryGetReferencedVariable(method, inst, out VariableDefinition? local)) {
                             continue;
                         }
                         // However, for other more common variables, they can be regarded as having the scope of the entire method.
@@ -613,7 +614,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                     TraceUsage(this, method, initFieldDef, extractDestinations, localMap, inst, ignoreExtractLocalModifications);
                                     break;
                             }
-                            foreach (var extracted in extractDestinations) {
+                            foreach (Instruction extracted in extractDestinations) {
                                 fieldModification.Value.Add(extracted);
                             }
                         }
@@ -621,33 +622,33 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
 
                 ExpandBranchSourcesUntilStable(method, initFieldDef, fieldModification.Value, branchBlockMapToConditions, localMap, ignoreExtractLocalModifications);
-                foreach (var loopForFields in loopBlocks.Values) {
-                    if (loopForFields.FilteredLoopBody.TryGetValue(fieldModification.Key, out var loopBodyInst)) {
+                foreach (LoopBlockData loopForFields in loopBlocks.Values) {
+                    if (loopForFields.FilteredLoopBody.TryGetValue(fieldModification.Key, out HashSet<Instruction>? loopBodyInst)) {
                         ExpandBranchSourcesUntilStable(method, initFieldDef, loopBodyInst, branchBlockMapToConditions, localMap, ignoreExtractLocalModifications);
                     }
                 }
 
                 extractDestinations.Clear();
                 List<Instruction> extractSources = [];
-                foreach (var inst in fieldModification.Value) {
+                foreach (Instruction inst in fieldModification.Value) {
                     if (inst.Operand is Instruction jumpTarget) {
                         extractSources.Add(jumpTarget);
                     }
                     else if (inst.Operand is Instruction[] jumpTargets) {
-                        foreach (var target in jumpTargets) {
+                        foreach (Instruction target in jumpTargets) {
                             extractSources.Add(target);
                         }
                     }
                 }
                 ExtractSources(this, method, initFieldDef, extractDestinations, localMap, extractSources, ignoreExtractLocalModifications);
-                foreach (var dest in extractDestinations) {
+                foreach (Instruction dest in extractDestinations) {
                     fieldModification.Value.Add(dest);
                 }
 
-                foreach (var inst in method.Body.Instructions) {
+                foreach (Instruction? inst in method.Body.Instructions) {
                     if (inst.OpCode == OpCodes.Pop || inst.OpCode == OpCodes.Br || inst.OpCode == OpCodes.Br_S) {
-                        foreach (var block in loopBlocks.Values) {
-                            foreach (var modification in block.FilteredLoopBody) {
+                        foreach (LoopBlockData block in loopBlocks.Values) {
+                            foreach (KeyValuePair<string, HashSet<Instruction>> modification in block.FilteredLoopBody) {
                                 if (modification.Value.Contains(inst.Previous) && modification.Value.Contains(inst.Next)) {
                                     modification.Value.Add(inst);
                                 }
@@ -670,9 +671,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 visited.Add(method.GetIdentifier());
 
                 while (stack.Count > 0) {
-                    var caller = stack.Pop();
+                    MethodDefinition caller = stack.Pop();
 
-                    foreach (var inst in caller.Body.Instructions) {
+                    foreach (Instruction? inst in caller.Body.Instructions) {
                         if (inst.OpCode == OpCodes.Ldsflda || inst.OpCode == OpCodes.Stsfld) {
                             return true;
                         }
@@ -683,7 +684,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             }
                         }
                         else if (inst.OpCode == OpCodes.Call) {
-                            var resolvedCallee = ((MethodReference)inst.Operand).TryResolve();
+                            MethodDefinition? resolvedCallee = ((MethodReference)inst.Operand).TryResolve();
 
                             if (resolvedCallee is null
                                 || !resolvedCallee.IsStatic
@@ -707,13 +708,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 return false;
             }
 
-            foreach (var inst in method.Body.Instructions) {
+            foreach (Instruction? inst in method.Body.Instructions) {
 
                 if (inst.OpCode != OpCodes.Call) {
                     continue;
                 }
 
-                var resolvedCallee = ((MethodReference)inst.Operand).TryResolve();
+                MethodDefinition? resolvedCallee = ((MethodReference)inst.Operand).TryResolve();
                 if (resolvedCallee is null
                     || !resolvedCallee.IsStatic
                     || resolvedCallee.IsConstructor
@@ -735,15 +736,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 ExtractSources(this, method, tmp, localMap, [inst], ignoreExtractLocalModifications);
 
                 if (IsExtractableStaticPart(source, tmp)) {
-                    foreach (var staticInst in tmp) {
+                    foreach (Instruction staticInst in tmp) {
                         extractedStaticInsts.Add(staticInst);
                     }
                 }
             }
 
-            foreach (var loopBlock in loopBlocks.Values) {
-                foreach (var fieldModification in loopBlock.FilteredLoopBody) {
-                    if (!source.InitialStaticFields.TryGetValue(fieldModification.Key, out var initFieldDef)) {
+            foreach (LoopBlockData loopBlock in loopBlocks.Values) {
+                foreach (KeyValuePair<string, HashSet<Instruction>> fieldModification in loopBlock.FilteredLoopBody) {
+                    if (!source.InitialStaticFields.TryGetValue(fieldModification.Key, out FieldDefinition? initFieldDef)) {
                         loopBlock.FilteredLoopBody.Remove(fieldModification.Key);
                         continue;
                     }
@@ -753,15 +754,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         continue;
                     }
 
-                    foreach (var staticInst in fieldModification.Value) {
+                    foreach (Instruction staticInst in fieldModification.Value) {
                         extractedStaticInsts.Add(staticInst);
                     }
                     continue;
                 }
             }
 
-            foreach (var fieldModification in fieldModificationInstructions) {
-                if (!source.InitialStaticFields.TryGetValue(fieldModification.Key, out var initFieldDef)) {
+            foreach (KeyValuePair<string, HashSet<Instruction>> fieldModification in fieldModificationInstructions) {
+                if (!source.InitialStaticFields.TryGetValue(fieldModification.Key, out FieldDefinition? initFieldDef)) {
                     continue;
                 }
 
@@ -769,7 +770,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     continue;
                 }
 
-                foreach (var staticInst in fieldModification.Value) {
+                foreach (Instruction staticInst in fieldModification.Value) {
                     extractedStaticInsts.Add(staticInst);
                 }
                 continue;
@@ -800,14 +801,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         methodCallChain[i] = chainedMethod;
                     }
                     else {
-                        var origCaller = origMethodCallChain[i];
+                        MethodDefinition origCaller = origMethodCallChain[i];
                         generatedCallerName = chainedMethod.DeclaringType.Name + "_" + origCaller.Name;
                     }
 
-                    var generatedMethod = globalInitializer.Methods.Where(m => m.Name == generatedCallerName).FirstOrDefault();
+                    MethodDefinition? generatedMethod = globalInitializer.Methods.Where(m => m.Name == generatedCallerName).FirstOrDefault();
                     if (generatedMethod is null) {
 
-                        var module = source.MainModule;
+                        ModuleDefinition module = source.MainModule;
                         generatedMethod = new MethodDefinition(generatedCallerName, Constants.Modifiers.GlobalInitialize, module.TypeSystem.Void);
 
                         var attr = new CustomAttribute(initializerAttribute.Methods.Single(m => m.IsConstructor && !m.IsStatic));
@@ -816,17 +817,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         attr.ConstructorArguments.Add(new CustomAttributeArgument(module.TypeSystem.String, origMethodCallChain[i].Name));
                         generatedMethod.CustomAttributes.Add(attr);
 
-                        var body = generatedMethod.Body = new MethodBody(generatedMethod);
+                        MethodBody body = generatedMethod.Body = new MethodBody(generatedMethod);
                         body.Instructions.Add(Instruction.Create(OpCodes.Ret));
                         globalInitializer.Methods.Add(generatedMethod);
 
-                        var caller = methodCallChain[i - 1];
-                        var ret = caller.Body.Instructions.Last();
+                        MethodDefinition caller = methodCallChain[i - 1];
+                        Instruction ret = caller.Body.Instructions.Last();
 
                         var call = Instruction.Create(OpCodes.Call, generatedMethod);
                         caller.Body.GetILProcessor().InsertBefore(ret, call);
 
-                        foreach (var (local, fields) in localMap.Values) {
+                        foreach ((VariableDefinition? local, Dictionary<string, FieldDefinition>? fields) in localMap.Values) {
                             generatedMethod.Body.Variables.Add(local);
                         }
                     }
@@ -834,10 +835,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     methodCallChain[i] = generatedMethod;
                 }
 
-                var generated = methodCallChain[^1];
+                MethodDefinition generated = methodCallChain[^1];
                 EnsureMethodHasLocals(generated, localMap);
-                var returnInst = generated.Body.Instructions.Last();
-                var ilProcessor = generated.Body.GetILProcessor();
+                Instruction returnInst = generated.Body.Instructions.Last();
+                ILProcessor ilProcessor = generated.Body.GetILProcessor();
 
                 if (isWholeStaticModification) {
                     generated.Body.Instructions.Clear();
@@ -856,29 +857,29 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     instOrig2GenMap[method.Body.Instructions.Last()] = returnInst;
 
                     Dictionary<Instruction, List<LoopBlockData>> instToLoopBlocks = [];
-                    foreach (var loopBlock in loopBlocks.Values) {
-                        foreach (var inst in loopBlock.AllInsts()) {
-                            if (!instToLoopBlocks.TryGetValue(inst, out var list)) {
+                    foreach (LoopBlockData loopBlock in loopBlocks.Values) {
+                        foreach (Instruction inst in loopBlock.AllInsts()) {
+                            if (!instToLoopBlocks.TryGetValue(inst, out List<LoopBlockData>? list)) {
                                 list = instToLoopBlocks[inst] = [];
                             }
                             list.Add(loopBlock);
                         }
                     }
-                    foreach (var kv in instToLoopBlocks) {
-                        var inst = kv.Key;
-                        var list = kv.Value;
+                    foreach (KeyValuePair<Instruction, List<LoopBlockData>> kv in instToLoopBlocks) {
+                        Instruction inst = kv.Key;
+                        List<LoopBlockData> list = kv.Value;
                         if (list.Count > 1) {
 
                             var noDup = list.ToHashSet();
-                            var priority = noDup.SingleOrDefault(x => x.InitLoopVariable.Contains(inst) || x.LoopCond.Contains(inst) || x.PostLoop.Contains(inst));
-                            var sorted = noDup.OrderBy(x => x.OrigiLoopBody.Length);
+                            LoopBlockData? priority = noDup.SingleOrDefault(x => x.InitLoopVariable.Contains(inst) || x.LoopCond.Contains(inst) || x.PostLoop.Contains(inst));
+                            IOrderedEnumerable<LoopBlockData> sorted = noDup.OrderBy(x => x.OrigiLoopBody.Length);
 
                             priority ??= sorted.First();
 
                             list.Clear();
                             list.Add(priority);
 
-                            foreach (var other in sorted) {
+                            foreach (LoopBlockData? other in sorted) {
                                 if (other != priority) {
                                     list.Add(other);
                                 }
@@ -891,9 +892,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     HashSet<LoopBlockData> processedLoops = [];
                     Dictionary<LoopBlockData, HashSet<Instruction>> checkingLoops = [];
 
-                    foreach (var inst in method.Body.Instructions) {
+                    foreach (Instruction? inst in method.Body.Instructions) {
                         static void MapLocal(MethodDefinition method, Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap, Instruction inst, Instruction clone, LoopBlockData? loopBlock) {
-                            if (MonoModCommon.IL.TryGetReferencedVariable(method, inst, out var origLocal)) {
+                            if (MonoModCommon.IL.TryGetReferencedVariable(method, inst, out VariableDefinition? origLocal)) {
                                 VariableDefinition local;
                                 if (loopBlock is not null && loopBlock.OriginalLocal == origLocal) {
                                     local = loopBlock.Local;
@@ -928,28 +929,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         }
 
                         static Instruction CloneAndUpdateMap(Dictionary<Instruction, Instruction> instMap, Instruction inst) {
-                            var clone = inst.Clone();
+                            Instruction clone = inst.Clone();
                             clone.Offset = inst.Offset;
                             instMap[inst] = clone;
                             return clone;
                         }
 
-                        if (instToLoopBlocks.TryGetValue(inst, out var loopBlockList)) {
+                        if (instToLoopBlocks.TryGetValue(inst, out List<LoopBlockData>? loopBlockList)) {
 
-                            foreach (var loopBlock in loopBlockList) {
+                            foreach (LoopBlockData loopBlock in loopBlockList) {
                                 if (loopBlock.FilteredLoopBody.Count == 0 || processedLoops.Contains(loopBlock)) {
                                     continue;
                                 }
 
-                                if (!checkingLoops.TryGetValue(loopBlock, out var restInsts)) {
+                                if (!checkingLoops.TryGetValue(loopBlock, out HashSet<Instruction>? restInsts)) {
 
                                     checkingLoops.Add(loopBlock, restInsts = [.. loopBlock.FilteredLoopBody.SelectMany(x => x.Value)]);
 
                                     generated.Body.Variables.Add(loopBlock.Local);
 
-                                    foreach (var init in loopBlock.InitLoopVariable) {
+                                    foreach (Instruction init in loopBlock.InitLoopVariable) {
                                         if (addedInsts.Add(init)) {
-                                            var cloneInit = CloneAndUpdateMap(instOrig2GenMap, init);
+                                            Instruction cloneInit = CloneAndUpdateMap(instOrig2GenMap, init);
                                             MapLocal(method, localMap, init, cloneInit, loopBlock);
                                             ilProcessor.InsertBefore(returnInst, cloneInit);
                                         }
@@ -966,16 +967,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 }
 
                                 if (restInsts.Count == 0) {
-                                    foreach (var post in loopBlock.PostLoop) {
+                                    foreach (Instruction post in loopBlock.PostLoop) {
                                         if (addedInsts.Add(post)) {
-                                            var clonePost = CloneAndUpdateMap(instOrig2GenMap, post);
+                                            Instruction clonePost = CloneAndUpdateMap(instOrig2GenMap, post);
                                             MapLocal(method, localMap, post, clonePost, loopBlock);
                                             ilProcessor.InsertBefore(returnInst, clonePost);
                                         }
                                     }
-                                    foreach (var cond in loopBlock.LoopCond) {
+                                    foreach (Instruction cond in loopBlock.LoopCond) {
                                         if (addedInsts.Add(cond)) {
-                                            var cloneCond = CloneAndUpdateMap(instOrig2GenMap, cond);
+                                            Instruction cloneCond = CloneAndUpdateMap(instOrig2GenMap, cond);
                                             MapLocal(method, localMap, cond, cloneCond, loopBlock);
                                             ilProcessor.InsertBefore(returnInst, cloneCond);
                                         }
@@ -996,7 +997,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         }
                     }
 
-                    foreach (var inst in generated.Body.Instructions) {
+                    foreach (Instruction? inst in generated.Body.Instructions) {
                         if (inst.Operand is Instruction jumpTarget) {
                             inst.Operand = instOrig2GenMap[jumpTarget];
                         }
@@ -1007,13 +1008,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         }
                     }
 
-                    foreach (var inst in removedInsts) {
+                    foreach (Instruction inst in removedInsts) {
                         method.Body.RemoveInstructionSeamlessly(jumpSites, inst);
                     }
                 }
             }
 
-            foreach (var calleeKV in myCalingMethods.ToArray()) {
+            foreach (KeyValuePair<string, MethodDefinition> calleeKV in myCalingMethods.ToArray()) {
                 var key = calleeKV.Key;
                 if (calleeKV.Value.Parameters.Count != 0) {
                     myCalingMethods.Remove(key);
@@ -1037,11 +1038,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             bool incremented;
             do {
                 incremented = false;
-                foreach (var inst in modifications.ToArray()) {
-                    if (branchBlockMapToConditions.TryGetValue(inst, out var conditions)) {
+                foreach (Instruction? inst in modifications.ToArray()) {
+                    if (branchBlockMapToConditions.TryGetValue(inst, out HashSet<Instruction>? conditions)) {
                         extractDestinations.Clear();
                         ExtractSources(this, method, staticField, extractDestinations, localMap, conditions, ignoreExtractLocalModifications);
-                        foreach (var extracted in extractDestinations) {
+                        foreach (Instruction extracted in extractDestinations) {
                             if (modifications.Add(extracted)) {
                                 incremented = true;
                             }
@@ -1057,8 +1058,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             branchBlockMapToConditions = [];
 
             Dictionary<Instruction, (Instruction next, HashSet<Instruction> block)> currentProcessing = [];
-            foreach (var instruction in method.Body.Instructions) {
-                foreach (var currentKV in currentProcessing.ToArray()) {
+            foreach (Instruction? instruction in method.Body.Instructions) {
+                foreach (KeyValuePair<Instruction, (Instruction next, HashSet<Instruction> block)> currentKV in currentProcessing.ToArray()) {
                     if (currentKV.Value.next == instruction) {
                         conditionBranchInstructions[currentKV.Key] = currentKV.Value.block;
                         currentProcessing.Remove(currentKV.Key);
@@ -1076,9 +1077,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 throw new InvalidOperationException();
             }
 
-            foreach (var condBranch in conditionBranchInstructions) {
-                foreach (var inst in condBranch.Value) {
-                    if (!branchBlockMapToConditions.TryGetValue(inst, out var conditions)) {
+            foreach (KeyValuePair<Instruction, HashSet<Instruction>> condBranch in conditionBranchInstructions) {
+                foreach (Instruction inst in condBranch.Value) {
+                    if (!branchBlockMapToConditions.TryGetValue(inst, out HashSet<Instruction>? conditions)) {
                         conditions = branchBlockMapToConditions[inst] = [];
                     }
                     conditions.Add(condBranch.Key);
@@ -1088,7 +1089,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
         private bool IsExtractableStaticPart(FilterArgumentSource source, FieldDefinition initFieldDef, IEnumerable<Instruction> instructions) {
             var fieldId = initFieldDef.GetIdentifier();
-            foreach (var inst in instructions) {
+            foreach (Instruction inst in instructions) {
                 switch (inst.OpCode.Code) {
                     case Code.Ldsfld:
                     case Code.Ldsflda:
@@ -1107,7 +1108,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     case Code.Callvirt:
                     case Code.Newobj: {
                             var methodRef = (MethodReference)inst.Operand;
-                            var methodDef = methodRef.TryResolve();
+                            MethodDefinition? methodDef = methodRef.TryResolve();
                             if (methodDef is null) {
                                 break;
                             }
@@ -1121,7 +1122,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         break;
                 }
             }
-            foreach (var inst in instructions) {
+            foreach (Instruction inst in instructions) {
                 switch (inst.OpCode.Code) {
                     case Code.Ldarg_0:
                     case Code.Ldarg_1:
@@ -1139,7 +1140,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             return true;
         }
         private bool IsExtractableStaticPart(FilterArgumentSource source, IEnumerable<Instruction> instructions) {
-            foreach (var inst in instructions) {
+            foreach (Instruction inst in instructions) {
                 switch (inst.OpCode.Code) {
                     case Code.Ldsfld:
                     case Code.Ldsflda:
@@ -1155,7 +1156,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     case Code.Callvirt:
                     case Code.Newobj: {
                             var methodRef = (MethodReference)inst.Operand;
-                            var methodDef = methodRef.TryResolve();
+                            MethodDefinition? methodDef = methodRef.TryResolve();
                             if (methodDef is null) {
                                 break;
                             }
@@ -1166,7 +1167,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                         break;
                 }
             }
-            foreach (var inst in instructions) {
+            foreach (Instruction inst in instructions) {
                 switch (inst.OpCode.Code) {
                     case Code.Ldarg_0:
                     case Code.Ldarg_1:
@@ -1212,19 +1213,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         private Dictionary<VariableDefinition, LoopBlockData> ExtractLoopBlock(MethodDefinition method) {
             Dictionary<VariableDefinition, LoopBlockData> loopBlocks = [];
 
-            foreach (var initLoopVariable in method.Body.Instructions) {
-                if (!MonoModCommon.IL.MatchSetVariable(method, initLoopVariable, out var loopVariable)) {
+            foreach (Instruction? initLoopVariable in method.Body.Instructions) {
+                if (!MonoModCommon.IL.MatchSetVariable(method, initLoopVariable, out VariableDefinition? loopVariable)) {
                     continue;
                 }
                 if (initLoopVariable.Next.OpCode != OpCodes.Br && initLoopVariable.Next.OpCode != OpCodes.Br_S) {
                     continue;
                 }
                 var loopConditionBegin = ((Instruction)initLoopVariable.Next.Operand);
-                if (!MonoModCommon.IL.MatchLoadVariable(method, loopConditionBegin, out var checkLoopVariable)
+                if (!MonoModCommon.IL.MatchLoadVariable(method, loopConditionBegin, out VariableDefinition? checkLoopVariable)
                     || checkLoopVariable != loopVariable) {
                     continue;
                 }
-                var loopConditionEnd = MonoModCommon.Stack.TraceStackValueFinalConsumers(method, loopConditionBegin);
+                Instruction[] loopConditionEnd = MonoModCommon.Stack.TraceStackValueFinalConsumers(method, loopConditionBegin);
                 if (loopConditionEnd.Length != 1
                     || loopConditionEnd[0].Operand is not Instruction loopBodyBegin) {
                     continue;
@@ -1234,7 +1235,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                     continue;
                 }
 
-                var checkConditionPaths = MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, loopConditionEnd[0], this.GetMethodJumpSites(method));
+                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource>[] checkConditionPaths = MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, loopConditionEnd[0], this.GetMethodJumpSites(method));
                 if (checkConditionPaths.Length != 1
                     || checkConditionPaths[0].ParametersSources.Length != 2
                     || checkConditionPaths[0].ParametersSources[0].Instructions.Length != 1) {
@@ -1276,9 +1277,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 HashSet<Instruction> extractedConditionCheck = [];
                 ExtractSources(this, method, extractedConditionCheck, loopConditionEnd[0]);
 
-                var upBound = loopBodyBegin;
-                var downBound = loopConditionBegin.Previous;
-                var current = upBound;
+                Instruction upBound = loopBodyBegin;
+                Instruction downBound = loopConditionBegin.Previous;
+                Instruction current = upBound;
 
                 List<Instruction> loopBody = [];
                 while (current.Offset < downBound.Offset) {
@@ -1312,10 +1313,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             works.Push(inst);
 
             while (works.Count > 0) {
-                var current = works.Pop();
-                var usages = MonoModCommon.Stack.TraceStackValueConsumers(caller, current);
+                Instruction current = works.Pop();
+                Instruction[] usages = MonoModCommon.Stack.TraceStackValueConsumers(caller, current);
                 ExtractSources(feature, caller, collected, usages);
-                foreach (var usage in usages) {
+                foreach (Instruction usage in usages) {
                     if (MonoModCommon.Stack.GetPushCount(caller.Body, usage) > 0) {
                         works.Push(usage);
                     }
@@ -1327,22 +1328,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             HashSet<Instruction> collected,
             params IEnumerable<Instruction> extractSources) {
 
-            var jumpSite = feature.GetMethodJumpSites(caller);
+            Dictionary<Instruction, List<Instruction>> jumpSite = feature.GetMethodJumpSites(caller);
 
             Stack<Instruction> stack = [];
-            foreach (var checkSource in extractSources) {
+            foreach (Instruction checkSource in extractSources) {
                 stack.Push(checkSource);
             }
             while (stack.Count > 0) {
-                var check = stack.Pop();
+                Instruction check = stack.Pop();
                 if (!collected.Add(check)) {
                     continue;
                 }
 
                 if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(caller, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(caller, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.ParameterSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
@@ -1350,9 +1351,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
                 // Only pop value from stack
                 else if (MonoModCommon.Stack.GetPopCount(caller.Body, check) > 0) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.InstructionArgsSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
@@ -1372,10 +1373,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             works.Push(inst);
 
             while (works.Count > 0) {
-                var current = works.Pop();
-                var usages = MonoModCommon.Stack.TraceStackValueConsumers(caller, current);
+                Instruction current = works.Pop();
+                Instruction[] usages = MonoModCommon.Stack.TraceStackValueConsumers(caller, current);
                 ExtractSources(feature, caller, referencedField, transformInsts, localMap, usages, ignoreExtractLocalModifications);
-                foreach (var usage in usages) {
+                foreach (Instruction usage in usages) {
                     if (MonoModCommon.Stack.GetPushCount(caller.Body, usage) > 0) {
                         works.Push(usage);
                     }
@@ -1387,7 +1388,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             MethodDefinition method,
             Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap) {
 
-            foreach (var (local, _) in localMap.Values) {
+            foreach ((VariableDefinition? local, Dictionary<string, FieldDefinition> _) in localMap.Values) {
                 if (!method.Body.Variables.Contains(local)) {
                     method.Body.Variables.Add(local);
                 }
@@ -1403,51 +1404,51 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             const string NonFieldLocalMapKey = "<non-field>";
 
-            var jumpSite = feature.GetMethodJumpSites(caller);
+            Dictionary<Instruction, List<Instruction>> jumpSite = feature.GetMethodJumpSites(caller);
 
             Stack<Instruction> stack = [];
-            foreach (var checkSource in extractSources) {
+            foreach (Instruction checkSource in extractSources) {
                 stack.Push(checkSource);
             }
             while (stack.Count > 0) {
-                var check = stack.Pop();
+                Instruction check = stack.Pop();
                 if (!transformInsts.Add(check)) {
                     continue;
                 }
 
                 if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(caller, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(caller, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.ParameterSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
                     }
                 }
                 else if (MonoModCommon.Stack.GetPopCount(caller.Body, check) > 0) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.InstructionArgsSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
                     }
                 }
 
-                if (MonoModCommon.IL.TryGetReferencedVariable(caller, check, out var local)) {
+                if (MonoModCommon.IL.TryGetReferencedVariable(caller, check, out VariableDefinition? local)) {
                     if (ignoreExtractLocalModifications is not null && ignoreExtractLocalModifications.Contains(local)) {
                         continue;
                     }
 
-                    if (!localMap.TryGetValue(local, out var tuple)) {
+                    if (!localMap.TryGetValue(local, out (VariableDefinition local, Dictionary<string, FieldDefinition> fields) tuple)) {
                         localMap.Add(local, tuple = (new VariableDefinition(local.VariableType), []));
                     }
                     if (!tuple.fields.TryAdd(NonFieldLocalMapKey, null!)) {
                         continue;
                     }
 
-                    foreach (var inst in caller.Body.Instructions) {
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(caller, inst, out var otherLocal) || otherLocal.Index != local.Index) {
+                    foreach (Instruction? inst in caller.Body.Instructions) {
+                        if (!MonoModCommon.IL.TryGetReferencedVariable(caller, inst, out VariableDefinition? otherLocal) || otherLocal.Index != local.Index) {
                             continue;
                         }
                         switch (inst.OpCode.Code) {
@@ -1466,14 +1467,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             case Code.Ldloc_S:
                             case Code.Ldloc:
                                 if (!local.VariableType.IsTruelyValueType()) {
-                                    foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
+                                    foreach (Instruction usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
                                         stack.Push(usage);
                                     }
                                 }
                                 break;
                             case Code.Ldloca_S:
                             case Code.Ldloca:
-                                foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
+                                foreach (Instruction usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
                                     stack.Push(usage);
                                 }
                                 break;
@@ -1490,51 +1491,51 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             IEnumerable<Instruction> extractSources,
             HashSet<VariableDefinition>? ignoreExtractLocalModifications = null) {
 
-            var jumpSite = feature.GetMethodJumpSites(caller);
+            Dictionary<Instruction, List<Instruction>> jumpSite = feature.GetMethodJumpSites(caller);
 
             Stack<Instruction> stack = [];
-            foreach (var checkSource in extractSources) {
+            foreach (Instruction checkSource in extractSources) {
                 stack.Push(checkSource);
             }
             while (stack.Count > 0) {
-                var check = stack.Pop();
+                Instruction check = stack.Pop();
                 if (!transformInsts.Add(check)) {
                     continue;
                 }
 
                 if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(caller, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(caller, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.ParameterSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
                     }
                 }
                 else if (MonoModCommon.Stack.GetPopCount(caller.Body, check) > 0) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.InstructionArgsSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
                     }
                 }
 
-                if (MonoModCommon.IL.TryGetReferencedVariable(caller, check, out var local)) {
+                if (MonoModCommon.IL.TryGetReferencedVariable(caller, check, out VariableDefinition? local)) {
                     if (ignoreExtractLocalModifications is not null && ignoreExtractLocalModifications.Contains(local)) {
                         transformInsts.Add(check);
                         continue;
                     }
 
-                    if (!localMap.TryGetValue(local, out var tuple)) {
+                    if (!localMap.TryGetValue(local, out (VariableDefinition local, Dictionary<string, FieldDefinition> fields) tuple)) {
                         localMap.Add(local, tuple = (new VariableDefinition(local.VariableType), []));
                     }
                     if (!tuple.fields.TryAdd(referenceField.GetIdentifier(), referenceField)) {
                         continue;
                     }
-                    foreach (var inst in caller.Body.Instructions) {
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(caller, inst, out var otherLocal) || otherLocal.Index != local.Index) {
+                    foreach (Instruction? inst in caller.Body.Instructions) {
+                        if (!MonoModCommon.IL.TryGetReferencedVariable(caller, inst, out VariableDefinition? otherLocal) || otherLocal.Index != local.Index) {
                             continue;
                         }
                         switch (inst.OpCode.Code) {
@@ -1553,7 +1554,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             case Code.Ldloc_S:
                             case Code.Ldloc:
                                 if (!local.VariableType.IsTruelyValueType()) {
-                                    foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
+                                    foreach (Instruction usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
                                         stack.Push(usage);
                                     }
                                 }
@@ -1561,7 +1562,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                 break;
                             case Code.Ldloca_S:
                             case Code.Ldloca:
-                                foreach (var usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
+                                foreach (Instruction usage in MonoModCommon.Stack.TraceStackValueConsumers(caller, inst)) {
                                     stack.Push(usage);
                                 }
                                 transformInsts.Add(inst);

@@ -18,18 +18,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
-            foreach (var field in source.UnmodifiedStaticFields.Values.ToArray()) {
+            foreach (FieldDefinition? field in source.UnmodifiedStaticFields.Values.ToArray()) {
                 ProcessField(field, source);
             }
         }
 
         private void ProcessField(FieldDefinition field, FilterArgumentSource source) {
-            var fieldType = field.FieldType;
+            TypeReference fieldType = field.FieldType;
             if (fieldType is ArrayType) {
                 return;
             }
-            var ctors = fieldType.TryResolve()?.GetConstructors()?.ToArray() ?? [];
-            foreach (var ctor in ctors) {
+            MethodDefinition[] ctors = fieldType.TryResolve()?.GetConstructors()?.ToArray() ?? [];
+            foreach (MethodDefinition? ctor in ctors) {
                 if (ctor.IsStatic) {
                     continue;
                 }

@@ -16,7 +16,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             return CreateEncapsulatedInstance(newMember, null);
         }
         public AggregatedParameterProvenance CreateEncapsulatedInstance(MemberReference newMember, TypeFlowSccIndex? sccIndex) {
-            var result = new AggregatedParameterProvenance();
+            AggregatedParameterProvenance result = new AggregatedParameterProvenance();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
@@ -34,7 +34,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             return CreateEncapsulatedArrayInstance(arrayType, null);
         }
         public AggregatedParameterProvenance CreateEncapsulatedArrayInstance(ArrayType arrayType, TypeFlowSccIndex? sccIndex) {
-            var result = new AggregatedParameterProvenance();
+            AggregatedParameterProvenance result = new AggregatedParameterProvenance();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
@@ -48,7 +48,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             return CreateEncapsulatedCollectionInstance(collectionType, elementType, null);
         }
         public AggregatedParameterProvenance CreateEncapsulatedCollectionInstance(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex) {
-            var result = new AggregatedParameterProvenance();
+            AggregatedParameterProvenance result = new AggregatedParameterProvenance();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
@@ -59,7 +59,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             return result;
         }
         public AggregatedParameterProvenance? CreateEncapsulatedEnumeratorInstance() {
-            var result = new AggregatedParameterProvenance();
+            AggregatedParameterProvenance result = new AggregatedParameterProvenance();
             foreach (var origin in ReferencedParameters) {
                 result.ReferencedParameters.Add(
                     origin.Key,
@@ -84,7 +84,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in ReferencedParameters) {
-                var newChains = new HashSet<ParameterTracingChain>();
+                HashSet<ParameterTracingChain> newChains = new HashSet<ParameterTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryExtendTracingWithMemberAccess(member, sccIndex, out ParameterTracingChain? newChain)) {
@@ -113,7 +113,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in ReferencedParameters) {
-                var newChains = new HashSet<ParameterTracingChain>();
+                HashSet<ParameterTracingChain> newChains = new HashSet<ParameterTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryExtendTracingWithArrayAccess(arrayType, sccIndex, out ParameterTracingChain? newChain)) {
@@ -142,7 +142,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in ReferencedParameters) {
-                var newChains = new HashSet<ParameterTracingChain>();
+                HashSet<ParameterTracingChain> newChains = new HashSet<ParameterTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryExtendTracingWithCollectionAccess(collectionType, elementType, sccIndex, out ParameterTracingChain? newChain)) {
@@ -167,7 +167,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             bool foundAny = false;
 
             foreach (var originGroup in ReferencedParameters) {
-                var newChains = new HashSet<ParameterTracingChain>();
+                HashSet<ParameterTracingChain> newChains = new HashSet<ParameterTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
                     if (chain.TryTraceEnumeratorCurrent(out ParameterTracingChain? newChain)) {

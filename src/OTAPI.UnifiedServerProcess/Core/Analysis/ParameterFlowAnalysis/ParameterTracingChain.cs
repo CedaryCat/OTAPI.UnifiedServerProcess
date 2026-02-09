@@ -67,8 +67,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 return new ParameterTracingChain(this, storedIn);
             }
 
-            var newHierarchy = EncapsulationHierarchy.Insert(0, storedIn);
-            var normalizedHierarchy = NormalizeEncapsulationHierarchyWithSccLoops(newHierarchy, sccIndex);
+            ImmutableArray<MemberAccessStep> newHierarchy = EncapsulationHierarchy.Insert(0, storedIn);
+            ImmutableArray<MemberAccessStep> normalizedHierarchy = NormalizeEncapsulationHierarchyWithSccLoops(newHierarchy, sccIndex);
 
             return new ParameterTracingChain(TracingParameter, normalizedHierarchy, ComponentAccessPath);
         }
@@ -81,13 +81,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 return hierarchy;
             }
 
-            var builder = ImmutableArray.CreateBuilder<MemberAccessStep>(hierarchy.Length);
+            ImmutableArray<MemberAccessStep>.Builder builder = ImmutableArray.CreateBuilder<MemberAccessStep>(hierarchy.Length);
 
             int? activeSccId = null;
             bool hasLoopSummary = false;
             HashSet<string>? seen = null;
 
-            foreach (var step in hierarchy) {
+            foreach (MemberAccessStep step in hierarchy) {
                 if (step is SccLoopLayer loop) {
                     activeSccId = loop.SccId;
                     hasLoopSummary = true;
@@ -152,7 +152,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 return null;
             }
             if (EncapsulationHierarchy[0] is ArrayElementLayer or CollectionElementLayer) {
-                var collectionEle = EncapsulationHierarchy[0];
+                MemberAccessStep collectionEle = EncapsulationHierarchy[0];
                 return new ParameterTracingChain(this, new EnumeratorLayer(collectionEle.DeclaringType));
             }
             // if there has already enumerator, we don't need to create a nested one
@@ -286,7 +286,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
         private ComponentPathState ComputeComponentPathState(TypeFlowSccIndex sccIndex) {
             var state = ComponentPathState.Exact(TracingParameter.ParameterType);
 
-            foreach (var step in ComponentAccessPath) {
+            foreach (MemberAccessStep step in ComponentAccessPath) {
                 if (step is SccLoopLayer loop) {
                     state = ComponentPathState.InScc(loop.SccId);
                     continue;
@@ -321,14 +321,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     return false;
                 }
 
-                var loopState = ComputeComponentPathState(sccIndex);
+                ComponentPathState loopState = ComputeComponentPathState(sccIndex);
 
                 if (loopState.Kind == ComponentStateKind.InScc) {
                     result = this;
                     return true;
                 }
 
-                var loopBaseType = loopState.ExactType ?? TracingParameter.ParameterType;
+                TypeReference loopBaseType = loopState.ExactType ?? TracingParameter.ParameterType;
                 if (!sccIndex.IsInSccIncludingBaseTypes(loopBaseType, loop.SccId)) {
                     result = this;
                     return true;
@@ -346,7 +346,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 return true;
             }
 
-            var currentState = ComputeComponentPathState(sccIndex);
+            ComponentPathState currentState = ComputeComponentPathState(sccIndex);
 
             // If we are currently "inside" a recursive SCC (unknown node), only allow exit edges.
             if (currentState.Kind == ComponentStateKind.InScc) {
@@ -369,7 +369,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 return true;
             }
 
-            var baseType = currentState.ExactType ?? TracingParameter.ParameterType;
+            TypeReference baseType = currentState.ExactType ?? TracingParameter.ParameterType;
             if (!sccIndex.TryGetRecursiveSccIdIncludingBaseTypes(baseType, out var sccId) || !sccIndex.IsRecursiveScc(sccId)) {
                 result = new ParameterTracingChain(TracingParameter, [], [.. ComponentAccessPath, member]);
                 return true;
@@ -398,14 +398,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             int sccId) {
 
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            var current = startType;
+            TypeReference current = startType;
 
             bool inScc = sccIndex.IsInSccIncludingBaseTypes(current, sccId);
             if (inScc) {
                 seen.Add(current.FullName);
             }
 
-            foreach (var step in existingPath) {
+            foreach (MemberAccessStep step in existingPath) {
                 if (step is SccLoopLayer loop && loop.SccId == sccId) {
                     // Previous loop summaries shouldn't prevent detecting a new cycle after exiting and re-entering the SCC.
                     seen.Clear();
@@ -424,7 +424,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 seen.Add(current.FullName);
             }
 
-            var nextType = nextStep.MemberType;
+            TypeReference nextType = nextStep.MemberType;
             return sccIndex.IsInSccIncludingBaseTypes(nextType, sccId) && seen.Contains(nextType.FullName);
         }
         public bool TryTraceEnumeratorCurrent([NotNullWhen(true)] out ParameterTracingChain? result) {
@@ -455,7 +455,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     return null;
                 }
 
-                var combinedEncapsulation = innerPart.EncapsulationHierarchy.AddRange(outerPart.EncapsulationHierarchy.Skip(consumedOuter));
+                ImmutableArray<MemberAccessStep> combinedEncapsulation = innerPart.EncapsulationHierarchy.AddRange(outerPart.EncapsulationHierarchy.Skip(consumedOuter));
                 if (sccIndex is not null) {
                     combinedEncapsulation = NormalizeEncapsulationHierarchyWithSccLoops(combinedEncapsulation, sccIndex);
                 }
@@ -467,7 +467,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 );
             }
             else if (innerPart.ComponentAccessPath.Length == 0 && outerPart.EncapsulationHierarchy.Length != 0) {
-                var combinedEncapsulation = innerPart.EncapsulationHierarchy.AddRange(outerPart.EncapsulationHierarchy);
+                ImmutableArray<MemberAccessStep> combinedEncapsulation = innerPart.EncapsulationHierarchy.AddRange(outerPart.EncapsulationHierarchy);
                 if (sccIndex is not null) {
                     combinedEncapsulation = NormalizeEncapsulationHierarchyWithSccLoops(combinedEncapsulation, sccIndex);
                 }
@@ -486,8 +486,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
 
                 var combined = new ParameterTracingChain(outerPart.TracingParameter, [], outerPart.ComponentAccessPath);
-                foreach (var step in innerPart.ComponentAccessPath) {
-                    if (!combined.TryExtendComponentAccessPath(step, sccIndex, out var next)) {
+                foreach (MemberAccessStep step in innerPart.ComponentAccessPath) {
+                    if (!combined.TryExtendComponentAccessPath(step, sccIndex, out ParameterTracingChain? next)) {
                         return null;
                     }
                     combined = next;
@@ -523,7 +523,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     j++;
                 }
 
-                var step = innerComponent[i];
+                MemberAccessStep step = innerComponent[i];
 
                 if (step is SccLoopLayer loop) {
                     if (sccIndex is null || !sccIndex.IsRecursiveScc(loop.SccId)) {

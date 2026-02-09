@@ -39,9 +39,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
             delegateInvocationGraph = invocationGraph;
             this.methodInheritanceGraph = methodInheritanceGraph;
 
-            var modifiedParameters = new Dictionary<string, Dictionary<int, ParameterMutationInfo>>();
+            Dictionary<string, Dictionary<int, ParameterMutationInfo>> modifiedParameters = new Dictionary<string, Dictionary<int, ParameterMutationInfo>>();
 
-            var workQueue = new Dictionary<string, MethodDefinition>(
+            Dictionary<string, MethodDefinition> workQueue = new Dictionary<string, MethodDefinition>(
                 module.GetAllTypes()
                 .SelectMany(t => t.Methods)
                 .Where(m => m.HasBody)
@@ -228,7 +228,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
             }
 
             void HandleModifyField(Instruction instruction) {
-                var field = (FieldReference)instruction.Operand;
+                FieldReference field = (FieldReference)instruction.Operand;
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                     foreach (var loadModifyingInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
 
@@ -327,7 +327,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
             }
             void HandleMethodCall(Instruction instruction) {
 
-                var callee = (MethodReference)instruction.Operand;
+                MethodReference callee = (MethodReference)instruction.Operand;
                 var resolvedCallee = ((MethodReference)instruction.Operand).TryResolve();
 
                 if (!parameterFlowAnalyzer.AnalyzedMethods.TryGetValue(processingMethodId, out var tracedMethodData)) {

@@ -4,6 +4,7 @@ using Mono.Cecil.Cil;
 using MonoMod.Cil;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
+using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
@@ -23,18 +24,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public override string Name => nameof(TrivialDefaultValuePatcher);
 
         public override void Patch(PatcherArguments arguments) {
-            var main = arguments.ContextTypes["Terraria.Main" + Constants.ContextSuffix];
+            ContextTypeData main = arguments.ContextTypes["Terraria.Main" + Constants.ContextSuffix];
 
             // Because the RootContext contains most of the static conversion entities,
             // this makes it possible for some lazy loading logic to be triggered earlier (before Program.RunGame).
 
             // Such as Main.dedServ is only set to true in Program.RunGame,
             // so setting MainSystenContext.dedServ to true in the initialization is very necessary, otherwise some servers that should not run will be executed incorrectly.
-            var mainCtor = main.constructor;
-            var dedServ = main.ContextTypeDef.GetField("dedServ");
+            MethodDefinition mainCtor = main.constructor;
+            FieldDefinition dedServ = main.ContextTypeDef.GetField("dedServ");
 
-            var baseCtorCall = MonoModCommon.IL.GetBaseConstructorCall(mainCtor.Body) ?? throw new Exception("Failed to find base constructor call");
-            var il = mainCtor.Body.GetILProcessor();
+            Instruction baseCtorCall = MonoModCommon.IL.GetBaseConstructorCall(mainCtor.Body) ?? throw new Exception("Failed to find base constructor call");
+            ILProcessor il = mainCtor.Body.GetILProcessor();
             il.InsertBefore(baseCtorCall, Instruction.Create(OpCodes.Ldarg_0));
             il.InsertBefore(baseCtorCall, Instruction.Create(OpCodes.Ldc_I4_1));
             il.InsertBefore(baseCtorCall, Instruction.Create(OpCodes.Stfld, dedServ));
@@ -45,28 +46,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // initial maxTilesX = rightWorld / 16 + 1 = 2
             // initial maxTilesY = bottomWorld / 16 + 1 = 2
 
-            var loadRightWorldConst = mainCtor.Body.Instructions.Single(inst =>
+            Instruction loadRightWorldConst = mainCtor.Body.Instructions.Single(inst =>
                 inst.OpCode == OpCodes.Ldc_R4 &&
-                inst.Next.MatchStfld(out var rightWorldField) &&
+                inst.Next.MatchStfld(out FieldReference? rightWorldField) &&
                 rightWorldField.Name == "rightWorld");
             loadRightWorldConst.Operand = 16f;
 
-            var loadBottomWorldConst = mainCtor.Body.Instructions.Single(inst =>
+            Instruction loadBottomWorldConst = mainCtor.Body.Instructions.Single(inst =>
                 inst.OpCode == OpCodes.Ldc_R4 &&
-                inst.Next.MatchStfld(out var bottomWorldField) &&
+                inst.Next.MatchStfld(out FieldReference? bottomWorldField) &&
                 bottomWorldField.Name == "bottomWorld");
             loadBottomWorldConst.Operand = 16f;
 
-            var worldGen = arguments.ContextTypes["Terraria.WorldGen" + Constants.ContextSuffix];
-            var clearWorld = worldGen.ContextTypeDef.GetMethod("mfwh_clearWorld");
+            ContextTypeData worldGen = arguments.ContextTypes["Terraria.WorldGen" + Constants.ContextSuffix];
+            MethodDefinition clearWorld = worldGen.ContextTypeDef.GetMethod("mfwh_clearWorld");
             var resetWorldSize = new MethodDefinition("ResetWorldSize", MethodAttributes.Public | MethodAttributes.HideBySig, arguments.MainModule.TypeSystem.Void);
             worldGen.ContextTypeDef.Methods.Add(resetWorldSize);
-            var body = resetWorldSize.Body = new MethodBody(resetWorldSize);
+            MethodBody body = resetWorldSize.Body = new MethodBody(resetWorldSize);
             var local_main = new VariableDefinition(main.ContextTypeDef);
             body.Variables.Add(local_main);
-            var tileField = main.ContextTypeDef.GetField("tile");
-            var maxTilesX = main.ContextTypeDef.GetField("maxTilesX");
-            var maxTilesY = main.ContextTypeDef.GetField("maxTilesY");
+            FieldDefinition tileField = main.ContextTypeDef.GetField("tile");
+            FieldDefinition maxTilesX = main.ContextTypeDef.GetField("maxTilesX");
+            FieldDefinition maxTilesY = main.ContextTypeDef.GetField("maxTilesY");
             var tileProviderCreate = new MethodReference("Create", tileField.FieldType, tileField.FieldType);
             tileProviderCreate.Parameters.AddRange([
                 new(arguments.MainModule.TypeSystem.Int32),
@@ -113,7 +114,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 Instruction.Create(OpCodes.Ret),
             ]);
 
-            var cursor = clearWorld.GetILCursor();
+            ILCursor cursor = clearWorld.GetILCursor();
             cursor
                 .Goto(cursor.Body.Instructions.First())
                 .Emit(OpCodes.Ldarg_0)

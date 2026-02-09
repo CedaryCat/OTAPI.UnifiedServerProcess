@@ -15,7 +15,7 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
         #region Tools
         public static Dictionary<Instruction, List<Instruction>> GetMethodJumpSites<TFeature>(this TFeature _, MethodDefinition method) where TFeature : IJumpSitesCacheFeature {
-            if (!cachedJumpSites.TryGetValue(method, out var result)) {
+            if (!cachedJumpSites.TryGetValue(method, out Dictionary<Instruction, List<Instruction>>? result)) {
                 cachedJumpSites.Add(method, result = MonoModCommon.Stack.BuildJumpSitesMap(method));
             }
             return result;

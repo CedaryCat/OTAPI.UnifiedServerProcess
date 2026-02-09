@@ -22,27 +22,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public override string Name => nameof(AdjustHooksPatcher);
 
         public override void Patch(PatcherArguments arguments) {
-            var hookEventDelegate = arguments.MainModule.GetType("HookEvents.HookDelegate")
+            TypeDefinition hookEventDelegate = arguments.MainModule.GetType("HookEvents.HookDelegate")
                 ?? throw new Exception("HookEvents.HookDelegate is not found.");
-            var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
+            ContextBoundMethodMap mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
 
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
                 if (!type.GetRootDeclaringType().Namespace.OrdinalStartsWith("HookEvents.")) {
                     continue;
                 }
                 if (type.BaseType?.Name == "MulticastDelegate") {
                     continue;
                 }
-                foreach (var invokeMethod in type.Methods) {
+                foreach (MethodDefinition? invokeMethod in type.Methods) {
                     if (!invokeMethod.Name.OrdinalStartsWith("Invoke")) {
                         continue;
                     }
                     var methodId = invokeMethod.GetIdentifier();
-                    if (!callGraph.MediatedCallGraph.TryGetValue(methodId, out var callData)) {
+                    if (!callGraph.MediatedCallGraph.TryGetValue(methodId, out MethodCallData? callData)) {
                         continue;
                     }
-                    var containingMethod = callData.UsedByMethods.Single();
-                    if (mappedMethods.originalToContextBound.TryGetValue(containingMethod.GetIdentifier(), out var convertedMethod)) {
+                    MethodDefinition containingMethod = callData.UsedByMethods.Single();
+                    if (mappedMethods.originalToContextBound.TryGetValue(containingMethod.GetIdentifier(), out MethodDefinition? convertedMethod)) {
                         containingMethod = convertedMethod;
                     }
 
@@ -56,18 +56,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return;
             }
 
-            foreach (var inst in containingMethod.Body.Instructions) {
+            foreach (Instruction? inst in containingMethod.Body.Instructions) {
                 if (inst.OpCode != OpCodes.Newobj) {
                     continue;
                 }
-                var ctor = ((MethodReference)inst.Operand).Resolve();
+                MethodDefinition ctor = ((MethodReference)inst.Operand).Resolve();
                 if (ctor?.DeclaringType.BaseType.Name != "MulticastDelegate") {
                     continue;
                 }
-                var delegateDef = ctor.DeclaringType;
+                TypeDefinition delegateDef = ctor.DeclaringType;
 
-                var invokeDef = delegateDef.GetMethod("Invoke");
-                var beginInvoke = delegateDef.GetMethod("BeginInvoke");
+                MethodDefinition invokeDef = delegateDef.GetMethod("Invoke");
+                MethodDefinition beginInvoke = delegateDef.GetMethod("BeginInvoke");
                 for (int i = 0; i < containingMethod.Parameters.Count; i++) {
                     invokeDef.Parameters[i].Attributes = containingMethod.Parameters[i].Attributes;
                     beginInvoke.Parameters[i].Attributes = containingMethod.Parameters[i].Attributes;

@@ -1,6 +1,7 @@
 ﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using Mono.Collections.Generic;
 using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
@@ -33,7 +34,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             ProcessTerraria_GameContent_Creative_CreativePowerManager(raw);
             ProcessTerraria_WorldBuilding_WorldGenerationOptions(raw);
 
-            foreach (var fieldKV in raw.ModifiedStaticFields.ToArray()) {
+            foreach (KeyValuePair<string, FieldDefinition> fieldKV in raw.ModifiedStaticFields.ToArray()) {
                 if (fieldKV.Value.DeclaringType.HasGenericParameters) {
                     if (ignoredStaticGenericFieldDeclaringFullNames.Contains(fieldKV.Value.DeclaringType.FullName)) {
                         raw.ModifiedStaticFields.Remove(fieldKV.Key);
@@ -45,17 +46,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         }
         void ProcessTerraria_Net_NetManager(FilterArgumentSource argument) {
 
-            var netManager = argument.MainModule.GetType("Terraria.Net.NetManager");
-            var packetTypeStorage = argument.MainModule.GetType("Terraria.Net.NetManager/PacketTypeStorage`1");
+            TypeDefinition netManager = argument.MainModule.GetType("Terraria.Net.NetManager");
+            TypeDefinition packetTypeStorage = argument.MainModule.GetType("Terraria.Net.NetManager/PacketTypeStorage`1");
 
-            var netManager_moduleCount = netManager.GetField(nameof(Terraria.Net.NetManager._moduleCount))
+            FieldDefinition netManager_moduleCount = netManager.GetField(nameof(Terraria.Net.NetManager._moduleCount))
                 ?? throw new Exception("Terraria.Net.NetManager._moduleCount not found");
-            var netManager_modules = netManager.GetField(nameof(Terraria.Net.NetManager._modules))
+            FieldDefinition netManager_modules = netManager.GetField(nameof(Terraria.Net.NetManager._modules))
                 ?? throw new Exception("Terraria.Net.NetManager._modules not found");
 
-            var packetTypeStorage_Id = packetTypeStorage.GetField(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Id))
+            FieldDefinition packetTypeStorage_Id = packetTypeStorage.GetField(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Id))
                 ?? throw new Exception("Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Id not found");
-            var packetTypeStorage_Module = packetTypeStorage.GetField(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module))
+            FieldDefinition packetTypeStorage_Module = packetTypeStorage.GetField(nameof(Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module))
                 ?? throw new Exception("Terraria.Net.NetManager.PacketTypeStorage<Terraria.Net.NetModule>.Module not found");
 
             RefactorFieldOperate_DictionaryStorage(netManager, packetTypeStorage, true);
@@ -63,29 +64,29 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Id.GetIdentifier());
             argument.ModifiedStaticFields.Remove(packetTypeStorage_Module.GetIdentifier());
 
-            var instanceField = netManager.GetField("Instance");
+            FieldDefinition instanceField = netManager.GetField("Instance");
             argument.ModifiedStaticFields.TryAdd(instanceField.GetIdentifier(), instanceField);
-            var packetTypeStorageInstanceField = netManager.GetField("PacketTypeStorageInstance");
+            FieldDefinition packetTypeStorageInstanceField = netManager.GetField("PacketTypeStorageInstance");
             argument.ModifiedStaticFields.TryAdd(packetTypeStorageInstanceField.GetIdentifier(), packetTypeStorageInstanceField);
         }
 
         void ProcessTerraria_GameContent_Creative_CreativePowerManager(FilterArgumentSource argument) {
 
-            var creativePowerManager = argument.MainModule.GetType("Terraria.GameContent.Creative.CreativePowerManager");
-            var powerTypeStorage = argument.MainModule.GetType("Terraria.GameContent.Creative.CreativePowerManager/PowerTypeStorage`1");
+            TypeDefinition creativePowerManager = argument.MainModule.GetType("Terraria.GameContent.Creative.CreativePowerManager");
+            TypeDefinition powerTypeStorage = argument.MainModule.GetType("Terraria.GameContent.Creative.CreativePowerManager/PowerTypeStorage`1");
 
-            var creativePowerManager_powersCount = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersCount))
+            FieldDefinition creativePowerManager_powersCount = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersCount))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager._powersCount not found");
-            var creativePowerManager_powersById = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersById))
+            FieldDefinition creativePowerManager_powersById = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersById))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager._powersById not found");
-            var creativePowerManager_powersByName = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersByName))
+            FieldDefinition creativePowerManager_powersByName = creativePowerManager.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager._powersByName))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager._powersByName not found");
 
-            var powerTypeStorage_Id = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Id))
+            FieldDefinition powerTypeStorage_Id = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Id))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Id not found");
-            var powerTypeStorage_Name = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Name))
+            FieldDefinition powerTypeStorage_Name = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Name))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Name not found");
-            var powerTypeStorage_Power = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power))
+            FieldDefinition powerTypeStorage_Power = powerTypeStorage.GetField(nameof(Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power))
                 ?? throw new Exception("Terraria.GameContent.Creative.CreativePowerManager.PowerTypeStorage<Terraria.GameContent.Creative.ICreativePower>.Power not found");
 
             RefactorFieldOperate_DictionaryStorage(creativePowerManager, powerTypeStorage, true);
@@ -94,20 +95,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Name.GetIdentifier());
             argument.ModifiedStaticFields.Remove(powerTypeStorage_Power.GetIdentifier());
 
-            var powerStorageInstanceField = creativePowerManager.GetField("PowerTypeStorageInstance");
+            FieldDefinition powerStorageInstanceField = creativePowerManager.GetField("PowerTypeStorageInstance");
             argument.ModifiedStaticFields.TryAdd(powerStorageInstanceField.GetIdentifier(), powerStorageInstanceField);
         }
 
         void ProcessTerraria_WorldBuilding_WorldGenerationOptions(FilterArgumentSource argument) {
-            var worldGenerationOptions = argument.MainModule.GetType("Terraria.WorldBuilding.WorldGenerationOptions");
-            var optionStorage = argument.MainModule.GetType("Terraria.WorldBuilding.WorldGenerationOptions/OptionStorage`1");
+            TypeDefinition worldGenerationOptions = argument.MainModule.GetType("Terraria.WorldBuilding.WorldGenerationOptions");
+            TypeDefinition optionStorage = argument.MainModule.GetType("Terraria.WorldBuilding.WorldGenerationOptions/OptionStorage`1");
 
-            var optionStorage_Instance = optionStorage.GetField(nameof(Terraria.WorldBuilding.WorldGenerationOptions.OptionStorage<Terraria.WorldBuilding.AWorldGenerationOption>.Instance))
+            FieldDefinition optionStorage_Instance = optionStorage.GetField(nameof(Terraria.WorldBuilding.WorldGenerationOptions.OptionStorage<Terraria.WorldBuilding.AWorldGenerationOption>.Instance))
                 ?? throw new Exception("Terraria.WorldBuilding.WorldGenerationOptions.OptionStorage<Terraria.WorldBuilding.AWorldGenerationOption>.Instance not found");
 
             worldGenerationOptions.Attributes |= TypeAttributes.Abstract;
             worldGenerationOptions.Attributes |= TypeAttributes.Sealed;
-            foreach (var ctor in worldGenerationOptions.Methods.Where(x => !x.IsStatic && x.IsConstructor).ToList()) {
+            foreach (MethodDefinition? ctor in worldGenerationOptions.Methods.Where(x => !x.IsStatic && x.IsConstructor).ToList()) {
                 worldGenerationOptions.Methods.Remove(ctor);
             }
 
@@ -115,10 +116,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             argument.ModifiedStaticFields.Remove(optionStorage_Instance.GetIdentifier());
 
-            var optionsField = worldGenerationOptions.GetField("_options");
+            FieldDefinition optionsField = worldGenerationOptions.GetField("_options");
             argument.ModifiedStaticFields.TryAdd(optionsField.GetIdentifier(), optionsField);
 
-            var optionStorageInstanceField = worldGenerationOptions.GetField("OptionStorageInstance");
+            FieldDefinition optionStorageInstanceField = worldGenerationOptions.GetField("OptionStorageInstance");
             argument.ModifiedStaticFields.TryAdd(optionStorageInstanceField.GetIdentifier(), optionStorageInstanceField);
         }
 
@@ -166,7 +167,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 rtHandleType = new TypeReference(nameof(System), nameof(RuntimeTypeHandle), module, module.TypeSystem.CoreLibrary);
                 activatorType = new TypeReference(nameof(System), nameof(Activator), module, module.TypeSystem.CoreLibrary);
 
-                var collectionScope = module.AssemblyReferences.First(a => a.Name == "System.Collections");
+                AssemblyNameReference collectionScope = module.AssemblyReferences.First(a => a.Name == "System.Collections");
 
                 dictTypePatten = new TypeReference("System.Collections.Generic", "Dictionary`2", module, collectionScope);
                 var genericParamKey = new GenericParameter(dictTypePatten);
@@ -183,9 +184,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             readonly TypeInitializationParams typeParams;
             public MethodReference CreateDictTryGet(TypeReference genericInstancedDictType) {
 
-                var dictTypePatten = typeParams.dictTypePatten;
-                var genericParamKey = dictTypePatten.GenericParameters[0];
-                var genericParamValue = dictTypePatten.GenericParameters[1];
+                TypeReference dictTypePatten = typeParams.dictTypePatten;
+                GenericParameter genericParamKey = dictTypePatten.GenericParameters[0];
+                GenericParameter genericParamValue = dictTypePatten.GenericParameters[1];
 
                 var dictTryGet = new MethodReference(nameof(Dictionary<Type, object>.TryGetValue), typeParams.Bool, dictTypePatten) {
                     HasThis = true,
@@ -198,9 +199,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             }
             public MethodReference CreateSetItem(TypeReference genericInstancedDictType) {
 
-                var dictTypePatten = typeParams.dictTypePatten;
-                var genericParamKey = dictTypePatten.GenericParameters[0];
-                var genericParamValue = dictTypePatten.GenericParameters[1];
+                TypeReference dictTypePatten = typeParams.dictTypePatten;
+                GenericParameter genericParamKey = dictTypePatten.GenericParameters[0];
+                GenericParameter genericParamValue = dictTypePatten.GenericParameters[1];
 
                 var dictSetItem = new MethodReference("set_Item", typeParams.Void, dictTypePatten) {
                     HasThis = true,
@@ -220,10 +221,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             public MethodReferenceParams(in TypeInitializationParams typeParams) {
                 this.typeParams = typeParams;
 
-                var module = typeParams.module;
-                var sysType = typeParams.sysType;
-                var rtHandleType = typeParams.rtHandleType;
-                var activatorType = typeParams.activatorType;
+                ModuleDefinition module = typeParams.module;
+                TypeReference sysType = typeParams.sysType;
+                TypeReference rtHandleType = typeParams.rtHandleType;
+                TypeReference activatorType = typeParams.activatorType;
 
                 TypeOfT = module.ImportReference(sysType.Resolve().Methods.Single(m => m.Name == nameof(Type.GetTypeFromHandle)));
 
@@ -252,7 +253,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 var method = new MethodReference(".ctor", ItemCtor.ReturnType, genericInstancedItemType) {
                     HasThis = true,
                 };
-                foreach (var parameter in ItemCtor.Parameters) {
+                foreach (ParameterDefinition? parameter in ItemCtor.Parameters) {
                     method.Parameters.Add(new ParameterDefinition(parameter.ParameterType));
                 }
                 return method;
@@ -266,22 +267,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             public readonly TypeReference innerContainerType = innerContainerType;
         }
         private static void CreateItemTypeAndFieldMap(in TypeInitializationParams typeParams, in MethodReferenceParams methodParams, out ItemParams itemParams) {
-            var staticGenericType = typeParams.staticGenericType;
-            var origGenericParam = typeParams.origGenericParam;
+            TypeDefinition staticGenericType = typeParams.staticGenericType;
+            GenericParameter origGenericParam = typeParams.origGenericParam;
 
             var name = staticGenericType.Name.Split('`')[0];
             var itemType = new TypeDefinition("", name + "Item", TypeAttributes.NestedPublic | TypeAttributes.Class, staticGenericType.Module.TypeSystem.Object);
             var itemGenericParam = new GenericParameter(origGenericParam.Name, itemType);
             itemType.GenericParameters.Add(itemGenericParam);
 
-            var fields = staticGenericType.Fields.Where(f => f.IsStatic).ToArray();
-            var origGenericField = fields.FirstOrDefault(f => f.FieldType == origGenericParam)
+            FieldDefinition[] fields = staticGenericType.Fields.Where(f => f.IsStatic).ToArray();
+            FieldDefinition origGenericField = fields.FirstOrDefault(f => f.FieldType == origGenericParam)
                 ?? throw new Exception("The type does not contain a fieldKV of the generic type");
 
             var fieldMap = new Dictionary<FieldDefinition, FieldDefinition>();
 
-            foreach (var origField in fields) {
-                var fieldType = origField.FieldType;
+            foreach (FieldDefinition? origField in fields) {
+                TypeReference fieldType = origField.FieldType;
                 if (origField.FieldType == origGenericParam) {
                     fieldType = itemGenericParam;
                 }
@@ -290,7 +291,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 itemType.Fields.Add(field);
             }
 
-            var genericField = fieldMap[origGenericField];
+            FieldDefinition genericField = fieldMap[origGenericField];
             var genericInstanceItemType = new GenericInstanceType(itemType);
             genericInstanceItemType.GenericArguments.Add(itemGenericParam);
             var genericInstanceField = new FieldReference(genericField.Name, genericField.FieldType, genericInstanceItemType);
@@ -300,7 +301,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 typeParams.Void);
             itemCtor.Parameters.Add(new ParameterDefinition("defaultValue", ParameterAttributes.None, itemGenericParam));
             itemCtor.Body = new MethodBody(itemCtor);
-            var itemCtorBody = itemCtor.Body.Instructions;
+            Collection<Instruction> itemCtorBody = itemCtor.Body.Instructions;
             itemCtorBody.Add(Instruction.Create(OpCodes.Ldarg_0));
             itemCtorBody.Add(Instruction.Create(OpCodes.Call, new MethodReference(".ctor", typeParams.Void, typeParams.Object) { HasThis = true }));
             itemCtorBody.Add(Instruction.Create(OpCodes.Ldarg_0));
@@ -314,7 +315,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             itemParams = new ItemParams(itemType, itemCtor, fieldMap);
         }
         private static void CreateContainerType(in TypeInitializationParams typeParams, out ContainerParams containerParams) {
-            var containingType = typeParams.containingType;
+            TypeDefinition containingType = typeParams.containingType;
             var containerType = new TypeDefinition("", typeParams.Prefix + "Container", TypeAttributes.NestedPublic | TypeAttributes.Class, containingType.Module.TypeSystem.Object);
             containingType.NestedTypes.Add(containerType);
             var containerCtor = new MethodDefinition(".ctor", MethodAttributes.Public | MethodAttributes.HideBySig | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName, typeParams.Void);
@@ -326,7 +327,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             var innerContainerField = new FieldDefinition("data", FieldAttributes.Public, innerContainerType);
             containerType.Fields.Add(innerContainerField);
 
-            var containerCtorBody = containerCtor.Body.Instructions;
+            Collection<Instruction> containerCtorBody = containerCtor.Body.Instructions;
 
             containerCtorBody.Add(Instruction.Create(OpCodes.Ldarg_0));
             containerCtorBody.Add(Instruction.Create(OpCodes.Newobj, new MethodReference(".ctor", typeParams.Void, innerContainerType) { HasThis = true }));
@@ -340,16 +341,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             containingType.Fields.Add(containerField);
 
             if (containingType.Attributes.HasFlag(TypeAttributes.Abstract | TypeAttributes.Sealed)) {
-                var containingTypeCtorDef = containingType.Methods.Single(m => m.Name == ".cctor" && m.IsStatic);
+                MethodDefinition containingTypeCtorDef = containingType.Methods.Single(m => m.Name == ".cctor" && m.IsStatic);
                 containingTypeCtorDef.Body.Instructions.InsertRange(0, [
                     Instruction.Create(OpCodes.Newobj, containerCtor),
                     Instruction.Create(OpCodes.Stsfld, containerField)
                 ]);
             }
             else {
-                var containingTypeCtorDef = containingType.Methods.Single(m => m.Name == ".ctor" && !m.IsStatic);
-                var callBaseCtor = containingTypeCtorDef.Body.Instructions.Single(i => i.OpCode == OpCodes.Call && ((MethodReference)i.Operand).Name == ".ctor");
-                var loadThisBeforeCallBaseCtor = callBaseCtor.Previous;
+                MethodDefinition containingTypeCtorDef = containingType.Methods.Single(m => m.Name == ".ctor" && !m.IsStatic);
+                Instruction callBaseCtor = containingTypeCtorDef.Body.Instructions.Single(i => i.OpCode == OpCodes.Call && ((MethodReference)i.Operand).Name == ".ctor");
+                Instruction loadThisBeforeCallBaseCtor = callBaseCtor.Previous;
                 containingTypeCtorDef.Body.GetILProcessor()
                     .InsertBeforeSeamlessly(ref loadThisBeforeCallBaseCtor, [
                         Instruction.Create(OpCodes.Ldarg_0),
@@ -366,11 +367,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             var methodParams = new MethodReferenceParams(typeParams);
 
             // create item type and fields
-            CreateItemTypeAndFieldMap(typeParams, methodParams, out var itemParams);
+            CreateItemTypeAndFieldMap(typeParams, methodParams, out ItemParams itemParams);
             fieldMap = itemParams.FieldMap;
 
             // create container type and fields
-            CreateContainerType(typeParams, out var containerParams);
+            CreateContainerType(typeParams, out ContainerParams containerParams);
 
             typedDataGetMethod = new MethodDefinition("Get", MethodAttributes.Public | MethodAttributes.HideBySig, itemParams.ItemType);
             var getMethodGenericParam = new GenericParameter(typeParams.origGenericParam.Name, typedDataGetMethod);
@@ -381,7 +382,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             getMethodGenericParam.Constraints.Add(constraint);
             typedDataGetMethod.GenericParameters.Add(getMethodGenericParam);
 
-            var itemCtorRef = itemParams.CreateGenericInstancedCtor(getMethodGenericParam, out var returnType);
+            MethodReference itemCtorRef = itemParams.CreateGenericInstancedCtor(getMethodGenericParam, out GenericInstanceType? returnType);
             typedDataGetMethod.ReturnType = returnType;
 
             typedDataGetMethod.Body = new MethodBody(typedDataGetMethod);
@@ -390,7 +391,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
             var loadObj = Instruction.Create(OpCodes.Ldloc_0);
 
-            var getValueBody = typedDataGetMethod.Body.Instructions;
+            Collection<Instruction> getValueBody = typedDataGetMethod.Body.Instructions;
             getValueBody.Add(Instruction.Create(OpCodes.Ldarg_0));
             getValueBody.Add(Instruction.Create(OpCodes.Ldfld, containerParams.innerContainerField));
             getValueBody.Add(Instruction.Create(OpCodes.Ldtoken, getMethodGenericParam));
@@ -427,21 +428,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
         }
         void RefactorFieldOperate_DictionaryStorage(TypeDefinition containingType, TypeDefinition staticGenericType, bool paramless) {
 
-            CreateTypedDataGetMethod(containingType, staticGenericType, paramless, out var containerField, out var typedDataGetMethod, out var fieldMap);
-            foreach (var method in containingType.Methods) {
-                var jumpSites = this.GetMethodJumpSites(method);
-                var ilProcessor = method.Body.GetILProcessor();
+            CreateTypedDataGetMethod(containingType, staticGenericType, paramless, out FieldDefinition? containerField, out MethodDefinition? typedDataGetMethod, out Dictionary<FieldDefinition, FieldDefinition>? fieldMap);
+            foreach (MethodDefinition? method in containingType.Methods) {
+                Dictionary<Instruction, List<Instruction>> jumpSites = this.GetMethodJumpSites(method);
+                ILProcessor ilProcessor = method.Body.GetILProcessor();
 
-                foreach (var instruction in method.Body.Instructions.ToArray()) {
+                foreach (Instruction? instruction in method.Body.Instructions.ToArray()) {
                     switch (instruction.OpCode.Code) {
                         case Code.Ldsflda:
                         case Code.Ldsfld: {
                                 var fieldRef = (FieldReference)instruction.Operand;
-                                var field = fieldRef.TryResolve();
+                                FieldDefinition? field = fieldRef.TryResolve();
                                 if (field is null) {
                                     continue;
                                 }
-                                if (!fieldMap.TryGetValue(field, out var newField)) {
+                                if (!fieldMap.TryGetValue(field, out FieldDefinition? newField)) {
                                     continue;
                                 }
                                 var genericInstance = (GenericInstanceType)fieldRef.DeclaringType;
@@ -467,7 +468,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                                     ];
                                 }
 
-                                var insertTarget = instruction;
+                                Instruction insertTarget = instruction;
                                 ilProcessor.InsertBeforeSeamlessly(ref insertTarget, insertBefores);
                                 insertTarget.Operand = genericInstancedFieldRef;
                                 insertTarget.OpCode = insertTarget.OpCode.Code == Code.Ldsflda ? OpCodes.Ldflda : OpCodes.Ldfld;
@@ -475,15 +476,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                             }
                         case Code.Stsfld: {
                                 var fieldRef = (FieldReference)instruction.Operand;
-                                var field = fieldRef.TryResolve();
+                                FieldDefinition? field = fieldRef.TryResolve();
                                 if (field is null) {
                                     continue;
                                 }
-                                if (!fieldMap.TryGetValue(field, out var newField)) {
+                                if (!fieldMap.TryGetValue(field, out FieldDefinition? newField)) {
                                     continue;
                                 }
-                                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
-                                    var loadValue = path.ParametersSources[0].Instructions.First();
+                                foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
+                                    Instruction loadValue = path.ParametersSources[0].Instructions.First();
 
                                     var genericInstance = (GenericInstanceType)fieldRef.DeclaringType;
                                     var genericInstancedGetMethod = new GenericInstanceMethod(typedDataGetMethod);

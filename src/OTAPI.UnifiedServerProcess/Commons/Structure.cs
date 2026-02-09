@@ -13,7 +13,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
         public static class Structure
         {
             public static TypeReference CreateTypeReference(TypeDefinition type, ModuleDefinition module) {
-                var result = new TypeReference(type.Namespace, type.Name, module, type.Scope) {
+                TypeReference result = new TypeReference(type.Namespace, type.Name, module, type.Scope) {
                     IsValueType = type.IsValueType,
                 };
                 if (result.HasGenericParameters) {
@@ -40,13 +40,13 @@ namespace OTAPI.UnifiedServerProcess.Commons
             public static MethodReference CreateMethodReference(MethodReference origiReference, MethodDefinition definition) {
                 TypeReference declaringType = definition.DeclaringType;
                 if (origiReference.DeclaringType is GenericInstanceType origiGenericType) {
-                    var genericType = new GenericInstanceType(declaringType);
+                    GenericInstanceType genericType = new GenericInstanceType(declaringType);
                     foreach (var genArg in origiGenericType.GenericArguments) {
                         genericType.GenericArguments.Add(genArg);
                     }
                     declaringType = genericType;
                 }
-                var callee = new MethodReference(definition.Name, definition.ReturnType, declaringType) {
+                MethodReference callee = new MethodReference(definition.Name, definition.ReturnType, declaringType) {
                     HasThis = definition.HasThis
                 };
                 foreach (var genParam in definition.GenericParameters) {
@@ -56,7 +56,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     callee.Parameters.Add(param.Clone());
                 }
                 if (origiReference is GenericInstanceMethod genericMethod) {
-                    var gerericCallee = new GenericInstanceMethod(callee);
+                    GenericInstanceMethod gerericCallee = new GenericInstanceMethod(callee);
                     foreach (var genArg in genericMethod.GenericArguments) {
                         gerericCallee.GenericArguments.Add(genArg);
                     }
@@ -112,7 +112,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     pattern = mappedPattern;
                 }
 
-                var result = new GenericInstanceType(pattern);
+                GenericInstanceType result = new GenericInstanceType(pattern);
                 foreach (var arg in instance.GenericArguments) {
                     if (arg is GenericInstanceType nestedGeneric) {
                         result.GenericArguments.Add(DeepMapGenericInstanceType(nestedGeneric, option));
@@ -165,7 +165,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     pattern = mappedPattern;
                 }
 
-                var result = new GenericInstanceMethod(pattern);
+                GenericInstanceMethod result = new GenericInstanceMethod(pattern);
                 foreach (var arg in instance.GenericArguments) {
                     if (arg is GenericInstanceType nestedGeneric) {
                         result.GenericArguments.Add(DeepMapGenericInstanceType(nestedGeneric, option));
@@ -216,7 +216,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 var def = method.TryResolve();
                 if (def is null && method.DeclaringType is ArrayType arrayType) {
                     arrayType = new ArrayType(DeepMapTypeReference(arrayType.ElementType, option), arrayType.Rank);
-                    var mref = new MethodReference(method.Name, DeepMapTypeReference(method.ReturnType, option), arrayType) {
+                    MethodReference mref = new MethodReference(method.Name, DeepMapTypeReference(method.ReturnType, option), arrayType) {
                         HasThis = method.HasThis
                     };
                     mref.Parameters.AddRange(method.Parameters.Select(p => new ParameterDefinition(DeepMapTypeReference(p.ParameterType, option))));
@@ -232,7 +232,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         && m.HasThis == method.HasThis)) {
                         declaringType = DeepMapTypeReference(method.DeclaringType, option);
                     }
-                    var mref = new MethodReference(method.Name,
+                    MethodReference mref = new MethodReference(method.Name,
                         DeepMapTypeReference(method.ReturnType, option),
                         declaringType) {
                         HasThis = method.HasThis
@@ -254,7 +254,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 if (option.MethodReplaceMap.TryGetValue(method, out var mappedMethod)) {
                     return mappedMethod;
                 }
-                var result = new MethodDefinition(method.Name, method.Attributes, method.Module.TypeSystem.Void);
+                MethodDefinition result = new MethodDefinition(method.Name, method.Attributes, method.Module.TypeSystem.Void);
 
                 result.CustomAttributes.AddRange(method.CustomAttributes.Select(c => c.Clone()));
 
@@ -317,13 +317,13 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 Dictionary<VariableDefinition, VariableDefinition> varMap = [];
 
                 foreach (var local in copyFrom.Variables) {
-                    var addLocal = new VariableDefinition(DeepMapTypeReference(local.VariableType, option));
+                    VariableDefinition addLocal = new VariableDefinition(DeepMapTypeReference(local.VariableType, option));
                     copied.Variables.Add(addLocal);
                     varMap.Add(local, addLocal);
                 }
 
                 foreach (var inst in copyFrom.Instructions) {
-                    var addInst = Instruction.Create(OpCodes.Nop);
+                    Instruction addInst = Instruction.Create(OpCodes.Nop);
                     addInst.OpCode = inst.OpCode;
                     addInst.Operand = inst.Operand;
                     addInst.Offset = inst.Offset;
@@ -338,7 +338,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         inst.Operand = instMap[target];
                     }
                     else if (inst.Operand is Instruction[] targets) {
-                        var newTargets = new Instruction[targets.Length];
+                        Instruction[] newTargets = new Instruction[targets.Length];
                         for (int i = 0; i < targets.Length; i++) {
                             newTargets[i] = instMap[targets[i]];
                         }
@@ -376,7 +376,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 }
 
                 copied.ExceptionHandlers.AddRange(copyFrom.ExceptionHandlers.Select(o => {
-                    var c = new ExceptionHandler(o.HandlerType);
+                    ExceptionHandler c = new ExceptionHandler(o.HandlerType);
                     c.TryStart = o.TryStart is null ? null : copied.Instructions[copyFrom.Instructions.IndexOf(o.TryStart)];
                     c.TryEnd = o.TryEnd is null ? null : copied.Instructions[copyFrom.Instructions.IndexOf(o.TryEnd)];
                     c.FilterStart = o.FilterStart is null ? null : copied.Instructions[copyFrom.Instructions.IndexOf(o.FilterStart)];
@@ -396,7 +396,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                 copied.Method.CustomDebugInformations.AddRange(copyFrom.Method.CustomDebugInformations.Select(o => {
                     if (o is AsyncMethodBodyDebugInformation ao) {
-                        var c = new AsyncMethodBodyDebugInformation();
+                        AsyncMethodBodyDebugInformation c = new AsyncMethodBodyDebugInformation();
                         if (ao.CatchHandler.Offset >= 0)
                             c.CatchHandler = ao.CatchHandler.IsEndOfMethod ? new InstructionOffset() : new InstructionOffset(ResolveInstrOff(ao.CatchHandler.Offset));
                         c.Yields.AddRange(ao.Yields.Select(off => off.IsEndOfMethod ? new InstructionOffset() : new InstructionOffset(ResolveInstrOff(off.Offset))));
@@ -405,7 +405,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         return c;
                     }
                     else if (o is StateMachineScopeDebugInformation so) {
-                        var c = new StateMachineScopeDebugInformation();
+                        StateMachineScopeDebugInformation c = new StateMachineScopeDebugInformation();
                         c.Scopes.AddRange(so.Scopes.Select(s => new StateMachineScope(ResolveInstrOff(s.Start.Offset), s.End.IsEndOfMethod ? null : ResolveInstrOff(s.End.Offset))));
                         return c;
                     }
@@ -414,7 +414,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 }));
 
                 copied.Method.DebugInformation.SequencePoints.AddRange(copyFrom.Method.DebugInformation.SequencePoints.Select(o => {
-                    var c = new SequencePoint(ResolveInstrOff(o.Offset), o.Document);
+                    SequencePoint c = new SequencePoint(ResolveInstrOff(o.Offset), o.Document);
                     c.StartLine = o.StartLine;
                     c.StartColumn = o.StartColumn;
                     c.EndLine = o.EndLine;
@@ -427,12 +427,12 @@ namespace OTAPI.UnifiedServerProcess.Commons
             public static TypeDefinition MemberClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition>? mappedTypes = null, Dictionary<MethodDefinition, MethodDefinition>? mappedMethods = null) {
                 mappedTypes ??= [];
                 mappedMethods ??= [];
-                var inputTypes = mappedTypes.ToDictionary();
-                var mapCondition = new MonoModCommon.Structure.MapOption(mappedTypes, mappedMethods, [], []);
+                Dictionary<TypeDefinition, TypeDefinition> inputTypes = mappedTypes.ToDictionary();
+                MapOption mapCondition = new MonoModCommon.Structure.MapOption(mappedTypes, mappedMethods, [], []);
 
                 static TypeDefinition ClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition> mappedTypes) {
 
-                    var copied = new TypeDefinition(type.Namespace, newName, type.Attributes, type.BaseType);
+                    TypeDefinition copied = new TypeDefinition(type.Namespace, newName, type.Attributes, type.BaseType);
                     mappedTypes.Add(type, copied);
 
                     foreach (var nested in type.NestedTypes) {
@@ -464,7 +464,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     }
 
                     foreach (var field in from.Fields) {
-                        var copiedField = new FieldDefinition(field.Name, field.Attributes, MonoModCommon.Structure.DeepMapTypeReference(field.FieldType, mapContext));
+                        FieldDefinition copiedField = new FieldDefinition(field.Name, field.Attributes, MonoModCommon.Structure.DeepMapTypeReference(field.FieldType, mapContext));
                         copied.Fields.Add(copiedField);
                     }
 
@@ -548,7 +548,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return impl;
                 }
 
-                var option = new MapOption(genericParameterMap: map);
+                MapOption option = new MapOption(genericParameterMap: map);
                 return DeepMapMethodReference(patten, option);
             }
             /// <summary>
@@ -575,7 +575,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return methodDef;
                 }
 
-                var option = new MapOption(genericParameterMap: map);
+                MapOption option = new MapOption(genericParameterMap: map);
                 return DeepMapMethodReference(methodDef, option);
             }
         }

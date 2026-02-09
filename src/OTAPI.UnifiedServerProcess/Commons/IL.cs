@@ -19,7 +19,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return Instruction.Create(OpCodes.Ldarg_0);
                 }
                 else {
-                    var index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
+                    int index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
                     return index switch {
                         -1 => throw new ArgumentException("Parameter not found in method", nameof(parameter)),
                         0 => Instruction.Create(OpCodes.Ldarg_0),
@@ -35,7 +35,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     throw new ArgumentException("Cannot set \"this\" TracingParameter", nameof(parameter));
                 }
                 else {
-                    var index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
+                    int index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
                     if (index < 0) {
                         throw new ArgumentException("Parameter not found in method", nameof(parameter));
                     }
@@ -47,7 +47,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return Instruction.Create(OpCodes.Ldarga_S, body?.ThisParameter ?? throw new InvalidOperationException());
                 }
                 else {
-                    var index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
+                    int index = method.Parameters.IndexOf(parameter) + (method.HasThis ? 1 : 0);
                     if (index < 0) {
                         throw new ArgumentException("Parameter not found in method", nameof(parameter));
                     }
@@ -55,7 +55,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 }
             }
             public static Instruction BuildVariableLoad(MethodDefinition method, MethodBody body, VariableDefinition variable) {
-                var index = method.Body.Variables.IndexOf(variable);
+                int index = method.Body.Variables.IndexOf(variable);
                 if (index < 0) {
                     throw new ArgumentException("Variable not found in method", nameof(variable));
                 }
@@ -68,7 +68,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 };
             }
             public static Instruction BuildVariableStore(MethodDefinition method, MethodBody body, VariableDefinition variable) {
-                var index = method.Body.Variables.IndexOf(variable);
+                int index = method.Body.Variables.IndexOf(variable);
                 if (index < 0) {
                     throw new ArgumentException("Variable not found in method", nameof(variable));
                 }
@@ -81,7 +81,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 };
             }
             public static Instruction BuildVariableLoadAddress(MethodDefinition method, MethodBody body, VariableDefinition variable) {
-                var index = method.Body.Variables.IndexOf(variable);
+                int index = method.Body.Variables.IndexOf(variable);
                 if (index < 0) {
                     throw new ArgumentException("Variable not found in method", nameof(variable));
                 }
@@ -89,7 +89,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             }
             public static ParameterDefinition GetReferencedParameter(MethodDefinition method, Instruction instruction) {
                 ParameterDefinition? tmpCheck = null;
-                var paramIndex = instruction.OpCode.Code switch {
+                int paramIndex = instruction.OpCode.Code switch {
                     Code.Ldarg_0 or
                     Code.Ldarg_1 or
                     Code.Ldarg_2 or
@@ -140,7 +140,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     parameter = method.Body?.ThisParameter ?? new ParameterDefinition("", ParameterAttributes.None, method.DeclaringType);
                 }
                 else {
-                    var paramIndex = paramInnerIndex - (method.HasThis ? 1 : 0);
+                    int paramIndex = paramInnerIndex - (method.HasThis ? 1 : 0);
                     parameter = method.Parameters[paramIndex];
                     if (tmpCheck is not null && tmpCheck.Name != parameter.Name) {
                         throw new InvalidOperationException("Operand TracingParameter is invalid");
@@ -150,7 +150,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             }
             public static VariableDefinition GetReferencedVariable(MethodDefinition method, Instruction instruction) {
                 VariableDefinition? tmpCheck = null;
-                var localIndex = instruction.OpCode.Code switch {
+                int localIndex = instruction.OpCode.Code switch {
                     Code.Ldloc_0 or Code.Stloc_0 => 0,
                     Code.Ldloc_1 or Code.Stloc_1 => 1,
                     Code.Ldloc_2 or Code.Stloc_2 => 2,
@@ -207,7 +207,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             public static bool MatchSetVariable(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) {
                 VariableDefinition? tmpCheck = null;
 
-                var localIndex = instruction.OpCode.Code switch {
+                int localIndex = instruction.OpCode.Code switch {
                     Code.Stloc_0 => 0,
                     Code.Stloc_1 => 1,
                     Code.Stloc_2 => 2,
@@ -233,7 +233,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             public static bool MatchLoadVariableAddress(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) {
                 VariableDefinition? tmpCheck = null;
 
-                var localIndex = instruction.OpCode.Code switch {
+                int localIndex = instruction.OpCode.Code switch {
                     Code.Ldloca_S or
                     Code.Ldloca => (tmpCheck = (VariableDefinition)instruction.Operand).Index,
                     _ => -1
@@ -254,7 +254,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
             public static bool MatchLoadVariable(MethodDefinition method, Instruction instruction, [NotNullWhen(true)] out VariableDefinition? variable) {
                 VariableDefinition? tmpCheck = null;
 
-                var localIndex = instruction.OpCode.Code switch {
+                int localIndex = instruction.OpCode.Code switch {
                     Code.Ldloc_0 => 0,
                     Code.Ldloc_1 => 1,
                     Code.Ldloc_2 => 2,

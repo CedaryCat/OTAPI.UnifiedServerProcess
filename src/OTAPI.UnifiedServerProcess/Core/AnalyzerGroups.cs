@@ -1,7 +1,5 @@
 ﻿using ModFramework;
 using Mono.Cecil;
-using System;
-using System.Collections.Generic;
 using OTAPI.UnifiedServerProcess.Core.Analysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.DelegateInvocationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
@@ -11,6 +9,8 @@ using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Loggers;
+using System;
+using System.Collections.Generic;
 
 namespace OTAPI.UnifiedServerProcess.Core
 {
@@ -61,7 +61,7 @@ namespace OTAPI.UnifiedServerProcess.Core
         public AnalyzerGroups(ILogger logger, ModuleDefinition module) {
             this.logger = logger;
             this.module = module;
-            var modframework = module.ImportReference(typeof(DefaultCollection<>)).Resolve().Module;
+            ModuleDefinition modframework = module.ImportReference(typeof(DefaultCollection<>)).Resolve().Module;
 
             TypeInheritanceGraph = new TypeInheritanceGraph(module);
             MethodInheritanceGraph = new MethodInheritanceGraph(modframework, module);

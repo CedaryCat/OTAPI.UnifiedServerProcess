@@ -2,8 +2,8 @@
 using Mono.Cecil;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
+using Mono.Collections.Generic;
 using MonoMod.Utils;
-using NuGet.Packaging.Signing;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
@@ -17,7 +17,6 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text.RegularExpressions;
-using static MonoMod.InlineRT.MonoModRule;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 {
@@ -33,19 +32,19 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public override void Patch(PatcherArguments arguments) {
-            var module = arguments.MainModule;
-            var mappedMethod = arguments.LoadVariable<ContextBoundMethodMap>();
+            ModuleDefinition module = arguments.MainModule;
+            ContextBoundMethodMap mappedMethod = arguments.LoadVariable<ContextBoundMethodMap>();
 
             ClosureDataCache cachedClosureObjs = [];
 
-            var methods = module.GetAllTypes()
+            (TypeDefinition t, MethodDefinition m)[] methods = module.GetAllTypes()
                 .SelectMany(t => t.Methods.Select(m => (t, m)))
                 .Where(x => x.m.HasBody)
                 .ToArray();
 
             for (int progress = 0; progress < methods.Length; progress++) {
 
-                var (type, method) = methods[progress];
+                (TypeDefinition? type, MethodDefinition? method) = methods[progress];
 
                 if (!method.HasBody) {
                     continue;
@@ -71,12 +70,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             Dictionary<string, Dictionary<MethodDefinition, ClosureData>> _data = [];
             Dictionary<string, Dictionary<MethodDefinition, int>> _cacheId = [];
             public void Add(string key, MethodDefinition md, ClosureData data) {
-                if (_data.TryGetValue(key, out var sameKeys)) {
+                if (_data.TryGetValue(key, out Dictionary<MethodDefinition, ClosureData>? sameKeys)) {
                     if (sameKeys.Count is 0) {
                         _count += 1;
                         sameKeys.Add(md, data);
                     }
-                    if (sameKeys.TryGetValue(md, out var existing) && existing != data) {
+                    if (sameKeys.TryGetValue(md, out ClosureData? existing) && existing != data) {
                         throw new Exception();
                     }
                     return;
@@ -85,7 +84,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 _data.Add(key, new() { { md, data } });
             }
             public bool TryGet(string key, [NotNullWhen(true)] out ClosureData? data) {
-                if (_data.TryGetValue(key, out var sameKey)) {
+                if (_data.TryGetValue(key, out Dictionary<MethodDefinition, ClosureData>? sameKey)) {
                     data = sameKey.Values.Single();
                     return true;
                 }
@@ -94,13 +93,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
             public bool TryGet(string perferKey, MethodDefinition userMethod, [NotNullWhen(true)] out ClosureData? data) {
                 data = null;
-                return _data.TryGetValue(perferKey, out var sameKey) && sameKey.TryGetValue(userMethod, out data);
+                return _data.TryGetValue(perferKey, out Dictionary<MethodDefinition, ClosureData>? sameKey) && sameKey.TryGetValue(userMethod, out data);
             }
             public bool ContainsKey(string key) {
                 return _data.ContainsKey(key);
             }
             public string GetNameFromPreferKey(string perferKey, MethodDefinition userMethod) {
-                if (!_cacheId.TryGetValue(perferKey, out var idS)) {
+                if (!_cacheId.TryGetValue(perferKey, out Dictionary<MethodDefinition, int>? idS)) {
                     _cacheId.Add(perferKey, idS = []);
                 }
                 int id;
@@ -126,11 +125,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 instructionIndexes[method.Body.Instructions[i]] = i;
             }
             bool anyModified = false;
-            var jumpSites = this.GetMethodJumpSites(method);
+            Dictionary<Instruction, List<Instruction>> jumpSites = this.GetMethodJumpSites(method);
 
             int index = 0;
             while (index < copiedInstructions.Length) {
-                var processingInst = copiedInstructions[index];
+                Instruction processingInst = copiedInstructions[index];
                 Instruction? nextInst = null;
 
                 nextInst ??= RefactorNoCaptureAnonymousMethodDelegateCache(arguments, mappedMethods, cachedClosureObjs, jumpSites, method, processingInst);
@@ -158,12 +157,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             MethodDefinition userMethod,
             Instruction instruction) {
 
-            var createDelegate = instruction;
+            Instruction? createDelegate = instruction;
             if (createDelegate is null || createDelegate.OpCode != OpCodes.Newobj) {
                 return null;
             }
             var delegateCtor = (MethodReference)createDelegate.Operand;
-            var delegateCtorDef = delegateCtor.TryResolve();
+            MethodDefinition? delegateCtorDef = delegateCtor.TryResolve();
             if (delegateCtorDef is null) {
                 return null;
             }
@@ -171,36 +170,36 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
-            var paths = MonoModCommon.Stack.AnalyzeParametersSources(userMethod, instruction, jumpSites);
+            MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paths = MonoModCommon.Stack.AnalyzeParametersSources(userMethod, instruction, jumpSites);
             Instruction? firstInst = null;
-            foreach (var inst in paths.Select(p => p.ParametersSources[0].Instructions[0])) {
+            foreach (Instruction? inst in paths.Select(p => p.ParametersSources[0].Instructions[0])) {
                 firstInst ??= inst;
                 if (firstInst != inst) {
                     return null;
                 }
             }
 
-            var closureLoadPaths = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(
-                userMethod, 
+            MonoModCommon.Stack.StackTopTypePath[] closureLoadPaths = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(
+                userMethod,
                 paths[0].ParametersSources[0].Instructions.Last(),
                 jumpSites);
             if (closureLoadPaths.Length != 1) {
                 return null;
             }
             TypeReference closureTypeOrigRef;
-            if (MonoModCommon.IL.TryGetReferencedVariable(userMethod, closureLoadPaths[0].RealPushValueInstruction, out var closureVariable)) {
+            if (MonoModCommon.IL.TryGetReferencedVariable(userMethod, closureLoadPaths[0].RealPushValueInstruction, out VariableDefinition? closureVariable)) {
                 closureTypeOrigRef = closureVariable.VariableType;
             }
-            else if (closureLoadPaths[0].RealPushValueInstruction is Instruction { OpCode.Code: Code.Ldfld, Operand: FieldReference ldfr } ldfldInst && 
+            else if (closureLoadPaths[0].RealPushValueInstruction is Instruction { OpCode.Code: Code.Ldfld, Operand: FieldReference ldfr } ldfldInst &&
                 ldfr.DeclaringType.Name.OrdinalStartsWith("<>c__DisplayClass")) {
-                var stfldInst = userMethod.Body.Instructions.Single(
-                    x => 
-                    x is Instruction { 
-                        OpCode.Code: Code.Stfld, 
-                        Operand: FieldReference stfr 
+                Instruction stfldInst = userMethod.Body.Instructions.Single(
+                    x =>
+                    x is Instruction {
+                        OpCode.Code: Code.Stfld,
+                        Operand: FieldReference stfr
                     }
                     && stfr.FullName == ldfr.FullName);
-                var path = MonoModCommon.Stack.AnalyzeInstructionArgsSources(userMethod, stfldInst, jumpSites).Single();
+                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path = MonoModCommon.Stack.AnalyzeInstructionArgsSources(userMethod, stfldInst, jumpSites).Single();
                 closureVariable = MonoModCommon.IL.GetReferencedVariable(userMethod, path.ParametersSources[1].Instructions.Last());
                 closureTypeOrigRef = closureVariable.VariableType;
             }
@@ -221,14 +220,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
-            var closureMethodLdftn = paths[0].ParametersSources[1].Instructions.Single();
+            Instruction closureMethodLdftn = paths[0].ParametersSources[1].Instructions.Single();
             var closureMethodRef = (MethodReference)closureMethodLdftn.Operand;
 
             if (PatchingCommon.IsDelegateInjectedCtxParam(delegateCtor.DeclaringType)) {
                 return null;
             }
 
-            var containingType = userMethod.DeclaringType;
+            TypeDefinition containingType = userMethod.DeclaringType;
 
             var perferKey = closureTypeOrigRef.FullName;
 
@@ -244,22 +243,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             // Is processed closure, skip
-            if (cachedClosureObjs.TryGet(perferKey, userMethod, out var closureObjData) &&
+            if (cachedClosureObjs.TryGet(perferKey, userMethod, out ClosureData? closureObjData) &&
                 closureObjData.ProcessedMethods.ContainsKey(closureMethodRef.GetIdentifier())) {
                 return null;
             }
 
-            var closureMethodDef = closureMethodRef.TryResolve();
+            MethodDefinition? closureMethodDef = closureMethodRef.TryResolve();
             if (closureMethodDef is null) {
                 return null;
             }
 
-            var next = createDelegate.Next;
+            Instruction next = createDelegate.Next;
 
             if (closureVariable is null) {
                 closureVariable = new VariableDefinition(closureTypeOrigRef);
                 userMethod.Body.Variables.Add(closureVariable);
-                var ilProcessor = userMethod.Body.GetILProcessor();
+                ILProcessor ilProcessor = userMethod.Body.GetILProcessor();
                 ilProcessor.InsertAfter(closureLoadPaths[0].RealPushValueInstruction, [
                     MonoModCommon.IL.BuildVariableStore(userMethod, userMethod.Body, closureVariable),
                     MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureVariable),
@@ -286,7 +285,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             if (closureObjData is null) {
-                var closureType = closureTypeOrigRef.Resolve() ?? throw new Exception();
+                TypeDefinition closureType = closureTypeOrigRef.Resolve() ?? throw new Exception();
 
                 if (declaringChanged) {
                     anyModified = true;
@@ -296,42 +295,42 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     };
                     var option = new MonoModCommon.Structure.MapOption(typeMap);
 
-                    var oldClosureType = closureType;
+                    TypeDefinition oldClosureType = closureType;
                     closureType = MonoModCommon.Structure.MemberClonedType(closureType, closureType.Name, typeMap);
 
                     static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
                         yield return (oldTypeDef, newTypeDef);
-                        foreach (var newNestedType in newTypeDef.NestedTypes) {
-                            var oldNestedType = oldTypeDef.NestedTypes.Single(ont => ont.Name == newNestedType.Name);
-                            foreach (var pair in GetTypeReplacePairs(oldNestedType, newNestedType)) {
+                        foreach (TypeDefinition? newNestedType in newTypeDef.NestedTypes) {
+                            TypeDefinition oldNestedType = oldTypeDef.NestedTypes.Single(ont => ont.Name == newNestedType.Name);
+                            foreach ((TypeDefinition otype, TypeDefinition ntype) pair in GetTypeReplacePairs(oldNestedType, newNestedType)) {
                                 yield return pair;
                             }
                         }
                     }
-                    foreach (var (otype, ntype) in GetTypeReplacePairs(oldClosureType, closureType)) {
-                        foreach (var method in ntype.Methods) {
+                    foreach ((TypeDefinition? otype, TypeDefinition? ntype) in GetTypeReplacePairs(oldClosureType, closureType)) {
+                        foreach (MethodDefinition? method in ntype.Methods) {
                             if (method.IsConstructor) {
                                 continue;
                             }
-                            var omethod = otype.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == method.GetIdentifier(withDeclaring: false));
+                            MethodDefinition omethod = otype.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == method.GetIdentifier(withDeclaring: false));
                             mappedMethods.contextBoundMethods.Add(method.GetIdentifier(), method);
                             mappedMethods.originalToContextBound.Add(omethod.GetIdentifier(), method);
                         }
                     }
 
-                    foreach (var oldMethod in oldClosureType.Methods) {
-                        var newMethod = closureType.Methods.Single(m => m.Name == oldMethod.Name);
+                    foreach (MethodDefinition? oldMethod in oldClosureType.Methods) {
+                        MethodDefinition newMethod = closureType.Methods.Single(m => m.Name == oldMethod.Name);
                         ProcessMethod(arguments, mappedMethods, cachedClosureObjs, newMethod);
                     }
 
                     closureVariable.VariableType = MonoModCommon.Structure.DeepMapTypeReference(closureVariable.VariableType, option);
 
                     // No overload in closure type, so we can only check the name and avoid managing the change of parameters in copy
-                    var newClosureMethodDef = closureType.Methods.Single(m => m.Name == closureMethodDef.Name);
+                    MethodDefinition newClosureMethodDef = closureType.Methods.Single(m => m.Name == closureMethodDef.Name);
                     newClosureMethodDef.Body = MonoModCommon.Structure.DeepMapMethodBody(closureMethodDef, newClosureMethodDef, option) ?? throw new Exception();
                     closureMethodDef = newClosureMethodDef;
 
-                    var oldCreateClosure = userMethod.Body.Instructions.Single(
+                    Instruction oldCreateClosure = userMethod.Body.Instructions.Single(
                         i =>
                         i.OpCode == OpCodes.Newobj
                         && ((MethodReference)i.Operand).DeclaringType.TryResolve()?.FullName == oldClosureType.FullName);
@@ -340,7 +339,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                     option = new(typeReplace: new() { { oldClosureType, closureType } });
 
-                    foreach (var inst in userMethod.Body.Instructions) {
+                    foreach (Instruction? inst in userMethod.Body.Instructions) {
                         if (inst.Operand is TypeReference typeRef) {
                             inst.Operand = MonoModCommon.Structure.DeepMapTypeReference(typeRef, option);
                         }
@@ -348,12 +347,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             inst.Operand = MonoModCommon.Structure.DeepMapMethodReference(methodRef, option);
                         }
                         else if (inst.Operand is FieldReference fieldRef) {
-                            var fieldDef = fieldRef.Resolve();
+                            FieldDefinition? fieldDef = fieldRef.Resolve();
                             if (fieldDef is null) {
                                 continue;
                             }
-                            var declaringType = fieldRef.DeclaringType;
-                            if (option.TypeReplaceMap.TryGetValue(declaringType.Resolve(), out var mappedDeclaringType)
+                            TypeReference declaringType = fieldRef.DeclaringType;
+                            if (option.TypeReplaceMap.TryGetValue(declaringType.Resolve(), out TypeDefinition? mappedDeclaringType)
                                 && mappedDeclaringType.Fields.Any(f => f.Name == fieldDef.Name && f.IsStatic == fieldDef.IsStatic)) {
                                 declaringType = MonoModCommon.Structure.DeepMapTypeReference(fieldRef.DeclaringType, option);
                             }
@@ -363,7 +362,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         }
                     }
 
-                    var oldClosureDeclaringType = oldClosureType.DeclaringType;
+                    TypeDefinition oldClosureDeclaringType = oldClosureType.DeclaringType;
                     oldClosureType.DeclaringType.NestedTypes.Remove(oldClosureType);
                     // keep the original declaring type, because it might be used later
                     oldClosureType.DeclaringType = oldClosureDeclaringType;
@@ -373,7 +372,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ]);
             }
 
-            foreach (var inst in closureMethodDef.Body.Instructions.ToArray()) {
+            foreach (Instruction? inst in closureMethodDef.Body.Instructions.ToArray()) {
                 switch (inst.OpCode.Code) {
                     case Code.Ldsfld:
                         HandleLoadStaticField(inst, closureMethodDef, false, arguments, closureObjData, cachedClosureObjs, ref anyModified);
@@ -413,21 +412,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             MethodDefinition userMethod,
             Instruction instruction) {
 
-            var ldnull = instruction;
+            Instruction? ldnull = instruction;
             if (ldnull is null || ldnull.OpCode != OpCodes.Ldnull) {
                 return null;
             }
-            var ldftn = ldnull.Next;
+            Instruction? ldftn = ldnull.Next;
             if (ldftn is null || ldftn.OpCode != OpCodes.Ldftn) {
                 return null;
             }
             var invocationRef = (MethodReference)ldftn.Operand;
-            var createDelegate = ldftn.Next;
+            Instruction? createDelegate = ldftn.Next;
             if (createDelegate is null || createDelegate.OpCode != OpCodes.Newobj) {
                 return null;
             }
             var delegateCtor = (MethodReference)createDelegate.Operand;
-            var delegateCtorDef = delegateCtor.TryResolve();
+            MethodDefinition? delegateCtorDef = delegateCtor.TryResolve();
             if (delegateCtorDef is null) {
                 return null;
             }
@@ -439,15 +438,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
-            if (!mappedMethods.originalToContextBound.TryGetValue(invocationRef.GetIdentifier(), out var contextBoundInvocation)) {
+            if (!mappedMethods.originalToContextBound.TryGetValue(invocationRef.GetIdentifier(), out MethodDefinition? contextBoundInvocation)) {
                 if (!mappedMethods.contextBoundMethods.TryGetValue(invocationRef.GetIdentifier(), out contextBoundInvocation)) {
                     return null;
                 }
             }
 
             bool invocationContextBoundImplicit = false;
-            var invocationDeclaringType = contextBoundInvocation.DeclaringType;
-            if (arguments.ContextTypes.TryGetValue(invocationDeclaringType.FullName, out var invocationContextTypeData)) {
+            TypeDefinition invocationDeclaringType = contextBoundInvocation.DeclaringType;
+            if (arguments.ContextTypes.TryGetValue(invocationDeclaringType.FullName, out ContextTypeData? invocationContextTypeData)) {
                 invocationContextBoundImplicit = true;
             }
             else if (arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(invocationDeclaringType.FullName)) {
@@ -455,8 +454,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             FieldReference[]? rootFieldChain = null;
-            var declaringType = userMethod.DeclaringType.Resolve();
-            if (arguments.ContextTypes.TryGetValue(userMethod.DeclaringType.FullName, out var userMethodContextTypeData)) {
+            TypeDefinition declaringType = userMethod.DeclaringType.Resolve();
+            if (arguments.ContextTypes.TryGetValue(userMethod.DeclaringType.FullName, out ContextTypeData? userMethodContextTypeData)) {
                 declaringType = userMethodContextTypeData.ContextTypeDef;
                 rootFieldChain = [userMethodContextTypeData.rootContextField];
             }
@@ -465,10 +464,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
             else if (cachedClosureObjs.ContainsKey(userMethod.DeclaringType.FullName)) {
                 List<FieldReference> chain = [];
-                var root = userMethod.DeclaringType.Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
+                FieldDefinition? root = userMethod.DeclaringType.Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
                 TypeDefinition checkParent = userMethod.DeclaringType;
                 while (root is null) {
-                    var parentField = checkParent.Fields.Single(f => f.Name == "<>4__this");
+                    FieldDefinition parentField = checkParent.Fields.Single(f => f.Name == "<>4__this");
                     chain.Add(parentField);
                     checkParent = parentField.FieldType.Resolve();
                     root = checkParent.Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
@@ -487,7 +486,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var key = $"{declaringType.FullName}/{closureTypeName}";
             var userMethodId = userMethod.GetIdentifier();
 
-            if (!cachedClosureObjs.TryGet(key, userMethod, out var closureObjData)) {
+            if (!cachedClosureObjs.TryGet(key, userMethod, out ClosureData? closureObjData)) {
                 closureTypeName = cachedClosureObjs.GetNameFromPreferKey(key, userMethod);
                 key = $"{declaringType.FullName}/{closureTypeName}";
 
@@ -512,7 +511,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ldftn.Operand = MonoModCommon.Structure.CreateMethodReference(invocationRef, contextBoundInvocation);
 
                 if (invocationDeclaringType.FullName != declaringType.FullName) {
-                    var ilProcessor = userMethod.Body.GetILProcessor();
+                    ILProcessor ilProcessor = userMethod.Body.GetILProcessor();
                     ilProcessor.InsertAfter(ldnull, [
                         ..rootFieldChain.Select(f => Instruction.Create(OpCodes.Ldfld, f)),
                         ..invocationContextTypeData!.nestedChain.Select(f => Instruction.Create(OpCodes.Ldfld, f))
@@ -522,15 +521,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             // map the generic relationship in the method def (if exists)
-            var generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
-            foreach (var param in generatedMethod.Parameters) {
+            MethodDefinition generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
+            foreach (ParameterDefinition? param in generatedMethod.Parameters) {
                 param.HasConstant = false;
                 param.HasDefault = false;
                 param.IsOptional = false;
             }
             generatedMethod.Attributes = MethodAttributes.Public | MethodAttributes.HideBySig;
             generatedMethod.HasThis = true;
-            var rootParam = generatedMethod.Parameters.FirstOrDefault(p => p.ParameterType.FullName == arguments.RootContextDef.FullName);
+            ParameterDefinition? rootParam = generatedMethod.Parameters.FirstOrDefault(p => p.ParameterType.FullName == arguments.RootContextDef.FullName);
             if (rootParam is not null) {
                 generatedMethod.Parameters.Remove(rootParam);
             }
@@ -538,12 +537,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             generatedMethod.Body = new MethodBody(generatedMethod);
             generatedMethod.DeclaringType = closureObjData.ClosureType;
             generatedMethod.Name = $"<{invocationRef.Name}>b__0{closureObjData.ClosureType.Methods.Count}";
-            var generatedMethodBody = generatedMethod.Body.Instructions;
+            Collection<Instruction> generatedMethodBody = generatedMethod.Body.Instructions;
 
-            var closureField = closureObjData.Captures.First().CaptureField;
+            FieldDefinition closureField = closureObjData.Captures.First().CaptureField;
             var mapOption = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
-            var fieldType = MonoModCommon.Structure.DeepMapTypeReference(closureField.FieldType, mapOption);
-            var declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
+            TypeReference fieldType = MonoModCommon.Structure.DeepMapTypeReference(closureField.FieldType, mapOption);
+            TypeReference declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
             var fieldRef = new FieldReference(closureField.Name, fieldType, declaringTypeRef);
 
             // both use root context as first Parameter
@@ -555,7 +554,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             else if (rootFieldChain is null && invocationContextBoundImplicit) {
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
-                foreach (var field in invocationContextTypeData!.nestedChain) {
+                foreach (FieldDefinition field in invocationContextTypeData!.nestedChain) {
                     generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, field));
                 }
             }
@@ -570,12 +569,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldarg_0));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, fieldRef));
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, userMethodContextTypeData!.rootContextField));
-                foreach (var field in invocationContextTypeData!.nestedChain) {
+                foreach (FieldDefinition field in invocationContextTypeData!.nestedChain) {
                     generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, field));
                 }
             }
 
-            foreach (var param in generatedMethod.Parameters) {
+            foreach (ParameterDefinition? param in generatedMethod.Parameters) {
                 generatedMethodBody.Add(MonoModCommon.IL.BuildParameterLoad(generatedMethod, generatedMethod.Body, param));
             }
             invocationRef = MonoModCommon.Structure.DeepMapMethodReference(invocationRef, mapOption);
@@ -584,7 +583,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             closureObjData.ApplyMethod(declaringType, userMethod, generatedMethod, jumpSites);
 
-            var loadClosure = MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure);
+            Instruction loadClosure = MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure);
             ldnull.OpCode = loadClosure.OpCode;
             ldnull.Operand = loadClosure.Operand;
 
@@ -599,14 +598,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             Dictionary<Instruction, List<Instruction>> jumpSites,
             MethodDefinition userMethod,
             Instruction instruction) {
-            var module = arguments.MainModule;
+            ModuleDefinition module = arguments.MainModule;
 
-            var createDelegate = instruction;
+            Instruction? createDelegate = instruction;
             if (createDelegate is null || createDelegate.OpCode != OpCodes.Newobj) {
                 return null;
             }
             var delegateCtor = (MethodReference)createDelegate.Operand;
-            var delegateCtorDef = delegateCtor.TryResolve();
+            MethodDefinition? delegateCtorDef = delegateCtor.TryResolve();
             if (delegateCtorDef is null) {
                 return null;
             }
@@ -618,8 +617,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
-            var paths = MonoModCommon.Stack.AnalyzeParametersSources(userMethod, instruction, this.GetMethodJumpSites(userMethod));
-            var types = paths.Select(p => MonoModCommon.Stack.AnalyzeStackTopType(userMethod, p.ParametersSources[0].Instructions.Last(), this.GetMethodJumpSites(userMethod)))
+            MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paths = MonoModCommon.Stack.AnalyzeParametersSources(userMethod, instruction, this.GetMethodJumpSites(userMethod));
+            TypeReference[] types = paths.Select(p => MonoModCommon.Stack.AnalyzeStackTopType(userMethod, p.ParametersSources[0].Instructions.Last(), this.GetMethodJumpSites(userMethod)))
                 .Where(t => t is not null)
                 .OfType<TypeReference>()
                 .Distinct()
@@ -637,7 +636,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // allow multiple instance paths, but only one load method pointer
             HashSet<Instruction> loadMethodPointerSet = [];
 
-            var loadInstanceIfSinglePath = paths[0].ParametersSources[0].Instructions;
+            Instruction[] loadInstanceIfSinglePath = paths[0].ParametersSources[0].Instructions;
 
             bool instanceIsValueType = false;
 
@@ -659,8 +658,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 && loadInstanceIfSinglePath.Length == 1
                 && loadInstanceIfSinglePath[0].OpCode == OpCodes.Ldarg_0;
 
-            foreach (var path in paths) {
-                var loadMethodPointerInsts = path.ParametersSources[1].Instructions;
+            foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in paths) {
+                Instruction[] loadMethodPointerInsts = path.ParametersSources[1].Instructions;
                 if (loadMethodPointerInsts.Length == 1 && loadMethodPointerInsts[0].OpCode == OpCodes.Ldftn) {
                     loadMethodPointerSet.Add(loadMethodPointerInsts[0]);
                 }
@@ -672,7 +671,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
 
-            var loadMethodPointerInst = loadMethodPointerSet.Single();
+            Instruction loadMethodPointerInst = loadMethodPointerSet.Single();
             bool isLdvirtftn = loadMethodPointerInst.OpCode == OpCodes.Ldvirtftn;
             var invocationRef = (MethodReference)loadMethodPointerInst.Operand;
 
@@ -685,18 +684,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 // but same overload exists in tail type
                 && types[0].Resolve().Methods.Any(m => m.GetIdentifier(false, arguments.RootContextDef) == invocationRef.GetIdentifier(false, arguments.RootContextDef));
 
-            var captureType = (isLoadingBaseMethod || types.Length == 1)
+            TypeReference captureType = (isLoadingBaseMethod || types.Length == 1)
                 ? types.First()
                 : invocationRef.DeclaringType;
 
-            var ilProcessor = userMethod.Body.GetILProcessor();
+            ILProcessor ilProcessor = userMethod.Body.GetILProcessor();
 
             // Only invocationAdaptorPatcher is allowed to modify targets of ldftn and ldvirtftn to context-bound methods
             // Besides reusing methods, but their calling are correct at the first time, so just keep their original status
             if (mappedMethods.contextBoundMethods.ContainsKey(invocationRef.GetIdentifier())) {
                 return null;
             }
-            if (!mappedMethods.originalToContextBound.TryGetValue(invocationRef.GetIdentifier(), out var contextBoundInvocation)) {
+            if (!mappedMethods.originalToContextBound.TryGetValue(invocationRef.GetIdentifier(), out MethodDefinition? contextBoundInvocation)) {
                 return null;
             }
 
@@ -706,8 +705,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             FieldReference[]? rootFieldChain = null;
-            var userMethodDeclaringType = userMethod.DeclaringType.Resolve();
-            if (arguments.ContextTypes.TryGetValue(userMethod.DeclaringType.FullName, out var userMethodContextTypeData)) {
+            TypeDefinition userMethodDeclaringType = userMethod.DeclaringType.Resolve();
+            if (arguments.ContextTypes.TryGetValue(userMethod.DeclaringType.FullName, out ContextTypeData? userMethodContextTypeData)) {
                 userMethodDeclaringType = userMethodContextTypeData.ContextTypeDef;
                 rootFieldChain = [userMethodContextTypeData.rootContextField];
             }
@@ -716,10 +715,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
             else if (cachedClosureObjs.ContainsKey(userMethod.DeclaringType.FullName)) {
                 List<FieldReference> chain = [];
-                var root = userMethod.DeclaringType.Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
+                FieldDefinition? root = userMethod.DeclaringType.Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
                 TypeDefinition checkParent = userMethod.DeclaringType;
                 while (root is null) {
-                    var parentField = checkParent.Fields.Single(f => f.Name == "<>4__this");
+                    FieldDefinition parentField = checkParent.Fields.Single(f => f.Name == "<>4__this");
                     chain.Add(parentField);
                     checkParent = parentField.FieldType.Resolve();
                     root = checkParent.Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
@@ -736,7 +735,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // We set index to closure count to avoid conflict with any existing closure
             var closureTypeName = "<>c__DisplayClass" + methodIndex + "_0" + cachedClosureObjs.Count;
 
-            var closureObjData = cachedClosureObjs.FirstOrDefault(v => {
+            ClosureData? closureObjData = cachedClosureObjs.FirstOrDefault(v => {
                 if (v.ContainingMethod?.GetIdentifier() != userMethod.GetIdentifier()) {
                     return false;
                 }
@@ -759,8 +758,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     userMethod.Body.Variables.Add(local);
 
                     if (isLdvirtftn) {
-                        var dupInstance = loadMethodPointerInst.Previous;
-                        var stloc = MonoModCommon.IL.BuildVariableStore(userMethod, userMethod.Body, local);
+                        Instruction dupInstance = loadMethodPointerInst.Previous;
+                        Instruction stloc = MonoModCommon.IL.BuildVariableStore(userMethod, userMethod.Body, local);
                         dupInstance.OpCode = stloc.OpCode;
                         dupInstance.Operand = local;
                     }
@@ -809,12 +808,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 closureObjData.Apply(userMethodDeclaringType, userMethod, jumpSites);
 
-                var loadClosure = MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure);
+                Instruction loadClosure = MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure);
                 if (!instanceIsSelf) {
                     ilProcessor.InsertBeforeSeamlessly(ref loadMethodPointerInst, loadClosure);
                 }
                 else {
-                    var loadInstance = paths[0].ParametersSources[0].Instructions[0];
+                    Instruction loadInstance = paths[0].ParametersSources[0].Instructions[0];
                     loadInstance.OpCode = loadClosure.OpCode;
                     loadInstance.Operand = loadClosure.Operand;
                 }
@@ -822,11 +821,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             else if (paths[0].ParametersSources[0].Instructions.Length != 1) {
                 var thisCaptureIndex = instanceIsSelf && rootFieldChain is not null ? 0 : 1;
 
-                var loadInstance = paths[0].ParametersSources[0].Instructions[0];
+                Instruction loadInstance = paths[0].ParametersSources[0].Instructions[0];
 
                 ilProcessor.InsertBeforeSeamlessly(ref loadInstance, MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure));
 
-                var fieldDef = closureObjData.Captures[thisCaptureIndex].CaptureField;
+                FieldDefinition fieldDef = closureObjData.Captures[thisCaptureIndex].CaptureField;
                 var fieldRef = new FieldReference(fieldDef.Name, fieldDef.FieldType, closureObjData.Closure.VariableType);
 
                 ilProcessor.InsertBeforeSeamlessly(ref loadMethodPointerInst, [
@@ -835,16 +834,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ]);
             }
             else {
-                var loadClosure = MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure);
-                var loadInstance = paths[0].ParametersSources[0].Instructions[0];
+                Instruction loadClosure = MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure);
+                Instruction loadInstance = paths[0].ParametersSources[0].Instructions[0];
                 loadInstance.OpCode = loadClosure.OpCode;
                 loadInstance.Operand = loadClosure.Operand;
             }
 
             // map the generic relationship in the method def (if exists)
-            var generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
+            MethodDefinition generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
             bool addedRootParam = generatedMethod.Parameters.Count > 0 && generatedMethod.Parameters[0].ParameterType.FullName == arguments.RootContextDef.FullName;
-            var typedGeneratedMethod = MonoModCommon.Structure.CreateInstantiatedMethod(invocationRef);
+            MethodReference typedGeneratedMethod = MonoModCommon.Structure.CreateInstantiatedMethod(invocationRef);
             for (int i = 0; i < typedGeneratedMethod.Parameters.Count; i++) {
                 generatedMethod.Parameters[i + (addedRootParam ? 1 : 0)].ParameterType = typedGeneratedMethod.Parameters[i].ParameterType;
             }
@@ -853,21 +852,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             generatedMethod.Attributes = MethodAttributes.Public | MethodAttributes.HideBySig;
             generatedMethod.HasThis = true;
 
-            var generatedMethodRootParam = generatedMethod.Parameters.FirstOrDefault(p => p.ParameterType.FullName == arguments.RootContextDef.FullName);
+            ParameterDefinition? generatedMethodRootParam = generatedMethod.Parameters.FirstOrDefault(p => p.ParameterType.FullName == arguments.RootContextDef.FullName);
             if (generatedMethodRootParam is not null) {
                 generatedMethod.Parameters.Remove(generatedMethodRootParam);
             }
 
             MethodReference generatedMethodImpl = MonoModCommon.Structure.CreateMethodReference(invocationRef, contextBoundInvocation);
             if (isLoadingBaseMethod) {
-                var generatedBaseCall = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
+                MethodDefinition generatedBaseCall = MonoModCommon.Structure.DeepMapMethodDef(contextBoundInvocation, new(), false);
 
                 generatedBaseCall.Name = "<>n__" + userMethodDeclaringType.Methods.Count;
                 userMethodDeclaringType.Methods.Add(generatedBaseCall);
 
                 generatedBaseCall.Body = new(generatedBaseCall);
                 generatedBaseCall.Body.Instructions.Add(Instruction.Create(OpCodes.Ldarg_0));
-                foreach (var p in generatedBaseCall.Parameters) {
+                foreach (ParameterDefinition? p in generatedBaseCall.Parameters) {
                     generatedBaseCall.Body.Instructions.Add(MonoModCommon.IL.BuildParameterLoad(generatedBaseCall, generatedBaseCall.Body, p));
                 }
                 generatedBaseCall.Body.Instructions.Add(Instruction.Create(OpCodes.Call, generatedMethodImpl));
@@ -888,17 +887,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             generatedMethod.Body = new MethodBody(generatedMethod);
             generatedMethod.DeclaringType = closureObjData.ClosureType;
             generatedMethod.Name = $"<{invocationRef.Name}>b__0{closureObjData.ClosureType.Methods.Count}";
-            var generatedMethodBody = generatedMethod.Body.Instructions;
+            Collection<Instruction> generatedMethodBody = generatedMethod.Body.Instructions;
 
-            var contextField = closureObjData.Captures[0].CaptureField;
-            var thisField = closureObjData.Captures[1].CaptureField;
+            FieldDefinition contextField = closureObjData.Captures[0].CaptureField;
+            FieldDefinition thisField = closureObjData.Captures[1].CaptureField;
 
 
             var mapOption = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
-            var declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
+            TypeReference declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
 
             var contextFieldTypeRef = new FieldReference(contextField.Name, contextField.FieldType, declaringTypeRef);
-            var thisFieldTypeRef = MonoModCommon.Structure.DeepMapTypeReference(thisField.FieldType, mapOption);
+            TypeReference thisFieldTypeRef = MonoModCommon.Structure.DeepMapTypeReference(thisField.FieldType, mapOption);
             var thisFieldRef = new FieldReference(thisField.Name, thisFieldTypeRef, declaringTypeRef);
 
             // method use root context as first Parameter
@@ -926,7 +925,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 generatedMethodBody.Add(Instruction.Create(OpCodes.Ldfld, contextFieldTypeRef));
                 generatedMethodBody.AddRange(rootFieldChain.Select(f => Instruction.Create(OpCodes.Ldfld, f)));
             }
-            foreach (var param in generatedMethod.Parameters) {
+            foreach (ParameterDefinition? param in generatedMethod.Parameters) {
                 generatedMethodBody.Add(MonoModCommon.IL.BuildParameterLoad(generatedMethod, generatedMethod.Body, param));
             }
             generatedMethodImpl = MonoModCommon.Structure.DeepMapMethodReference(generatedMethodImpl, mapOption);
@@ -968,20 +967,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (checkBegin.OpCode != OpCodes.Ldsfld) {
                     return false;
                 }
-                var cachedNoCaptureClosureField = ((FieldReference)checkBegin.Operand).TryResolve();
+                FieldDefinition? cachedNoCaptureClosureField = ((FieldReference)checkBegin.Operand).TryResolve();
                 if (cachedNoCaptureClosureField is null || cachedNoCaptureClosureField.DeclaringType.Name != "<>c" || !cachedNoCaptureClosureField.DeclaringType.IsNested) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(checkBegin);
 
-                var loadMethodPtr = checkBegin.Next;
+                Instruction? loadMethodPtr = checkBegin.Next;
                 if (loadMethodPtr is null || loadMethodPtr.OpCode != OpCodes.Ldftn) {
                     return false;
                 }
                 compilerGeneratedMethodOrig = ((MethodReference)loadMethodPtr.Operand).Resolve();
                 origBlockInstructions.Enqueue(loadMethodPtr);
 
-                var createDelegate = loadMethodPtr.Next;
+                Instruction? createDelegate = loadMethodPtr.Next;
                 if (createDelegate is null || createDelegate.OpCode != OpCodes.Newobj) {
                     return false;
                 }
@@ -1006,58 +1005,58 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 if (checkBegin.OpCode != OpCodes.Ldsfld) {
                     return false;
                 }
-                var cachedDelegateField = ((FieldReference)checkBegin.Operand).TryResolve();
+                FieldDefinition? cachedDelegateField = ((FieldReference)checkBegin.Operand).TryResolve();
                 if (cachedDelegateField is null || cachedDelegateField.DeclaringType.Name != "<>c" || !cachedDelegateField.DeclaringType.IsNested) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(checkBegin);
 
-                var dupCache = checkBegin.Next;
+                Instruction? dupCache = checkBegin.Next;
                 if (dupCache is null || dupCache.OpCode != OpCodes.Dup) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(dupCache);
 
-                var brTrue = dupCache.Next;
+                Instruction? brTrue = dupCache.Next;
                 if (brTrue is null || brTrue.OpCode != OpCodes.Brtrue) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(brTrue);
 
-                var popNullCache = brTrue.Next;
+                Instruction? popNullCache = brTrue.Next;
                 if (popNullCache is null || popNullCache.OpCode != OpCodes.Pop) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(popNullCache);
 
-                var loadClosureCache = popNullCache.Next;
+                Instruction? loadClosureCache = popNullCache.Next;
                 if (loadClosureCache is null || loadClosureCache.OpCode != OpCodes.Ldsfld) {
                     return false;
                 }
-                var origClosureCacheField = ((FieldReference)loadClosureCache.Operand).Resolve();
+                FieldDefinition origClosureCacheField = ((FieldReference)loadClosureCache.Operand).Resolve();
                 origBlockInstructions.Enqueue(loadClosureCache);
 
-                var loadMethodPtr = loadClosureCache.Next;
+                Instruction? loadMethodPtr = loadClosureCache.Next;
                 if (loadMethodPtr is null || loadMethodPtr.OpCode != OpCodes.Ldftn) {
                     return false;
                 }
                 compilerGeneratedMethodOrig = ((MethodReference)loadMethodPtr.Operand).Resolve();
                 origBlockInstructions.Enqueue(loadMethodPtr);
 
-                var createDelegate = loadMethodPtr.Next;
+                Instruction? createDelegate = loadMethodPtr.Next;
                 if (createDelegate is null || createDelegate.OpCode != OpCodes.Newobj) {
                     return false;
                 }
                 delegateCtor = (MethodReference)createDelegate.Operand;
                 origBlockInstructions.Enqueue(createDelegate);
 
-                var dupDelegate = createDelegate.Next;
+                Instruction? dupDelegate = createDelegate.Next;
                 if (dupDelegate is null || dupDelegate.OpCode != OpCodes.Dup) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(dupDelegate);
 
-                var cacheDelegate = dupDelegate.Next;
+                Instruction? cacheDelegate = dupDelegate.Next;
                 if (cacheDelegate is null || cacheDelegate.OpCode != OpCodes.Stsfld || ((FieldReference)cacheDelegate.Operand).FullName != cachedDelegateField.FullName) {
                     return false;
                 }
@@ -1079,7 +1078,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return null;
             }
 
-            if (!IsNoCaptureAnonymousMethod(instruction, out var origBlockInstructions, out var nextInstruction, out var compilerGeneratedMethodOrig, out var delegateCtor)) {
+            if (!IsNoCaptureAnonymousMethod(instruction, out Queue<Instruction>? origBlockInstructions, out Instruction? nextInstruction, out MethodDefinition? compilerGeneratedMethodOrig, out MethodReference? delegateCtor)) {
                 return null;
             }
 
@@ -1088,8 +1087,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             bool userMethodContextBoundImplicit = false;
-            var declaringType = userMethod.DeclaringType.Resolve();
-            if (arguments.ContextTypes.TryGetValue(userMethod.DeclaringType.FullName, out var instanceConvdType)) {
+            TypeDefinition declaringType = userMethod.DeclaringType.Resolve();
+            if (arguments.ContextTypes.TryGetValue(userMethod.DeclaringType.FullName, out ContextTypeData? instanceConvdType)) {
                 declaringType = instanceConvdType.ContextTypeDef;
                 userMethodContextBoundImplicit = true;
             }
@@ -1109,7 +1108,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             // to:
             //      <>c__DisplayClass{MethodIndex}_{ScopeIndex}
 
-            var match = RegexTool.DefaultClosureMethodNameRegex().Match(compilerGeneratedMethodOrig.Name);
+            Match match = RegexTool.DefaultClosureMethodNameRegex().Match(compilerGeneratedMethodOrig.Name);
             if (!match.Success) {
                 throw new Exception("Unexpected: The method is not a compiler-generated method in closure");
             }
@@ -1122,7 +1121,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             var closureTypeName = "<>c__DisplayClass" + methodIndex + "_256";
             var closureKey = $"{declaringType.FullName}/{closureTypeName}";
 
-            if (!cachedClosureObjs.TryGet(closureKey, userMethod, out var closureObjData)) {
+            if (!cachedClosureObjs.TryGet(closureKey, userMethod, out ClosureData? closureObjData)) {
                 closureTypeName = cachedClosureObjs.GetNameFromPreferKey(closureKey, userMethod);
                 closureKey = $"{declaringType.FullName}/{closureTypeName}";
 
@@ -1137,11 +1136,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
 
-            var generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(
+            MethodDefinition generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(
                 compilerGeneratedMethodOrig,
                 MonoModCommon.Structure.MapOption.Create([(compilerGeneratedMethodOrig.DeclaringType.Resolve(), closureObjData.ClosureType)]),
                 true);
-            foreach (var param in generatedMethod.Parameters) {
+            foreach (ParameterDefinition? param in generatedMethod.Parameters) {
                 param.HasConstant = false;
                 param.HasDefault = false;
                 param.IsOptional = false;
@@ -1152,7 +1151,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             generatedMethod.DeclaringType = closureObjData.ClosureType;
 
             bool anyModified = false;
-            foreach (var inst in generatedMethod.Body.Instructions.ToArray()) {
+            foreach (Instruction? inst in generatedMethod.Body.Instructions.ToArray()) {
                 switch (inst.OpCode.Code) {
                     case Code.Ldsfld:
                         HandleLoadStaticField(inst, generatedMethod, false, arguments, closureObjData, cachedClosureObjs, ref anyModified);
@@ -1175,7 +1174,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 cachedClosureObjs.Add(closureKey, userMethod, closureObjData);
                 closureObjData.ApplyMethod(declaringType, userMethod, generatedMethod, jumpSites);
 
-                var next = nextInstruction;
+                Instruction next = nextInstruction;
 
                 Instruction[] replaceInstructions = [
                     MonoModCommon.IL.BuildVariableLoad(userMethod, userMethod.Body, closureObjData.Closure),
@@ -1184,12 +1183,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ];
 
                 for (int i = 0; i < replaceInstructions.Length; i++) {
-                    var replaced = origBlockInstructions.Dequeue();
+                    Instruction replaced = origBlockInstructions.Dequeue();
                     replaced.OpCode = replaceInstructions[i].OpCode;
                     replaced.Operand = replaceInstructions[i].Operand;
                 }
                 while (origBlockInstructions.Count > 0) {
-                    var removed = origBlockInstructions.Dequeue();
+                    Instruction removed = origBlockInstructions.Dequeue();
                     userMethod.Body.RemoveInstructionSeamlessly(this.GetMethodJumpSites(userMethod), removed);
                 }
 
@@ -1212,13 +1211,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             var option = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
             calleeRef = MonoModCommon.Structure.DeepMapMethodReference(calleeRef, option);
-            if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out var contextBound, out var vanillaCallee, out var contextProvider)) {
+            if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out MethodDefinition? contextBound, out MethodReference? vanillaCallee, out ContextTypeData? contextProvider)) {
                 return;
             }
 
             anyModified = true;
             // Generate context loading instructions
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextProvider);
+            Instruction[] loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextProvider);
             this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRef, vanillaCallee, contextProvider, loadInstanceInsts);
         }
         /// <summary>
@@ -1232,13 +1231,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         static Instruction[] BuildContextLoadInstrs(PatcherArguments arguments, ClosureData closureData, ClosureDataCache cachedClosureObjs, ContextTypeData? contextType) {
             List<Instruction> result = [];
 
-            var contextField = closureData.Captures.First().CaptureField;
-            var closureContextType = contextField.FieldType;
+            FieldDefinition contextField = closureData.Captures.First().CaptureField;
+            TypeReference closureContextType = contextField.FieldType;
 
             TypeReference declaringTypeRef = closureData.ClosureType;
             if (closureData.ClosureType.HasGenericParameters) {
                 var genericInstanceTypeRef = new GenericInstanceType(closureData.ClosureType);
-                foreach (var genericParam in closureData.ClosureType.GenericParameters) {
+                foreach (GenericParameter? genericParam in closureData.ClosureType.GenericParameters) {
                     genericInstanceTypeRef.GenericArguments.Add(genericParam);
                 }
                 declaringTypeRef = genericInstanceTypeRef;
@@ -1251,21 +1250,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     Instruction.Create(OpCodes.Ldfld, contextFieldRef)
                 ];
             }
-            if (cachedClosureObjs.TryGet(contextField.FieldType.FullName, out var nestedClosureDatas)) {
+            if (cachedClosureObjs.TryGet(contextField.FieldType.FullName, out ClosureData? nestedClosureDatas)) {
                 return [
                     Instruction.Create(OpCodes.Ldarg_0),
                     Instruction.Create(OpCodes.Ldfld, contextFieldRef),
                     ..BuildContextLoadInstrs(arguments, nestedClosureDatas, cachedClosureObjs, contextType).Where(inst => inst.OpCode != OpCodes.Ldarg_0),
                 ];
             }
-            var rootField = closureContextType.Resolve().Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
+            FieldDefinition? rootField = closureContextType.Resolve().Fields.FirstOrDefault(f => f.FieldType.FullName == arguments.RootContextDef.FullName);
             if (rootField is not null || arguments.RootContextFieldToAdaptExternalInterface.TryGetValue(closureContextType.FullName, out rootField)) {
                 result.Add(Instruction.Create(OpCodes.Ldarg_0));
                 result.Add(Instruction.Create(OpCodes.Ldfld, contextFieldRef));
                 result.Add(Instruction.Create(OpCodes.Ldfld, rootField));
             }
             // If context of closure is member of root context
-            else if (arguments.ContextTypes.TryGetValue(closureContextType.FullName, out var callerDeclaringInstanceConvdType)) {
+            else if (arguments.ContextTypes.TryGetValue(closureContextType.FullName, out ContextTypeData? callerDeclaringInstanceConvdType)) {
                 result.Add(Instruction.Create(OpCodes.Ldarg_0));
                 result.Add(Instruction.Create(OpCodes.Ldfld, contextFieldRef));
                 result.Add(Instruction.Create(OpCodes.Ldfld, callerDeclaringInstanceConvdType.rootContextField));
@@ -1280,7 +1279,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             }
 
             if (contextType is not null) {
-                foreach (var field in contextType.nestedChain) {
+                foreach (FieldDefinition field in contextType.nestedChain) {
                     result.Add(Instruction.Create(OpCodes.Ldfld, field));
                 }
             }
@@ -1290,7 +1289,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
         void HandleStoreStaticField(Instruction instruction, MethodDefinition generatedMethod, PatcherArguments arguments, ClosureData closureObjData, ClosureDataCache cachedClosureObjs, ref bool anyModified) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out FieldDefinition? contextBoundFieldDef)) {
                 return;
             }
             anyModified = true;
@@ -1300,13 +1299,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
             }
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextType);
+            Instruction[] loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextType);
             this.InjectContextFieldStoreInstanceLoads(arguments, ref instruction, out _, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
 
         void HandleLoadStaticField(Instruction instruction, MethodDefinition generatedMethod, bool isAddress, PatcherArguments arguments, ClosureData closureObjData, ClosureDataCache cachedClosureObjs, ref bool anyModified) {
             var fieldRef = (FieldReference)instruction.Operand;
-            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out var contextBoundFieldDef)) {
+            if (!arguments.InstanceConvdFieldOrgiMap.TryGetValue(fieldRef.GetIdentifier(), out FieldDefinition? contextBoundFieldDef)) {
                 return;
             }
 
@@ -1317,7 +1316,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 contextType = arguments.ContextTypes[contextBoundFieldDef.DeclaringType.FullName];
             }
 
-            var loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextType);
+            Instruction[] loadInstanceInsts = BuildContextLoadInstrs(arguments, closureObjData, cachedClosureObjs, contextType);
             this.InjectContextFieldLoadInstanceLoads(arguments, ref instruction, out _, isAddress, generatedMethod, contextBoundFieldDef, fieldRef, loadInstanceInsts);
         }
         static partial class RegexTool

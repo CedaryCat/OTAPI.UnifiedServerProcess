@@ -1,6 +1,7 @@
 ﻿using ModFramework;
 using ModFramework.Relinker;
 using Mono.Cecil;
+using MonoMod.RuntimeDetour.HookGen;
 using System;
 using System.IO;
 
@@ -10,8 +11,8 @@ namespace OTAPI.UnifiedServerProcess.Extensions
     {
         public static void CreateRuntimeHooks(this ModFwModder modder, string output) {
             modder.Log("[OTAPI-ProC] Generating OTAPI.Runtime.dll");
-            var gen = new MonoMod.RuntimeDetour.HookGen.HookGenerator(modder, "OTAPI.Runtime.dll");
-            using var srm = new MemoryStream();
+            HookGenerator gen = new MonoMod.RuntimeDetour.HookGen.HookGenerator(modder, "OTAPI.Runtime.dll");
+            using MemoryStream srm = new MemoryStream();
             using (ModuleDefinition mOut = gen.OutputModule) {
                 gen.Generate();
 
@@ -20,7 +21,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
 
             srm.Position = 0;
             var fileName = Path.GetFileName(output);
-            using var mm = new ModFwModder(new("OTAPI.Runtime")) {
+            using ModFwModder mm = new ModFwModder(new("OTAPI.Runtime")) {
                 Input = srm,
                 OutputPath = output,
                 MissingDependencyThrow = false,

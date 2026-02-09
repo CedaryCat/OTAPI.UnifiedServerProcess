@@ -1,4 +1,5 @@
-﻿using Mono.Cecil.Rocks;
+﻿using Mono.Cecil;
+using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System.Linq;
@@ -11,12 +12,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
     public class AddEventsProcessor() : IFieldFilterArgProcessor
     {
         public void Apply(LoggedComponent logger, ref FilterArgumentSource raw) {
-            foreach (var type in raw.MainModule.GetAllTypes()) {
+            foreach (TypeDefinition? type in raw.MainModule.GetAllTypes()) {
                 if (type.GetRootDeclaringType().Namespace.OrdinalStartsWith("HookEvents.")) {
                     continue;
                 }
-                foreach (var theEvent in type.Events) {
-                    var field = theEvent.DeclaringType.Fields.FirstOrDefault(x => x.Name == theEvent.Name && x.FieldType.FullName == theEvent.EventType.FullName);
+                foreach (EventDefinition? theEvent in type.Events) {
+                    FieldDefinition? field = theEvent.DeclaringType.Fields.FirstOrDefault(x => x.Name == theEvent.Name && x.FieldType.FullName == theEvent.EventType.FullName);
                     if (field is null) {
                         continue;
                     }

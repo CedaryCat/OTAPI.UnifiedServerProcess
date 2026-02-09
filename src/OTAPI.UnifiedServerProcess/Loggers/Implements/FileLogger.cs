@@ -15,7 +15,7 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements
         private readonly Task processingTask;
 
         public FileLogger(string filePrefix = "Log", string? folder = null) {
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             filePath = folder is not null
                 ? Path.Combine(folder, $"{filePrefix}_{timestamp}.log")
                 : $"{filePrefix}_{timestamp}.log";
@@ -32,12 +32,12 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements
         }
 
         public override void LogSegments(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            var line = FormatLogLine(sender, level, segments, false);
+            string line = FormatLogLine(sender, level, segments, false);
             logChannel.Writer.TryWrite(line);
         }
 
         public override void LogSegmentsLine(ILoggedComponent sender, int level, ReadOnlyMemory<ColoredSegment> segments) {
-            var line = FormatLogLine(sender, level, segments, true);
+            string line = FormatLogLine(sender, level, segments, true);
             logChannel.Writer.TryWrite(line);
         }
 
@@ -47,14 +47,14 @@ namespace OTAPI.UnifiedServerProcess.Loggers.Implements
             ReadOnlyMemory<ColoredSegment> segments,
             bool withNewLine
         ) {
-            var levelName = GetLevelName(level);
-            var text = string.Join("", segments.ToArray().Select(s => s.Text));
+            string levelName = GetLevelName(level);
+            string text = string.Join("", segments.ToArray().Select(s => s.Text));
             return $"[{levelName}] {text}{(withNewLine ? Environment.NewLine : "")}";
         }
 
         private async Task ProcessLogEntries() {
             try {
-                await foreach (var logEntry in logChannel.Reader.ReadAllAsync()) {
+                await foreach (string logEntry in logChannel.Reader.ReadAllAsync()) {
                     try {
                         writer.WriteLine(logEntry);
                         await writer.FlushAsync();

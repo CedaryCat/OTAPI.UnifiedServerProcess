@@ -45,10 +45,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             work.Push(Root);
 
             while (work.Count > 0) {
-                var current = work.Pop();
+                MethodDefinition current = work.Pop();
                 count++;
 
-                if (!adjacency.TryGetValue(current, out var children)) {
+                if (!adjacency.TryGetValue(current, out MethodDefinition[]? children)) {
                     continue;
                 }
 
@@ -65,7 +65,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
         /// </summary>
         public int CountDistinctNodes() {
             int count = 0;
-            foreach (var _ in this) {
+            foreach (MethodDefinition _ in this) {
                 count++;
             }
             return count;
@@ -83,7 +83,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
         /// When true, only returns vertices with in-degree &gt; 0 (excludes an isolated root).
         /// </param>
         public MethodDefinition[] GetVerticesWithNoOutgoingEdges(bool requireIncomingEdges = true) {
-            var (inDegree, outDegree, verticesById) = BuildDegreeIndex();
+            (Dictionary<string, int>? inDegree, Dictionary<string, int>? outDegree, Dictionary<string, MethodDefinition>? verticesById) = BuildDegreeIndex();
 
             return [.. verticesById
                 .Where(kv => outDegree[kv.Key] == 0 && (!requireIncomingEdges || inDegree[kv.Key] > 0))
@@ -109,7 +109,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             work.Push(Root);
 
             while (work.Count > 0) {
-                var current = work.Pop();
+                MethodDefinition current = work.Pop();
                 var currentId = current.GetIdentifier();
                 if (!emitted.Add(currentId)) {
                     continue;
@@ -117,7 +117,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
                 yield return current;
 
-                if (!adjacency.TryGetValue(current, out var children)) {
+                if (!adjacency.TryGetValue(current, out MethodDefinition[]? children)) {
                     continue;
                 }
 
@@ -135,7 +135,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             }
 
             bool Visit(MethodDefinition current) {
-                if (states.TryGetValue(current, out var state)) {
+                if (states.TryGetValue(current, out NodeVisitState state)) {
                     return state switch {
                         NodeVisitState.Visiting => false,
                         NodeVisitState.Visited => true,
@@ -144,8 +144,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 }
 
                 states[current] = NodeVisitState.Visiting;
-                if (adjacency.TryGetValue(current, out var children)) {
-                    foreach (var child in children) {
+                if (adjacency.TryGetValue(current, out MethodDefinition[]? children)) {
+                    foreach (MethodDefinition child in children) {
                         if (!Visit(child)) {
                             return false;
                         }
@@ -162,22 +162,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             var outDegree = new Dictionary<string, int>(StringComparer.Ordinal);
             var verticesById = new Dictionary<string, MethodDefinition>(StringComparer.Ordinal);
 
-            var vertices = GetVertices();
-            foreach (var vertex in vertices) {
+            MethodDefinition[] vertices = GetVertices();
+            foreach (MethodDefinition vertex in vertices) {
                 var id = vertex.GetIdentifier();
                 verticesById.TryAdd(id, vertex);
                 inDegree.TryAdd(id, 0);
                 outDegree.TryAdd(id, 0);
             }
 
-            foreach (var vertex in vertices) {
+            foreach (MethodDefinition vertex in vertices) {
                 var fromId = vertex.GetIdentifier();
-                if (!adjacency.TryGetValue(vertex, out var children)) {
+                if (!adjacency.TryGetValue(vertex, out MethodDefinition[]? children)) {
                     continue;
                 }
 
                 HashSet<string> uniqueChildren = new(StringComparer.Ordinal);
-                foreach (var child in children) {
+                foreach (MethodDefinition child in children) {
                     var toId = child.GetIdentifier();
                     if (!verticesById.ContainsKey(toId) || !uniqueChildren.Add(toId)) {
                         continue;
@@ -259,36 +259,36 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
         public MethodInheritanceGraph(params ModuleDefinition[] modules) {
             var typedMethods = new Dictionary<string, Dictionary<string, MethodDefinition>>(StringComparer.Ordinal);
             var chains = new Dictionary<string, Dictionary<string, MethodDefinition>>(StringComparer.Ordinal);
-            var typeOrder = GetTypesInInheritanceOrder(modules);
+            List<TypeDefinition> typeOrder = GetTypesInInheritanceOrder(modules);
 
             // Index methods per type using the "untyped" identifier to support generic instantiation matching.
-            foreach (var type in typeOrder) {
+            foreach (TypeDefinition type in typeOrder) {
                 typedMethods[type.FullName] = type.Methods.ToDictionary(m => m.GetIdentifier(false), m => m);
             }
 
             // Seed chains with interface-to-implementation relationships (including through base types).
-            foreach (var type in typeOrder) {
+            foreach (TypeDefinition type in typeOrder) {
                 ProcessInterfaces(type, typedMethods, chains);
             }
 
             // Invert the interface chains so we can query "method -> interface methods it satisfies".
-            var interfaceInheritance = GenerateInheritanceChains(chains);
+            Dictionary<string, Dictionary<string, MethodDefinition>> interfaceInheritance = GenerateInheritanceChains(chains);
 
             // Remove self-links introduced by inversion (a method is not considered its own base).
-            foreach (var kv in interfaceInheritance) {
+            foreach (KeyValuePair<string, Dictionary<string, MethodDefinition>> kv in interfaceInheritance) {
                 kv.Value.Remove(kv.Key);
             }
 
             // Add class/virtual override relationships on top of the interface relationships.
-            foreach (var type in typeOrder) {
-                foreach (var method in type.Methods) {
+            foreach (TypeDefinition type in typeOrder) {
+                foreach (MethodDefinition? method in type.Methods) {
                     ProcessMethod(method, interfaceInheritance, chains);
                 }
             }
 
-            var methodInheritance = GenerateInheritanceChains(chains);
-            var downwardAdjacency = BuildAdjacency(methodInheritance, reverse: false);
-            var upwardAdjacency = BuildAdjacency(methodInheritance, reverse: true);
+            Dictionary<string, Dictionary<string, MethodDefinition>> methodInheritance = GenerateInheritanceChains(chains);
+            Dictionary<MethodDefinition, HashSet<MethodDefinition>> downwardAdjacency = BuildAdjacency(methodInheritance, reverse: false);
+            Dictionary<MethodDefinition, HashSet<MethodDefinition>> upwardAdjacency = BuildAdjacency(methodInheritance, reverse: true);
 
             RawMethodImplementationGraphs = BuildImplementationChainGraphs(
                 chains,
@@ -348,8 +348,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
             var result = new Dictionary<string, MethodInheritanceChainGraph>(chains.Count, StringComparer.Ordinal);
 
-            foreach (var (rootIdentifier, methods) in chains) {
-                if (!TryGetRootMethod(rootIdentifier, methods, out var rootMethod)) {
+            foreach ((string? rootIdentifier, Dictionary<string, MethodDefinition>? methods) in chains) {
+                if (!TryGetRootMethod(rootIdentifier, methods, out MethodDefinition? rootMethod)) {
                     continue;
                 }
 
@@ -373,8 +373,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
             var result = new Dictionary<string, MethodInheritanceChainGraph>(methodInheritance.Count, StringComparer.Ordinal);
 
-            foreach (var (rootIdentifier, inheritances) in methodInheritance) {
-                if (!TryGetRootMethod(rootIdentifier, inheritances, out var rootMethod)) {
+            foreach ((string? rootIdentifier, Dictionary<string, MethodDefinition>? inheritances) in methodInheritance) {
+                if (!TryGetRootMethod(rootIdentifier, inheritances, out MethodDefinition? rootMethod)) {
                     continue;
                 }
 
@@ -396,16 +396,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             work.Push(root);
 
             while (work.Count > 0) {
-                var current = work.Pop();
+                MethodDefinition current = work.Pop();
                 var currentId = current.GetIdentifier();
                 if (!allowed.Contains(currentId) || !visitedIds.Add(currentId)) {
                     continue;
                 }
 
                 MethodDefinition[] children = [];
-                if (adjacency.TryGetValue(current, out var nextNodes)) {
+                if (adjacency.TryGetValue(current, out HashSet<MethodDefinition>? nextNodes)) {
                     Dictionary<string, MethodDefinition> uniqueChildren = new(StringComparer.Ordinal);
-                    foreach (var next in nextNodes) {
+                    foreach (MethodDefinition next in nextNodes) {
                         var nextId = next.GetIdentifier();
                         if (!allowed.Contains(nextId)) {
                             continue;
@@ -437,12 +437,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
             var result = new Dictionary<MethodDefinition, HashSet<MethodDefinition>>(ReferenceEqualityComparer.Instance);
 
-            foreach (var (methodIdentifier, inheritances) in methodInheritance) {
-                if (!TryGetRootMethod(methodIdentifier, inheritances, out var method)) {
+            foreach ((string? methodIdentifier, Dictionary<string, MethodDefinition>? inheritances) in methodInheritance) {
+                if (!TryGetRootMethod(methodIdentifier, inheritances, out MethodDefinition? method)) {
                     continue;
                 }
 
-                foreach (var (baseIdentifier, baseMethod) in inheritances) {
+                foreach ((string? baseIdentifier, MethodDefinition? baseMethod) in inheritances) {
                     if (string.Equals(methodIdentifier, baseIdentifier, StringComparison.Ordinal)) {
                         continue;
                     }
@@ -477,7 +477,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             MethodDefinition from,
             MethodDefinition to) {
 
-            if (!adjacency.TryGetValue(from, out var children)) {
+            if (!adjacency.TryGetValue(from, out HashSet<MethodDefinition>? children)) {
                 adjacency.Add(from, children = new HashSet<MethodDefinition>(ReferenceEqualityComparer.Instance));
             }
 
@@ -499,13 +499,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             Dictionary<string, Dictionary<string, MethodDefinition>> chains) {
             Dictionary<string, Dictionary<string, MethodDefinition>> immediateInheritanceChains = new(StringComparer.Ordinal);
 
-            foreach (var kv in chains) {
+            foreach (KeyValuePair<string, Dictionary<string, MethodDefinition>> kv in chains) {
                 var baseMethodId = kv.Key;
-                var implementations = kv.Value;
-                var baseMethod = implementations[baseMethodId];
+                Dictionary<string, MethodDefinition> implementations = kv.Value;
+                MethodDefinition baseMethod = implementations[baseMethodId];
 
-                foreach (var implementation in implementations) {
-                    if (!immediateInheritanceChains.TryGetValue(implementation.Key, out var inheritance)) {
+                foreach (KeyValuePair<string, MethodDefinition> implementation in implementations) {
+                    if (!immediateInheritanceChains.TryGetValue(implementation.Key, out Dictionary<string, MethodDefinition>? inheritance)) {
                         immediateInheritanceChains.Add(implementation.Key, inheritance = new Dictionary<string, MethodDefinition>(StringComparer.Ordinal));
                     }
 
@@ -531,21 +531,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             TypeDefinition type,
             Dictionary<string, Dictionary<string, MethodDefinition>> typedMethods,
             Dictionary<string, Dictionary<string, MethodDefinition>> chains) {
-            foreach (var interfaceImpl in type.Interfaces) {
-                var interfaceDef = interfaceImpl.InterfaceType.Resolve();
+            foreach (InterfaceImplementation? interfaceImpl in type.Interfaces) {
+                TypeDefinition interfaceDef = interfaceImpl.InterfaceType.Resolve();
 
-                foreach (var interfaceMethod in interfaceDef.Methods) {
+                foreach (MethodDefinition? interfaceMethod in interfaceDef.Methods) {
                     // Instantiate the interface method against the concrete interface type (handles generics).
-                    var typed = MonoModCommon.Structure.CreateInstantiatedMethod(interfaceMethod, interfaceImpl.InterfaceType);
+                    MethodReference typed = MonoModCommon.Structure.CreateInstantiatedMethod(interfaceMethod, interfaceImpl.InterfaceType);
 
                     // Walk up the base chain to account for implementations inherited from base classes.
-                    var currentType = type;
+                    TypeDefinition? currentType = type;
                     while (currentType is not null) {
-                        var methods = typedMethods[currentType.FullName];
+                        Dictionary<string, MethodDefinition> methods = typedMethods[currentType.FullName];
 
-                        if (methods.TryGetValue(typed.GetIdentifier(false), out var impl)) {
+                        if (methods.TryGetValue(typed.GetIdentifier(false), out MethodDefinition? impl)) {
                             var interfaceIdentifier = interfaceMethod.GetIdentifier();
-                            if (!chains.TryGetValue(interfaceIdentifier, out var interfaceChain)) {
+                            if (!chains.TryGetValue(interfaceIdentifier, out Dictionary<string, MethodDefinition>? interfaceChain)) {
                                 chains.Add(interfaceIdentifier, interfaceChain = new(StringComparer.Ordinal) { { interfaceIdentifier, interfaceMethod } });
                             }
 
@@ -578,9 +578,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                 chains.Add(identifier, new(StringComparer.Ordinal) { { identifier, method } });
             }
 
-            foreach (var baseMethod in GetImmediateBaseMethods(method, interfaceInheritance)) {
+            foreach (MethodDefinition baseMethod in GetImmediateBaseMethods(method, interfaceInheritance)) {
                 var baseIdentifier = baseMethod.GetIdentifier();
-                if (!chains.TryGetValue(baseIdentifier, out var baseChain)) {
+                if (!chains.TryGetValue(baseIdentifier, out Dictionary<string, MethodDefinition>? baseChain)) {
                     chains.Add(baseIdentifier, baseChain = new(StringComparer.Ordinal) { { baseIdentifier, baseMethod } });
                 }
 
@@ -606,8 +606,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             HashSet<MethodDefinition> result = [];
 
             // Explicit interface method overrides / explicit virtual overrides.
-            foreach (var ov in method.Overrides) {
-                var methodDef = ov.TryResolve();
+            foreach (MethodReference? ov in method.Overrides) {
+                MethodDefinition? methodDef = ov.TryResolve();
                 if (methodDef is null) {
                     continue;
                 }
@@ -616,22 +616,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
 
             TypeReference currentType = method.DeclaringType;
             while (currentType != null) {
-                var resolved = currentType.TryResolve();
+                TypeDefinition? resolved = currentType.TryResolve();
                 if (resolved is null) {
                     break;
                 }
 
-                foreach (var currentMethod in resolved.Methods) {
+                foreach (MethodDefinition? currentMethod in resolved.Methods) {
                     // Compare using an identifier that ignores instantiation details so generics match consistently.
-                    var typed = MonoModCommon.Structure.CreateInstantiatedMethod(currentMethod, currentType);
+                    MethodReference typed = MonoModCommon.Structure.CreateInstantiatedMethod(currentMethod, currentType);
 
                     if (typed.GetIdentifier(false) != method.GetIdentifier(false)) {
                         continue;
                     }
 
                     // Attach interface base methods for this slot (filtered to actual interface declarations).
-                    if (interfaceInheritance.TryGetValue(currentMethod.GetIdentifier(), out var interfaceMethods)) {
-                        foreach (var interfaceMethod in interfaceMethods.Values) {
+                    if (interfaceInheritance.TryGetValue(currentMethod.GetIdentifier(), out Dictionary<string, MethodDefinition>? interfaceMethods)) {
+                        foreach (MethodDefinition interfaceMethod in interfaceMethods.Values) {
                             if (!interfaceMethod.DeclaringType.IsInterface) {
                                 continue;
                             }
@@ -665,8 +665,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             var allTypes = new HashSet<TypeDefinition>();
             var sorted = new List<TypeDefinition>();
 
-            foreach (var module in modules) {
-                foreach (var type in module.GetAllTypes()) {
+            foreach (ModuleDefinition module in modules) {
+                foreach (TypeDefinition? type in module.GetAllTypes()) {
                     VisitType(type, allTypes, sorted);
                 }
             }
@@ -686,7 +686,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             List<TypeDefinition> sorted) {
             if (type is null || visited.Contains(type)) return;
 
-            var baseType = type.BaseType?.TryResolve();
+            TypeDefinition? baseType = type.BaseType?.TryResolve();
             if (baseType != null && !visited.Contains(baseType)) {
                 VisitType(baseType, visited, sorted);
             }

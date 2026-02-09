@@ -52,7 +52,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
         }
 
         public override string ToString() {
-            var fieldName = TracingStaticField.Name;
+            string fieldName = TracingStaticField.Name;
             if (!EncapsulationHierarchy.IsEmpty && !ComponentAccessPath.IsEmpty) {
                 return $"{{ {string.Join(".", EncapsulationHierarchy.Select(m => m.Name))}: ${fieldName}.{string.Join(".", ComponentAccessPath.Select(m => m.Name))} }}";
             }
@@ -250,7 +250,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
             // If we are currently "inside" a recursive SCC (unknown node), only allow exit edges.
             if (currentState.Kind == ComponentStateKind.InScc) {
-                var activeSccId = currentState.SccId;
+                int activeSccId = currentState.SccId;
                 if (!sccIndex.IsInSccIncludingBaseTypes(member.DeclaringType, activeSccId)) {
                     result = null;
                     return false;
@@ -268,7 +268,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             }
 
             var baseType = currentState.ExactType ?? TracingStaticField.FieldType;
-            if (!sccIndex.TryGetRecursiveSccIdIncludingBaseTypes(baseType, out var sccId) || !sccIndex.IsRecursiveScc(sccId)) {
+            if (!sccIndex.TryGetRecursiveSccIdIncludingBaseTypes(baseType, out int sccId) || !sccIndex.IsRecursiveScc(sccId)) {
                 result = new StaticFieldTracingChain(TracingStaticField, [], [.. ComponentAccessPath, member]);
                 return true;
             }
@@ -418,7 +418,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                     continue;
                 }
 
-                if (!sccIndex.TryGetRecursiveSccIdIncludingBaseTypes(step.DeclaringType, out var sccId)
+                if (!sccIndex.TryGetRecursiveSccIdIncludingBaseTypes(step.DeclaringType, out int sccId)
                     || !sccIndex.IsRecursiveScc(sccId)
                     || !sccIndex.IsInSccIncludingBaseTypes(step.MemberType, sccId)) {
 
@@ -495,7 +495,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
 
         public static StaticFieldTracingChain? CombineStaticFieldTraces(StaticFieldTracingChain outerPart, StaticFieldTracingChain innerPart, TypeFlowSccIndex? sccIndex) {
             if (innerPart.ComponentAccessPath.Length != 0 && outerPart.EncapsulationHierarchy.Length != 0) {
-                if (!TryMatchPrefixWithSccLoops(innerPart.ComponentAccessPath, outerPart.EncapsulationHierarchy, sccIndex, out var consumedInner, out var consumedOuter)) {
+                if (!TryMatchPrefixWithSccLoops(innerPart.ComponentAccessPath, outerPart.EncapsulationHierarchy, sccIndex, out int consumedInner, out int consumedOuter)) {
                     return null;
                 }
 
@@ -610,7 +610,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             if (left.IsEmpty) return right;
             if (right.IsEmpty) return left;
 
-            var maxOverlap = Math.Min(left.Length, right.Length);
+            int maxOverlap = Math.Min(left.Length, right.Length);
 
             for (int overlap = maxOverlap; overlap >= 1; overlap--) {
                 bool matches = true;

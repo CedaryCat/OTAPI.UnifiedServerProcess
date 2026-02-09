@@ -11,7 +11,6 @@ using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -29,27 +28,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public MethodCallGraph MethodCallGraph => callGraph;
 
         public sealed override void Patch(PatcherArguments arguments) {
-            var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
+            ContextBoundMethodMap mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
             List<MethodDefinition> cctors = [];
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
                 if (!arguments.OriginalToContextType.ContainsKey(type.FullName)) {
                     continue;
                 }
-                var cctor = type.GetStaticConstructor();
+                MethodDefinition? cctor = type.GetStaticConstructor();
                 if (cctor is null) {
                     continue;
                 }
                 cctors.Add(cctor);
             }
             for (int progress = 0; progress < cctors.Count; progress++) {
-                var cctor = cctors[progress];
+                MethodDefinition cctor = cctors[progress];
                 if (cctor.DeclaringType.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
                 Progress(progress, cctors.Count, $"Processing .cctor of: {cctor.DeclaringType.FullName}");
 
-                var contextTypeData = arguments.OriginalToContextType[cctor.DeclaringType.FullName];
-                ExtractContextRequestedCtor(arguments, mappedMethods, cctor, contextTypeData, out var newCtor);
+                ContextTypeData contextTypeData = arguments.OriginalToContextType[cctor.DeclaringType.FullName];
+                ExtractContextRequestedCtor(arguments, mappedMethods, cctor, contextTypeData, out MethodDefinition? newCtor);
                 if (newCtor is null) {
                     continue;
                 }
@@ -71,7 +70,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             HashSet<Instruction> transformInsts = [];
             Dictionary<VariableDefinition, VariableDefinition> localMap = [];
             var total = cctor.Body.Instructions.Count;
-            foreach (var inst in cctor.Body.Instructions) {
+            foreach (Instruction? inst in cctor.Body.Instructions) {
                 switch (inst.OpCode.Code) {
                     case Code.Ldsfld:
                     case Code.Ldsflda:
@@ -99,8 +98,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         break;
                 }
             }
-            foreach (var inst in cctor.Body.Instructions) {
-                if (!MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out var local)) {
+            foreach (Instruction? inst in cctor.Body.Instructions) {
+                if (!MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out VariableDefinition? local)) {
                     continue;
                 }
                 if (!localMap.ContainsKey(local)) {
@@ -145,14 +144,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 Dictionary<Instruction, Instruction> copiedMap = [];
 
-                foreach (var inst in cctor.Body.Instructions.ToArray()) {
+                foreach (Instruction? inst in cctor.Body.Instructions.ToArray()) {
                     if (!transformInsts.Contains(inst)) {
                         continue;
                     }
-                    var copiedInst = inst.Clone();
+                    Instruction copiedInst = inst.Clone();
                     copiedMap.Add(inst, copiedInst);
-                    if (MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out var originalLocal)) {
-                        if (localMap.TryGetValue(originalLocal, out var mappedLocal)) {
+                    if (MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out VariableDefinition? originalLocal)) {
+                        if (localMap.TryGetValue(originalLocal, out VariableDefinition? mappedLocal)) {
                             copiedInst.Operand = mappedLocal;
                         }
                         else {
@@ -188,14 +187,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     }
                 }
 
-                foreach (var inst in cctor.Body.Instructions.ToArray()) {
-                    if (copiedMap.TryGetValue(inst, out var copiedInst)) {
+                foreach (Instruction? inst in cctor.Body.Instructions.ToArray()) {
+                    if (copiedMap.TryGetValue(inst, out Instruction? copiedInst)) {
                         newCtorBody.Instructions.Add(copiedInst);
                         cctor.Body.RemoveInstructionSeamlessly(this.GetMethodJumpSites(cctor), inst);
                     }
                 }
 
-                foreach (var inst in newCtor.Body.Instructions) {
+                foreach (Instruction? inst in newCtor.Body.Instructions) {
                     if (inst.Operand is Instruction originalInst) {
                         inst.Operand = copiedMap[originalInst];
                     }
@@ -231,10 +230,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 works.Push(inst);
 
                 while (works.Count > 0) {
-                    var current = works.Pop();
-                    var usages = MonoModCommon.Stack.TraceStackValueConsumers(cctor, current);
+                    Instruction current = works.Pop();
+                    Instruction[] usages = MonoModCommon.Stack.TraceStackValueConsumers(cctor, current);
                     ExtractSources(feature, cctor, transformInsts, localMap, usages);
-                    foreach (var usage in usages) {
+                    foreach (Instruction usage in usages) {
                         if (MonoModCommon.Stack.GetPushCount(cctor.Body, usage) > 0) {
                             works.Push(usage);
                         }
@@ -242,7 +241,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
             static void HandleStoreStaticField(IJumpSitesCacheFeature feature, PatcherArguments arguments, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
-                var fieldDef = ((FieldReference)inst.Operand).TryResolve();
+                FieldDefinition? fieldDef = ((FieldReference)inst.Operand).TryResolve();
                 if (fieldDef is null) {
                     return;
                 }
@@ -253,7 +252,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return;
             }
             static void HandleLoadStaticField(IJumpSitesCacheFeature feature, PatcherArguments arguments, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst, bool isAddress) {
-                var fieldDef = ((FieldReference)inst.Operand).TryResolve();
+                FieldDefinition? fieldDef = ((FieldReference)inst.Operand).TryResolve();
                 if (fieldDef is null) {
                     return;
                 }
@@ -265,7 +264,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return;
             }
             static void HandleStoreLocal(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
-                var local = MonoModCommon.IL.GetReferencedVariable(cctor, inst);
+                VariableDefinition local = MonoModCommon.IL.GetReferencedVariable(cctor, inst);
                 bool usedTransformInst = false;
                 if (localMap.ContainsKey(local)) {
                     usedTransformInst = true;
@@ -299,18 +298,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return;
 
                 bool CheckContextBoundMethod(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Instruction inst) {
-                    if (mappedMethods.originalToContextBound.TryGetValue(((MethodReference)inst.Operand).GetIdentifier(), out var convertedMethod)) {
+                    if (mappedMethods.originalToContextBound.TryGetValue(((MethodReference)inst.Operand).GetIdentifier(), out MethodDefinition? convertedMethod)) {
                         return true;
                     }
                     var mr = (MethodReference)inst.Operand;
-                    var md = mr.TryResolve();
+                    MethodDefinition? md = mr.TryResolve();
                     if (md is not null && this.CheckUsedContextBoundField(arguments.InstanceConvdFields, md)) {
                         return true;
                     }
                     if (inst.OpCode == OpCodes.Newobj) {
                         var ctor = (MethodReference)inst.Operand;
                         if (ctor.DeclaringType.Name.OrdinalStartsWith("<")) {
-                            var movenext = ctor.DeclaringType.SafeResolve()?.Methods.FirstOrDefault(m => m.Name == "MoveNext");
+                            MethodDefinition? movenext = ctor.DeclaringType.SafeResolve()?.Methods.FirstOrDefault(m => m.Name == "MoveNext");
                             if (movenext is not null && this.CheckUsedContextBoundField(arguments.InstanceConvdFields, movenext)) {
                                 return true;
                             }
@@ -334,16 +333,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
 
                 var mr = (MethodReference)inst.Operand;
-                var md = mr.TryResolve();
+                MethodDefinition? md = mr.TryResolve();
                 if (md is not null && this.CheckUsedContextBoundField(arguments.InstanceConvdFields, md)) {
                     ExtractSources(feature, cctor, transformInsts, localMap, inst);
                     TraceUsage(feature, cctor, transformInsts, localMap, inst);
                 }
             }
             static bool CheckMethodUsedTransformInst(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Instruction inst) {
-                foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(cctor, inst, feature.GetMethodJumpSites(cctor))) {
-                    foreach (var source in path.ParametersSources) {
-                        foreach (var sourceInst in source.Instructions) {
+                foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(cctor, inst, feature.GetMethodJumpSites(cctor))) {
+                    foreach (MonoModCommon.Stack.ParameterSource source in path.ParametersSources) {
+                        foreach (Instruction sourceInst in source.Instructions) {
                             if (transformInsts.Contains(sourceInst)) {
                                 return true;
                             }
@@ -353,9 +352,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return false;
             }
             static bool CheckOperandUsedTransformInst(IJumpSitesCacheFeature feature, ContextBoundMethodMap mappedMethods, MethodDefinition cctor, HashSet<Instruction> transformInsts, Instruction inst) {
-                foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(cctor, inst, feature.GetMethodJumpSites(cctor))) {
-                    foreach (var source in path.ParametersSources) {
-                        foreach (var sourceInst in source.Instructions) {
+                foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(cctor, inst, feature.GetMethodJumpSites(cctor))) {
+                    foreach (MonoModCommon.Stack.InstructionArgsSource source in path.ParametersSources) {
+                        foreach (Instruction sourceInst in source.Instructions) {
                             if (transformInsts.Contains(sourceInst)) {
                                 return true;
                             }
@@ -367,22 +366,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         }
 
         static void ExtractSources(IJumpSitesCacheFeature feature, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, params IEnumerable<Instruction> extractSources) {
-            var jumpSite = feature.GetMethodJumpSites(cctor);
+            Dictionary<Instruction, List<Instruction>> jumpSite = feature.GetMethodJumpSites(cctor);
 
             Stack<Instruction> stack = [];
-            foreach (var checkSource in extractSources) {
+            foreach (Instruction checkSource in extractSources) {
                 stack.Push(checkSource);
             }
             while (stack.Count > 0) {
-                var check = stack.Pop();
+                Instruction check = stack.Pop();
                 if (!transformInsts.Add(check)) {
                     continue;
                 }
 
                 if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(cctor, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(cctor, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.ParameterSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
@@ -390,21 +389,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 // Only pop value from stack
                 else if (MonoModCommon.Stack.GetPopCount(cctor.Body, check) > 0) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(cctor, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
+                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(cctor, check, jumpSite)) {
+                        foreach (MonoModCommon.Stack.InstructionArgsSource source in path.ParametersSources) {
+                            foreach (Instruction inst in source.Instructions) {
                                 stack.Push(inst);
                             }
                         }
                     }
                 }
                 // Only push value to stack
-                else if (MonoModCommon.IL.TryGetReferencedVariable(cctor, check, out var local)) {
+                else if (MonoModCommon.IL.TryGetReferencedVariable(cctor, check, out VariableDefinition? local)) {
                     if (localMap.ContainsKey(local)) {
                         continue;
                     }
-                    foreach (var inst in cctor.Body.Instructions) {
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out var otherLocal) || otherLocal.Index != local.Index) {
+                    foreach (Instruction? inst in cctor.Body.Instructions) {
+                        if (!MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out VariableDefinition? otherLocal) || otherLocal.Index != local.Index) {
                             continue;
                         }
                         // store local
@@ -424,7 +423,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             newCtor.Name = ".ctor_placeholder";
             newCtor.DeclaringType = contextTypeData.ContextTypeDef;
             this.GetMethodJumpSites(newCtor);
-            foreach (var instruction in newCtor.Body.Instructions.ToArray()) {
+            foreach (Instruction? instruction in newCtor.Body.Instructions.ToArray()) {
                 switch (instruction.OpCode.Code) {
                     case Code.Ldsfld:
                         HandleLoadStaticField(instruction, newCtor, false);
@@ -448,7 +447,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             void HandleLoadStaticField(Instruction instruction, MethodDefinition method, bool isAddress) {
                 var fieldRef = (FieldReference)instruction.Operand;
-                var field = fieldRef.TryResolve();
+                FieldDefinition? field = fieldRef.TryResolve();
 
                 if (field is null) {
                     return;
@@ -456,7 +455,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 FieldDefinition? instanceConvdField;
                 // If the loading field is just an context, it must come from a singleton field redirection
-                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
+                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out ContextTypeData? instanceConvdType) && instanceConvdType.IsReusedSingleton) {
                     // If it is loading the field value but address, and tail method is an instance method of the context
                     // Just use 'this'
                     if (method.DeclaringType.FullName == instanceConvdType.ContextTypeDef.FullName
@@ -480,27 +479,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 // If the loading field is a member field of a context but context itself
                 else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
-                    var declaringType = instanceConvdField.DeclaringType;
+                    TypeDefinition declaringType = instanceConvdField.DeclaringType;
                     // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
                 else {
                     return;
                 }
-                var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out _);
+                Instruction[] loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out _);
                 this.InjectContextFieldLoadInstanceLoads(arguments, ref instruction, out _, isAddress, method, instanceConvdField, fieldRef, loadInstanceInsts);
             }
 
             void HandleStoreStaticField(Instruction instruction, MethodDefinition method) {
                 var fieldRef = (FieldReference)instruction.Operand;
-                var field = fieldRef.TryResolve();
+                FieldDefinition? field = fieldRef.TryResolve();
                 if (field is null) {
                     return;
                 }
 
                 FieldDefinition? instanceConvdField;
                 // If the loading field is just an context, it must come from a singleton field redirection
-                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out var instanceConvdType) && instanceConvdType.IsReusedSingleton) {
+                if (arguments.OriginalToContextType.TryGetValue(field.FieldType.FullName, out ContextTypeData? instanceConvdType) && instanceConvdType.IsReusedSingleton) {
 
                     // Load the field by tail: ** root context -> field 1 (context) -> ... -> field n-1 (context) -> tail field **
 
@@ -515,7 +514,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 // If the loading field is a member field of a context but context itself
                 else if (arguments.InstanceConvdFieldOrgiMap.TryGetValue(field.GetIdentifier(), out instanceConvdField)) {
-                    var declaringType = instanceConvdField.DeclaringType;
+                    TypeDefinition declaringType = instanceConvdField.DeclaringType;
                     // pararent instance of tail field must be a existing context
                     instanceConvdType = arguments.ContextTypes[declaringType.FullName];
                 }
@@ -523,7 +522,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     return;
                 }
 
-                var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out _);
+                Instruction[] loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, method.Body, instanceConvdType, out _);
                 this.InjectContextFieldStoreInstanceLoads(arguments, ref instruction, out _, method, instanceConvdField, fieldRef, loadInstanceInsts);
             }
 
@@ -531,10 +530,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 var calleeRefToAdjust = (MethodReference)methodCallInstruction.Operand;
 
-                if (!this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out var contextBound, out var vanillaCallee, out var contextType)) {
+                if (!this.AdjustMethodReferences(arguments, arguments.LoadVariable<ContextBoundMethodMap>(), ref calleeRefToAdjust, out MethodDefinition? contextBound, out MethodReference? vanillaCallee, out ContextTypeData? contextType)) {
                     return;
                 }
-                var loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out _);
+                Instruction[] loadInstanceInsts = PatchingCommon.BuildInstanceLoadInstrs(arguments, caller.Body, contextType, out _);
 
                 this.InjectContextParameterLoads(arguments, ref methodCallInstruction, out _, caller, calleeRefToAdjust, vanillaCallee, contextType, loadInstanceInsts);
             }
@@ -543,7 +542,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             Dictionary<VariableDefinition, VariableDefinition> localMap = newCtor.Body.Variables.ToDictionary(v => v, v => v);
             HashSet<Instruction> sources = [];
             List<Instruction> recursiveCtorCalls = [];
-            foreach (var instruction in newCtor.Body.Instructions) {
+            foreach (Instruction? instruction in newCtor.Body.Instructions) {
                 if (instruction.OpCode != OpCodes.Newobj) {
                     continue;
                 }
@@ -558,12 +557,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 return;
             }
             contextTypeData.SingletonCtorCallShouldBeMoveToRootCtor = true;
-            foreach (var recursiveCtorCall in recursiveCtorCalls) {
+            foreach (Instruction recursiveCtorCall in recursiveCtorCalls) {
                 sources.Remove(recursiveCtorCall);
                 recursiveCtorCall.OpCode = OpCodes.Ldarg_0;
                 recursiveCtorCall.Operand = null;
             }
-            foreach (var source in sources) {
+            foreach (Instruction source in sources) {
                 newCtor.Body.Instructions.Remove(source);
             }
         }
@@ -571,7 +570,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             Dictionary<VariableDefinition, VariableDefinition> localMap = newCtor.Body.Variables.ToDictionary(v => v, v => v);
             HashSet<Instruction> sources = [];
             List<Instruction> rootFieldLoads = [];
-            foreach (var instruction in newCtor.Body.Instructions) {
+            foreach (Instruction? instruction in newCtor.Body.Instructions) {
                 if (instruction.OpCode != OpCodes.Ldfld
                     || instruction.Operand is not FieldReference fieldRef
                     || fieldRef.FieldType.FullName != arguments.RootContextDef.FullName) {
@@ -580,21 +579,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ExtractSources(this, newCtor, sources, localMap, instruction);
                 rootFieldLoads.Add(instruction);
             }
-            foreach (var rootFieldLoad in rootFieldLoads) {
+            foreach (Instruction rootFieldLoad in rootFieldLoads) {
                 sources.Remove(rootFieldLoad);
                 rootFieldLoad.OpCode = OpCodes.Ldarg_1;
                 rootFieldLoad.Operand = null;
             }
-            foreach (var source in sources) {
+            foreach (Instruction source in sources) {
                 newCtor.Body.Instructions.Remove(source);
             }
         }
         static void MergeIntoExistingCtor(TypeDefinition rootContextDef, MethodDefinition newCtor, MethodDefinition existingCtor) {
-            var insertBefore = existingCtor.Body.Instructions.Single(
+            Instruction insertBefore = existingCtor.Body.Instructions.Single(
                 inst => inst.OpCode == OpCodes.Stfld && ((FieldReference)inst.Operand).FieldType.FullName == rootContextDef.FullName).Next;
             existingCtor.Body.Variables.AddRange(newCtor.Body.Variables);
 
-            var ilProcessor = existingCtor.Body.GetILProcessor();
+            ILProcessor ilProcessor = existingCtor.Body.GetILProcessor();
             ilProcessor.InsertBeforeSeamlessly(ref insertBefore, newCtor.Body.Instructions);
         }
     }

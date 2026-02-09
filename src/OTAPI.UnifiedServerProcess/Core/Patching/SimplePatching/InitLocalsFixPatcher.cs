@@ -10,8 +10,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.SimplePatching
         public override string Name => nameof(InitLocalsFixPatcher);
 
         public override void Patch() {
-            foreach (var type in module.GetAllTypes()) {
-                foreach (var m in type.Methods) {
+            foreach (TypeDefinition? type in module.GetAllTypes()) {
+                foreach (MethodDefinition? m in type.Methods) {
                     if (m.Body is not null) {
                         m.Body.InitLocals = m.Body.HasVariables;
                     }

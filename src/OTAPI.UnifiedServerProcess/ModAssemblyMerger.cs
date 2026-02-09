@@ -15,7 +15,7 @@ namespace OTAPI.UnifiedServerProcess
     {
         readonly Dictionary<string, ModuleDefinition> modModules = [];
         public ModAssemblyMerger(params System.Reflection.Assembly[] mods) {
-            foreach (var assembly in mods) {
+            foreach (System.Reflection.Assembly assembly in mods) {
                 var mod = AssemblyDefinition.ReadAssembly(assembly.Location);
                 modModules.TryAdd(mod.FullName, mod.MainModule);
             }
@@ -25,22 +25,22 @@ namespace OTAPI.UnifiedServerProcess
                 if (modder is null) {
                     return ModContext.EApplyResult.Continue;
                 }
-                var module = modder.Module;
+                ModuleDefinition module = modder.Module;
                 if (progress == ModType.PreRead) {
                 }
                 else if (progress == ModType.PrePatch) {
                     var modderTypes = module.GetAllTypes().ToDictionary(x => x.FullName, x => x);
                     Dictionary<string, TypeDefinition> modsTypes = [];
-                    foreach (var mod in modModules.Values) {
-                        foreach (var type in mod.Types) {
+                    foreach (ModuleDefinition mod in modModules.Values) {
+                        foreach (TypeDefinition? type in mod.Types) {
                             SetModTypePlaceholder(module, modderTypes, type, null);
                         }
                         modder.PrePatchModule(mod);
                         modder.PatchModule(mod);
                         modderTypes = module.GetAllTypes().ToDictionary(x => x.FullName, x => x);
 
-                        foreach (var type in mod.GetAllTypes()) {
-                            var mappedType = module.GetType(type.FullName) ?? throw new NotSupportedException();
+                        foreach (TypeDefinition? type in mod.GetAllTypes()) {
+                            TypeDefinition mappedType = module.GetType(type.FullName) ?? throw new NotSupportedException();
                             AdjustTypeInfo(module, mod, type, mappedType);
                             AdjustInterfaces(module, mod, type, mappedType);
                             AdjustMembers(module, mod, type, mappedType);
@@ -62,23 +62,23 @@ namespace OTAPI.UnifiedServerProcess
                 mappedType.PackingSize = type.PackingSize;
             }
             if (type.BaseType is not null) {
-                var baseType = type.BaseType;
+                TypeReference baseType = type.BaseType;
                 RedirectTypeRef(target, mod, ref baseType);
                 mappedType.BaseType = baseType;
             }
             if (type.HasGenericParameters) {
                 mappedType.GenericParameters.Clear();
-                foreach (var param in type.GenericParameters) {
+                foreach (GenericParameter? param in type.GenericParameters) {
                     var gp = new GenericParameter(param.Name, mappedType);
-                    foreach (var constraint in param.Constraints) {
-                        var constraintType = constraint.ConstraintType;
+                    foreach (GenericParameterConstraint? constraint in param.Constraints) {
+                        TypeReference constraintType = constraint.ConstraintType;
                         RedirectTypeRef(target, mod, ref constraintType);
                         gp.Constraints.Add(new GenericParameterConstraint(constraintType));
                     }
                     mappedType.GenericParameters.Add(gp);
 
-                    foreach (var att in param.CustomAttributes) {
-                        var mapped = MapCustomAttribute(target, mod, att);
+                    foreach (CustomAttribute? att in param.CustomAttributes) {
+                        CustomAttribute? mapped = MapCustomAttribute(target, mod, att);
                         if (mapped is not null) {
                             gp.CustomAttributes.Add(mapped);
                         }
@@ -89,43 +89,43 @@ namespace OTAPI.UnifiedServerProcess
         }
 
         private static void AdjustMembers(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {
-            foreach (var field in mappedType.Fields.ToArray()) {
-                var fieldType = field.FieldType;
+            foreach (FieldDefinition? field in mappedType.Fields.ToArray()) {
+                TypeReference fieldType = field.FieldType;
                 if (RedirectTypeRef(target, mod, ref fieldType)) {
                     field.FieldType = fieldType;
                 }
                 AdjustMemberAttributes(target, mod, field.CustomAttributes);
             }
-            foreach (var property in mappedType.Properties.ToArray()) {
-                var propertyType = property.PropertyType;
+            foreach (PropertyDefinition? property in mappedType.Properties.ToArray()) {
+                TypeReference propertyType = property.PropertyType;
                 if (RedirectTypeRef(target, mod, ref propertyType)) {
                     property.PropertyType = propertyType;
                 }
                 AdjustMemberAttributes(target, mod, property.CustomAttributes);
             }
-            foreach (var eventDef in mappedType.Events.ToArray()) {
-                var eventType = eventDef.EventType;
+            foreach (EventDefinition? eventDef in mappedType.Events.ToArray()) {
+                TypeReference eventType = eventDef.EventType;
                 if (RedirectTypeRef(target, mod, ref eventType)) {
                     eventDef.EventType = eventType;
                 }
                 AdjustMemberAttributes(target, mod, eventDef.CustomAttributes);
             }
-            foreach (var method in mappedType.Methods.ToArray()) {
-                var methodType = method.ReturnType;
+            foreach (MethodDefinition? method in mappedType.Methods.ToArray()) {
+                TypeReference methodType = method.ReturnType;
                 if (RedirectTypeRef(target, mod, ref methodType)) {
                     method.ReturnType = methodType;
                 }
                 AdjustMemberAttributes(target, mod, method.MethodReturnType.CustomAttributes);
-                foreach (var param in method.Parameters) {
-                    var paramType = param.ParameterType;
+                foreach (ParameterDefinition? param in method.Parameters) {
+                    TypeReference paramType = param.ParameterType;
                     if (RedirectTypeRef(target, mod, ref paramType)) {
                         param.ParameterType = paramType;
                     }
                     AdjustMemberAttributes(target, mod, param.CustomAttributes);
                 }
-                foreach (var genericParam in method.GenericParameters) {
-                    foreach (var constraint in genericParam.Constraints) {
-                        var constraintType = constraint.ConstraintType;
+                foreach (GenericParameter? genericParam in method.GenericParameters) {
+                    foreach (GenericParameterConstraint? constraint in genericParam.Constraints) {
+                        TypeReference constraintType = constraint.ConstraintType;
                         if (RedirectTypeRef(target, mod, ref constraintType)) {
                             constraint.ConstraintType = constraintType;
                         }
@@ -133,12 +133,12 @@ namespace OTAPI.UnifiedServerProcess
                     AdjustMemberAttributes(target, mod, genericParam.CustomAttributes);
                 }
                 for (int i = 0; i < method.Overrides.Count; i++) {
-                    var ovrride = method.Overrides[i];
+                    MethodReference ovrride = method.Overrides[i];
                     if (ovrride is GenericInstanceMethod generic) {
-                        var elementMethod = RedirectElementMethodRef(target, mod, generic.ElementMethod);
+                        MethodReference elementMethod = RedirectElementMethodRef(target, mod, generic.ElementMethod);
                         var mappedGeneric = new GenericInstanceMethod(elementMethod);
                         for (var j = 0; j < generic.GenericArguments.Count; j++) {
-                            var arg = generic.GenericArguments[j];
+                            TypeReference arg = generic.GenericArguments[j];
                             RedirectTypeRef(target, mod, ref arg);
                             mappedGeneric.GenericArguments.Add(arg);
                         }
@@ -150,14 +150,14 @@ namespace OTAPI.UnifiedServerProcess
                     method.Overrides[i] = ovrride;
                 }
                 if (method.HasBody) {
-                    foreach (var local in method.Body.Variables) {
-                        var localType = local.VariableType;
+                    foreach (VariableDefinition? local in method.Body.Variables) {
+                        TypeReference localType = local.VariableType;
                         if (RedirectTypeRef(target, mod, ref localType)) {
                             local.VariableType = localType;
                         }
                     }
-                    foreach (var ex in method.Body.ExceptionHandlers) {
-                        var exType = ex.CatchType;
+                    foreach (ExceptionHandler? ex in method.Body.ExceptionHandlers) {
+                        TypeReference exType = ex.CatchType;
                         if (RedirectTypeRef(target, mod, ref exType)) {
                             ex.CatchType = exType;
                         }
@@ -167,17 +167,17 @@ namespace OTAPI.UnifiedServerProcess
         }
 
         static void AdjustInstructions(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {
-            foreach (var method in mappedType.Methods) {
+            foreach (MethodDefinition? method in mappedType.Methods) {
                 if (!method.HasBody) {
                     continue;
                 }
-                foreach (var inst in method.Body.Instructions) {
+                foreach (Instruction? inst in method.Body.Instructions) {
                     if (inst.Operand is not MemberReference mr) {
                         continue;
                     }
                     if (inst.Operand is FieldReference fieldRef) {
-                        var declaringType = fieldRef.DeclaringType;
-                        var fieldType = fieldRef.FieldType;
+                        TypeReference declaringType = fieldRef.DeclaringType;
+                        TypeReference fieldType = fieldRef.FieldType;
                         RedirectTypeRef(target, mod, ref declaringType);
                         RedirectTypeRef(target, mod, ref fieldType);
                         fieldRef = new FieldReference(fieldRef.Name, fieldType, declaringType);
@@ -185,10 +185,10 @@ namespace OTAPI.UnifiedServerProcess
                     }
                     else if (inst.Operand is MethodReference methodRef) {
                         if (methodRef is GenericInstanceMethod generic) {
-                            var elementMethod = RedirectElementMethodRef(target, mod, generic.ElementMethod);
+                            MethodReference elementMethod = RedirectElementMethodRef(target, mod, generic.ElementMethod);
                             var mappedGeneric = new GenericInstanceMethod(elementMethod);
                             for (var i = 0; i < generic.GenericArguments.Count; i++) {
-                                var arg = generic.GenericArguments[i];
+                                TypeReference arg = generic.GenericArguments[i];
                                 RedirectTypeRef(target, mod, ref arg);
                                 mappedGeneric.GenericArguments.Add(arg);
                             }
@@ -200,16 +200,16 @@ namespace OTAPI.UnifiedServerProcess
                         inst.Operand = methodRef;
                     }
                     else if (inst.Operand is PropertyReference propRef) {
-                        var declaringType = propRef.DeclaringType;
-                        var propType = propRef.PropertyType;
+                        TypeReference declaringType = propRef.DeclaringType;
+                        TypeReference propType = propRef.PropertyType;
                         RedirectTypeRef(target, mod, ref declaringType);
                         RedirectTypeRef(target, mod, ref propType);
                         propRef.DeclaringType = declaringType;
                         propRef.PropertyType = propType;
                     }
                     else if (inst.Operand is EventReference eventRef) {
-                        var declaringType = eventRef.DeclaringType;
-                        var eventType = eventRef.EventType;
+                        TypeReference declaringType = eventRef.DeclaringType;
+                        TypeReference eventType = eventRef.EventType;
                         RedirectTypeRef(target, mod, ref declaringType);
                         RedirectTypeRef(target, mod, ref eventType);
                         eventRef.DeclaringType = declaringType;
@@ -220,22 +220,22 @@ namespace OTAPI.UnifiedServerProcess
                         inst.Operand = typeRef;
                     }
                     else if (inst.Operand is CallSite callSite) {
-                        var returnType = callSite.ReturnType;
+                        TypeReference returnType = callSite.ReturnType;
                         RedirectTypeRef(target, mod, ref returnType);
                         callSite.ReturnType = returnType;
-                        foreach (var arg in callSite.Parameters) {
-                            var argType = arg.ParameterType;
+                        foreach (ParameterDefinition? arg in callSite.Parameters) {
+                            TypeReference argType = arg.ParameterType;
                             RedirectTypeRef(target, mod, ref argType);
                             arg.ParameterType = argType;
                         }
                     }
                     else if (inst.Operand is ParameterReference parameter) {
-                        var parameterType = parameter.ParameterType;
+                        TypeReference parameterType = parameter.ParameterType;
                         RedirectTypeRef(target, mod, ref parameterType);
                         parameter.ParameterType = parameterType;
                     }
                     else if (inst.Operand is VariableReference variable) {
-                        var variableType = variable.VariableType;
+                        TypeReference variableType = variable.VariableType;
                         RedirectTypeRef(target, mod, ref variableType);
                         variable.VariableType = variableType;
                     }
@@ -244,23 +244,23 @@ namespace OTAPI.UnifiedServerProcess
         }
 
         static MethodReference RedirectElementMethodRef(ModuleDefinition target, ModuleDefinition mod, MethodReference methodRef) {
-            var declaringType = methodRef.DeclaringType;
-            var methodType = methodRef.ReturnType;
+            TypeReference declaringType = methodRef.DeclaringType;
+            TypeReference methodType = methodRef.ReturnType;
             RedirectTypeRef(target, mod, ref declaringType);
             RedirectTypeRef(target, mod, ref methodType);
             var mappedMethod = new MethodReference(methodRef.Name, methodType, declaringType) {
                 HasThis = methodRef.HasThis
             };
-            foreach (var param in methodRef.Parameters) {
-                var paramType = param.ParameterType;
+            foreach (ParameterDefinition? param in methodRef.Parameters) {
+                TypeReference paramType = param.ParameterType;
                 RedirectTypeRef(target, mod, ref paramType);
                 mappedMethod.Parameters.Add(new ParameterDefinition(param.Name, param.Attributes, paramType));
             }
             if (methodRef.HasGenericParameters) {
-                foreach (var genericParam in methodRef.GenericParameters) {
+                foreach (GenericParameter? genericParam in methodRef.GenericParameters) {
                     var mappedGenericParam = new GenericParameter(mappedMethod);
-                    foreach (var constraint in genericParam.Constraints) {
-                        var constraintType = constraint.ConstraintType;
+                    foreach (GenericParameterConstraint? constraint in genericParam.Constraints) {
+                        TypeReference constraintType = constraint.ConstraintType;
                         RedirectTypeRef(target, mod, ref constraintType);
                         genericParam.Constraints.Add(new GenericParameterConstraint(constraintType));
                     }
@@ -271,7 +271,7 @@ namespace OTAPI.UnifiedServerProcess
             return mappedMethod;
         }
         static void SetModTypePlaceholder(ModuleDefinition module, Dictionary<string, TypeDefinition> uspTypes, TypeDefinition modType, TypeDefinition? declaringType) {
-            if (!uspTypes.TryGetValue(modType.FullName, out var target)) {
+            if (!uspTypes.TryGetValue(modType.FullName, out TypeDefinition? target)) {
                 target = new TypeDefinition(modType.Namespace, modType.Name, modType.Attributes, modType.BaseType) {
                     Attributes = modType.Attributes,
                 };
@@ -281,7 +281,7 @@ namespace OTAPI.UnifiedServerProcess
                 else {
                     module.Types.Add(target);
                 }
-                foreach (var method in modType.Methods) {
+                foreach (MethodDefinition? method in modType.Methods) {
                     PrepareMethod(target, method, null);
                     SetMemberReplace(module, method.CustomAttributes, false);
                 }
@@ -290,8 +290,8 @@ namespace OTAPI.UnifiedServerProcess
                 modType.BaseType = target.BaseType;
 
                 var existingMethods = target.Methods.ToDictionary(m => m.GetIdentifier(), m => m);
-                foreach (var method in modType.Methods) {
-                    if (!existingMethods.TryGetValue(method.GetIdentifier(), out var existingMethod)) {
+                foreach (MethodDefinition? method in modType.Methods) {
+                    if (!existingMethods.TryGetValue(method.GetIdentifier(), out MethodDefinition? existingMethod)) {
                         existingMethod = null;
                     }
                     PrepareMethod(target, method, existingMethod);
@@ -302,7 +302,7 @@ namespace OTAPI.UnifiedServerProcess
                 if (modType.IsEnum) {
                     SetMemberReplace(module, modType.CustomAttributes, true);
                 }
-                foreach (var field in modType.Fields) {
+                foreach (FieldDefinition? field in modType.Fields) {
                     if (modType.IsEnum && !field.IsStatic) {
                         SetMemberReplace(module, field.CustomAttributes, false);
                     }
@@ -311,45 +311,45 @@ namespace OTAPI.UnifiedServerProcess
                     }
                 }
             }
-            foreach (var nested in modType.NestedTypes) {
+            foreach (TypeDefinition? nested in modType.NestedTypes) {
                 SetModTypePlaceholder(module, uspTypes, nested, target);
             }
         }
         static void PrepareMethod(TypeDefinition targetType, MethodDefinition modMethod, MethodDefinition? originalMethod) {
             if (modMethod.IsConstructor && !modMethod.IsStatic) {
                 int instCount = 0;
-                foreach (var inst in modMethod.Body.Instructions) {
+                foreach (Instruction? inst in modMethod.Body.Instructions) {
                     if (inst.OpCode != OpCodes.Nop) {
                         instCount += 1;
                     }
                 }
                 if (instCount <= 3 && originalMethod is not null) {
-                    var attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
+                    TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
                     modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
                 }
                 else {
-                    var attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
+                    TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
                     modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
                 }
             }
         }
         static void SetMemberReplace(ModuleDefinition module, Collection<CustomAttribute> attributes, bool isEnum) {
-            var type = isEnum ? typeof(MonoMod.MonoModEnumReplace) : typeof(MonoMod.MonoModReplace);
+            Type type = isEnum ? typeof(MonoMod.MonoModEnumReplace) : typeof(MonoMod.MonoModReplace);
             if (attributes.Any(a => a.AttributeType.Name == type.Name)) {
                 return;
             }
-            var attType_replace = module.ImportReference(type);
+            TypeReference attType_replace = module.ImportReference(type);
             attributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, attType_replace) { HasThis = true }));
         }
 
         static void AdjustInterfaces(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {
-            foreach (var interfImpl in type.Interfaces) {
-                var old = mappedType.Interfaces.FirstOrDefault(t => t.InterfaceType.FullName == interfImpl.InterfaceType.FullName);
+            foreach (InterfaceImplementation? interfImpl in type.Interfaces) {
+                InterfaceImplementation? old = mappedType.Interfaces.FirstOrDefault(t => t.InterfaceType.FullName == interfImpl.InterfaceType.FullName);
                 if (old is not null) {
                     mappedType.Interfaces.Remove(old);
                 }
                 AdjustMemberAttributes(target, mod, interfImpl.CustomAttributes);
-                var mappedInterfType = interfImpl.InterfaceType;
+                TypeReference mappedInterfType = interfImpl.InterfaceType;
                 if (RedirectTypeRef(target, mod, ref mappedInterfType)) {
                     interfImpl.InterfaceType = mappedInterfType;
                 }
@@ -357,10 +357,10 @@ namespace OTAPI.UnifiedServerProcess
             }
         }
         static void AdjustMemberAttributes(ModuleDefinition target, ModuleDefinition mod, Collection<CustomAttribute> attributes) {
-            var array = attributes.ToArray();
+            CustomAttribute[] array = attributes.ToArray();
             attributes.Clear();
-            foreach (var attr in array) {
-                var mappedAttr = MapCustomAttribute(target, mod, attr);
+            foreach (CustomAttribute attr in array) {
+                CustomAttribute? mappedAttr = MapCustomAttribute(target, mod, attr);
                 if (mappedAttr != null) {
                     attributes.Add(mappedAttr);
                 }
@@ -371,8 +371,8 @@ namespace OTAPI.UnifiedServerProcess
             try {
                 var mappedAttr = new CustomAttribute(RedirectElementMethodRef(target, mod, attr.Constructor));
                 for (int i = 0; i < attr.ConstructorArguments.Count; i++) {
-                    var arg = attr.ConstructorArguments[i];
-                    var mappedArgType = arg.Type;
+                    CustomAttributeArgument arg = attr.ConstructorArguments[i];
+                    TypeReference mappedArgType = arg.Type;
                     RedirectTypeRef(target, mod, ref mappedArgType);
                     var argValue = arg.Value;
                     if (arg.Value is TypeReference mappedArgValue) {
@@ -382,8 +382,8 @@ namespace OTAPI.UnifiedServerProcess
                     mappedAttr.ConstructorArguments.Add(new CustomAttributeArgument(mappedArgType, argValue));
                 }
                 for (int i = 0; i < attr.Properties.Count; i++) {
-                    var prop = attr.Properties[i];
-                    var mappedPropType = prop.Argument.Type;
+                    CustomAttributeNamedArgument prop = attr.Properties[i];
+                    TypeReference mappedPropType = prop.Argument.Type;
                     RedirectTypeRef(target, mod, ref mappedPropType);
                     var propValue = prop.Argument.Value;
                     if (prop.Argument.Value is TypeReference mappedPropValue) {
@@ -393,8 +393,8 @@ namespace OTAPI.UnifiedServerProcess
                     mappedAttr.Properties.Add(new CustomAttributeNamedArgument(prop.Name, new(mappedPropType, propValue)));
                 }
                 for (int i = 0; i < attr.Fields.Count; i++) {
-                    var field = attr.Fields[i];
-                    var mappedFieldType = field.Argument.Type;
+                    CustomAttributeNamedArgument field = attr.Fields[i];
+                    TypeReference mappedFieldType = field.Argument.Type;
                     RedirectTypeRef(target, mod, ref mappedFieldType);
                     var fieldValue = field.Argument.Value;
                     if (field.Argument.Value is TypeReference mappedFieldValue) {
@@ -417,7 +417,7 @@ namespace OTAPI.UnifiedServerProcess
             }
             if (reference is GenericParameter genericParameter) {
                 if (genericParameter.DeclaringType is not null) {
-                    var newDeclaringType = target.GetType(genericParameter.DeclaringType.FullName);
+                    TypeDefinition? newDeclaringType = target.GetType(genericParameter.DeclaringType.FullName);
                     if (newDeclaringType is not null) {
                         reference = newDeclaringType.GenericParameters[genericParameter.Position];
                         anyChanged = true;
@@ -428,13 +428,13 @@ namespace OTAPI.UnifiedServerProcess
             }
             else if (reference is GenericInstanceType genericOrig) {
                 for (int i = 0; i < genericOrig.GenericArguments.Count; i++) {
-                    var arg = genericOrig.GenericArguments[i];
+                    TypeReference arg = genericOrig.GenericArguments[i];
                     if (RedirectTypeRef(target, mod, ref arg)) {
                         genericOrig.GenericArguments[i] = arg;
                         anyChanged = true;
                     }
                 }
-                var elementType = genericOrig.ElementType;
+                TypeReference elementType = genericOrig.ElementType;
                 if (RedirectTypeRef(target, mod, ref elementType)) {
                     var genericInstance = new GenericInstanceType(elementType);
                     genericInstance.GenericArguments.AddRange(genericOrig.GenericArguments);
@@ -444,7 +444,7 @@ namespace OTAPI.UnifiedServerProcess
                 return anyChanged;
             }
             else if (reference is ArrayType array) {
-                var elementType = array.ElementType;
+                TypeReference elementType = array.ElementType;
                 if (RedirectTypeRef(target, mod, ref elementType)) {
                     reference = new ArrayType(elementType, array.Rank);
                     anyChanged = true;
@@ -452,7 +452,7 @@ namespace OTAPI.UnifiedServerProcess
                 return anyChanged;
             }
             else if (reference is PointerType pointer) {
-                var elementType = pointer.ElementType;
+                TypeReference elementType = pointer.ElementType;
                 if (RedirectTypeRef(target, mod, ref elementType)) {
                     reference = new PointerType(elementType);
                     anyChanged = true;
@@ -460,7 +460,7 @@ namespace OTAPI.UnifiedServerProcess
                 return anyChanged;
             }
             else if (reference is ByReferenceType byReference) {
-                var elementType = byReference.ElementType;
+                TypeReference elementType = byReference.ElementType;
                 if (RedirectTypeRef(target, mod, ref elementType)) {
                     reference = new ByReferenceType(elementType);
                     anyChanged = true;
@@ -468,21 +468,21 @@ namespace OTAPI.UnifiedServerProcess
                 return anyChanged;
             }
             else if (reference is FunctionPointerType function) {
-                var returnType = function.ReturnType;
+                TypeReference returnType = function.ReturnType;
                 if (RedirectTypeRef(target, mod, ref returnType)) {
                     function.ReturnType = returnType;
                     anyChanged = true;
                 }
-                foreach (var param in function.Parameters) {
-                    var paramType = param.ParameterType;
+                foreach (ParameterDefinition? param in function.Parameters) {
+                    TypeReference paramType = param.ParameterType;
                     if (RedirectTypeRef(target, mod, ref paramType)) {
                         param.ParameterType = paramType;
                         anyChanged = true;
                     }
                 }
-                foreach (var genericParam in function.GenericParameters) {
-                    foreach (var constraint in genericParam.Constraints) {
-                        var constraintType = constraint.ConstraintType;
+                foreach (GenericParameter? genericParam in function.GenericParameters) {
+                    foreach (GenericParameterConstraint? constraint in genericParam.Constraints) {
+                        TypeReference constraintType = constraint.ConstraintType;
                         if (RedirectTypeRef(target, mod, ref constraintType)) {
                             constraint.ConstraintType = constraintType;
                             anyChanged = true;
@@ -492,7 +492,7 @@ namespace OTAPI.UnifiedServerProcess
                 return anyChanged;
             }
             else if (reference is TypeSpecification spec) {
-                var elementType = spec.ElementType;
+                TypeReference elementType = spec.ElementType;
                 if (RedirectTypeRef(target, mod, ref elementType)) {
                     anyChanged = true;
                 }
@@ -500,7 +500,7 @@ namespace OTAPI.UnifiedServerProcess
             }
 
             if (reference.IsNested) {
-                var declaringType = reference.DeclaringType;
+                TypeReference declaringType = reference.DeclaringType;
                 if (RedirectTypeRef(target, mod, ref declaringType)) {
                     reference.DeclaringType = declaringType;
                     anyChanged = true;
@@ -511,14 +511,14 @@ namespace OTAPI.UnifiedServerProcess
                 anyChanged = true;
             }
 
-            var scope = mod.Name == reference.Scope.Name ? target : reference.Scope;
+            IMetadataScope scope = mod.Name == reference.Scope.Name ? target : reference.Scope;
 
             if (scope.Name == target.TypeSystem.CoreLibrary.Name) {
                 scope = target.TypeSystem.CoreLibrary;
                 anyChanged = true;
             }
             else if (scope != target) {
-                var assemblyReference = target.AssemblyReferences.FirstOrDefault(ar => ar.Name == scope.Name);
+                AssemblyNameReference? assemblyReference = target.AssemblyReferences.FirstOrDefault(ar => ar.Name == scope.Name);
                 if (assemblyReference is not null) {
                     scope = assemblyReference;
                     anyChanged = true;

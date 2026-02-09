@@ -31,7 +31,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             typeNameMap ??= [];
             makeByRefIfNot ??= [];
 
-            var methodToFormat = NormalizeMethodReference(method);
+            MethodReference methodToFormat = NormalizeMethodReference(method);
             if (withDeclaring && methodToFormat.DeclaringType is null) {
                 throw new ArgumentException("DeclaringType is null", nameof(method));
             }
@@ -39,7 +39,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             HashSet<string>? ignoredTypeNames = null;
             if (ignoreParams is { Length: > 0 }) {
                 ignoredTypeNames = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var ignoreParam in ignoreParams) {
+                foreach (TypeDefinition ignoreParam in ignoreParams) {
                     ignoredTypeNames.Add(ignoreParam.FullName);
                 }
             }
@@ -58,12 +58,12 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 identifierBuilder.Append(methodGenericParameterCount);
             }
 
-            var useAnonymousCtorNamedParameters = ShouldUseAnonymousCtorNamedParameters(methodToFormat, out var anonymousCtorDef);
+            var useAnonymousCtorNamedParameters = ShouldUseAnonymousCtorNamedParameters(methodToFormat, out MethodDefinition? anonymousCtorDef);
 
             identifierBuilder.Append('(');
             var appendedParameterCount = 0;
             for (var i = 0; i < methodToFormat.Parameters.Count; i++) {
-                var parameterType = methodToFormat.Parameters[i].ParameterType;
+                TypeReference parameterType = methodToFormat.Parameters[i].ParameterType;
                 if (ShouldIgnoreParameter(parameterType, ignoredTypeNames)) {
                     continue;
                 }
@@ -111,13 +111,13 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 return false;
             }
 
-            var checkType = parameterType is ByReferenceType byReferenceType ? byReferenceType.ElementType : parameterType;
+            TypeReference checkType = parameterType is ByReferenceType byReferenceType ? byReferenceType.ElementType : parameterType;
             checkType = checkType.GetElementType();
             return ignoredTypeNames.Contains(checkType.FullName);
         }
 
         private static string GetTypeRestrictionName(TypeReference declaringType, Dictionary<string, string> typeNameMap) {
-            var typeToFormat = declaringType is GenericInstanceType genericInstanceType
+            TypeReference typeToFormat = declaringType is GenericInstanceType genericInstanceType
                 ? genericInstanceType.ElementType
                 : declaringType.GetElementType();
 
@@ -125,11 +125,11 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 return mappedName;
             }
 
-            var chain = BuildDeclaringTypeChain(typeToFormat);
+            List<TypeReference> chain = BuildDeclaringTypeChain(typeToFormat);
             var builder = new StringBuilder();
 
             for (var i = 0; i < chain.Count; i++) {
-                var current = chain[i];
+                TypeReference current = chain[i];
 
                 if (i == 0) {
                     if (!string.IsNullOrEmpty(current.Namespace)) {
@@ -196,7 +196,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 return FormatGenericInstanceParameterType(genericInstanceType, typeNameMap);
             }
 
-            var elementType = type.GetElementType();
+            TypeReference elementType = type.GetElementType();
             if (typeNameMap.TryGetValue(elementType.FullName, out var mappedElementTypeName)) {
                 return NormalizeTypeNameForParameter(mappedElementTypeName);
             }
@@ -205,7 +205,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         }
 
         private static string FormatGenericInstanceParameterType(GenericInstanceType genericInstanceType, Dictionary<string, string> typeNameMap) {
-            var elementType = genericInstanceType.ElementType.GetElementType();
+            TypeReference elementType = genericInstanceType.ElementType.GetElementType();
 
             if (typeNameMap.TryGetValue(elementType.FullName, out var mappedElementTypeName)) {
                 return AppendGenericArgumentsToMappedType(
@@ -214,12 +214,12 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                     typeNameMap);
             }
 
-            var chain = BuildDeclaringTypeChain(elementType);
+            List<TypeReference> chain = BuildDeclaringTypeChain(elementType);
             var builder = new StringBuilder();
             var nextArgIndex = 0;
 
             for (var i = 0; i < chain.Count; i++) {
-                var part = chain[i];
+                TypeReference part = chain[i];
 
                 if (i == 0) {
                     if (!string.IsNullOrEmpty(part.Namespace)) {
@@ -250,7 +250,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                         part,
                         argOffset,
                         ref nextArgIndex,
-                        out var consumedArgumentType)) {
+                        out TypeReference? consumedArgumentType)) {
                         builder.Append(GetParameterTypeName(consumedArgumentType!, typeNameMap));
                     }
                     else {
@@ -319,7 +319,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             builder.Append('<');
 
             var index = 0;
-            foreach (var argument in genericArguments) {
+            foreach (TypeReference argument in genericArguments) {
                 if (index > 0) {
                     builder.Append(',');
                 }
@@ -333,7 +333,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
         }
 
         private static string FormatNamedTypeForParameter(TypeReference type, Dictionary<string, string> typeNameMap) {
-            var elementType = type.GetElementType();
+            TypeReference elementType = type.GetElementType();
             var simpleName = StripGenericArity(elementType.Name);
 
             if (elementType.DeclaringType is not null) {
@@ -358,19 +358,19 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 return false;
             }
 
-            var declaringType = method.DeclaringType;
+            TypeReference? declaringType = method.DeclaringType;
             if (declaringType is null || !declaringType.Name.OrdinalStartsWith("<>f__AnonymousType")) {
                 return false;
             }
 
-            var declaringTypeDef = declaringType.Resolve();
+            TypeDefinition? declaringTypeDef = declaringType.Resolve();
             if (declaringTypeDef is null) {
                 HandleMetadataMismatch($"Failed to resolve anonymous declaring type '{declaringType.FullName}'.");
                 return false;
             }
 
             var instanceCtorCount = 0;
-            foreach (var maybeCtor in declaringTypeDef.Methods) {
+            foreach (MethodDefinition? maybeCtor in declaringTypeDef.Methods) {
                 if (maybeCtor.IsConstructor && !maybeCtor.IsStatic) {
                     instanceCtorCount++;
                     if (instanceCtorCount > 1) {
@@ -459,7 +459,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             var chain = new List<TypeReference>();
 
             for (TypeReference? current = type; current is not null; current = current.DeclaringType) {
-                var unwrapped = current is GenericInstanceType genericInstanceType
+                TypeReference unwrapped = current is GenericInstanceType genericInstanceType
                     ? genericInstanceType.ElementType
                     : current.GetElementType();
 
@@ -492,7 +492,7 @@ namespace OTAPI.UnifiedServerProcess.Extensions
                 return false;
             }
 
-            var span = typeName.AsSpan(tickIndex + 1);
+            ReadOnlySpan<char> span = typeName.AsSpan(tickIndex + 1);
             if (!int.TryParse(span, out arity)) {
                 return false;
             }

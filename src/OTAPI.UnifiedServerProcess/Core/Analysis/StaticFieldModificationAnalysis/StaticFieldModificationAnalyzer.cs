@@ -12,6 +12,7 @@ using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalysis
@@ -47,10 +48,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
             Dictionary<string, FieldDefinition> modifiedFields_ignoredInitOnlys = FetchModifiedFieldInner(entryPoint, initOnlyMethodSet);
             Dictionary<string, FieldDefinition> modifiedFields_WhenInit = FetchModifiedFieldInner(initOnlys, []);
 
-            foreach (var fieldKV in modifiedFields_ignoredInitOnlys) {
+            foreach (KeyValuePair<string, FieldDefinition> fieldKV in modifiedFields_ignoredInitOnlys) {
                 modifiedFields_WhenInit.Remove(fieldKV.Key);
             }
-            foreach (var kv in modifiedFields_WhenInit.ToArray()) {
+            foreach (KeyValuePair<string, FieldDefinition> kv in modifiedFields_WhenInit.ToArray()) {
                 if (kv.Value.DeclaringType.Name.OrdinalStartsWith('<')) {
                     modifiedFields_WhenInit.Remove(kv.Key);
                 }
@@ -63,7 +64,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
         }
 
         private Dictionary<string, FieldDefinition> FetchModifiedFieldInner(MethodDefinition[] entryPoints, HashSet<string> ignored) {
-            var workQueue = entryPoints.ToDictionary(x => x.GetIdentifier(), method => { var path = method.GetDebugName();  return (method, path); });
+            Dictionary<string, (MethodDefinition method, string path)> workQueue = entryPoints.ToDictionary(x => x.GetIdentifier(), method => { var path = method.GetDebugName(); return (method, path); });
 
             var visited = new Dictionary<string, MethodDefinition>();
 
@@ -72,22 +73,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
             int iteration = 0;
             while (workQueue.Count > 0) {
                 iteration++;
-                var currentWorkBatch = workQueue.Values.ToArray();
+                (MethodDefinition method, string path)[] currentWorkBatch = workQueue.Values.ToArray();
 
                 for (int progress = 0; progress < currentWorkBatch.Length; progress++) {
-                    var (method, path) = currentWorkBatch[progress];
+                    (MethodDefinition? method, string? path) = currentWorkBatch[progress];
                     Progress(iteration, progress, currentWorkBatch.Length, method.GetDebugName());
                     ProcessMethod(
                         method,
                         storedFields,
-                        out var addedCallees
+                        out MethodDefinition[]? addedCallees
                     );
 
                     var methodId = method.GetIdentifier();
                     workQueue.Remove(methodId);
                     visited.TryAdd(methodId, method);
 
-                    foreach (var callee in addedCallees) {
+                    foreach (MethodDefinition callee in addedCallees) {
                         var calleeID = callee.GetIdentifier();
                         if (ignored.Contains(calleeID)) {
                             continue;
@@ -122,23 +123,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                 dict.TryAdd(field.GetIdentifier(), field);
             }
 
-            staticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(caller.GetIdentifier(), out var staticFieldReferenceData);
+            staticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(caller.GetIdentifier(), out StaticFieldUsageTrack? staticFieldReferenceData);
 
-            var jumpSites = this.GetMethodJumpSites(caller);
+            Dictionary<Instruction, List<Instruction>> jumpSites = this.GetMethodJumpSites(caller);
 
-            if (callGraph.MediatedCallGraph.TryGetValue(caller.GetIdentifier(), out var calls)) {
-                foreach (var useds in calls.UsedMethods) {
-                    foreach (var callee in useds.ImplementedMethods()) {
+            if (callGraph.MediatedCallGraph.TryGetValue(caller.GetIdentifier(), out MethodCallData? calls)) {
+                foreach (MethodReferenceData useds in calls.UsedMethods) {
+                    foreach (MethodDefinition callee in useds.ImplementedMethods()) {
                         myCalingMethods.TryAdd(callee.GetIdentifier(), callee);
                     }
                 }
             }
 
-            foreach (var instruction in caller.Body.Instructions) {
+            foreach (Instruction? instruction in caller.Body.Instructions) {
 
                 switch (instruction.OpCode.Code) {
                     case Code.Stfld: {
-                            var field = ((FieldReference)instruction.Operand).TryResolve();
+                            FieldDefinition? field = ((FieldReference)instruction.Operand).TryResolve();
                             if (field is null) {
                                 break;
                             }
@@ -147,16 +148,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                 continue;
                             }
 
-                            foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, instruction, jumpSites)) {
-                                var loadModifyingInstance = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[0].Instructions.Last(), jumpSites)
+                            foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, instruction, jumpSites)) {
+                                MonoModCommon.Stack.StackTopTypePath loadModifyingInstance = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[0].Instructions.Last(), jumpSites)
                                     .First();
 
-                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(caller, loadModifyingInstance.RealPushValueInstruction), out var stackValueTrace)) {
+                                if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(caller, loadModifyingInstance.RealPushValueInstruction), out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                     continue;
                                 }
 
-                                foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
-                                    foreach (var part in willBeModified.PartTracingPaths) {
+                                foreach (StaticFieldProvenance willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                    foreach (StaticFieldTracingChain part in willBeModified.PartTracingPaths) {
                                         if (part.EncapsulationHierarchy.Length == 0) {
                                             AddField(storedFields, willBeModified.TracingStaticField);
                                         }
@@ -171,21 +172,21 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                     case Code.Newobj: {
                             var isNewObj = instruction.OpCode == OpCodes.Newobj;
                             var methodRef = (MethodReference)instruction.Operand;
-                            var resolvedCallee = methodRef.TryResolve();
+                            MethodDefinition? resolvedCallee = methodRef.TryResolve();
 
                             // Get all implementations of the called method
-                            var implementations = this.GetMethodImplementations(caller, instruction, jumpSites, out _);
+                            MethodDefinition[] implementations = this.GetMethodImplementations(caller, instruction, jumpSites, out _);
 
                             if (staticFieldReferenceData is null) {
                                 continue;
                             }
 
                             // Analyze the parameters of the called method
-                            var paramPaths = MonoModCommon.Stack.AnalyzeParametersSources(caller, instruction, jumpSites);
+                            MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] paramPaths = MonoModCommon.Stack.AnalyzeParametersSources(caller, instruction, jumpSites);
                             MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths = new MonoModCommon.Stack.StackTopTypePath[paramPaths.Length][];
 
                             for (int i = 0; i < loadParamsInEveryPaths.Length; i++) {
-                                var path = paramPaths[i];
+                                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path = paramPaths[i];
                                 loadParamsInEveryPaths[i] = new MonoModCommon.Stack.StackTopTypePath[path.ParametersSources.Length];
                                 for (int j = 0; j < path.ParametersSources.Length; j++) {
                                     loadParamsInEveryPaths[i][j] = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, path.ParametersSources[j].Instructions.Last(), jumpSites).First();
@@ -202,14 +203,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                 // The called method return a reference
                                 || (methodRef.ReturnType is ByReferenceType && methodRef.Name is "get_Item")) {
 
-                                foreach (var paramGroup in loadParamsInEveryPaths) {
-                                    var loadInstance = paramGroup[0];
+                                foreach (MonoModCommon.Stack.StackTopTypePath[] paramGroup in loadParamsInEveryPaths) {
+                                    MonoModCommon.Stack.StackTopTypePath loadInstance = paramGroup[0];
 
-                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(caller, loadInstance.RealPushValueInstruction), out var stackValueTrace)) {
+                                    if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(StaticFieldUsageTrack.GenerateStackKey(caller, loadInstance.RealPushValueInstruction), out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                    foreach (StaticFieldProvenance willBeModified in stackValueTrace.TracedStaticFields.Values) {
                                         AddField(storedFields, willBeModified.TracingStaticField);
                                     }
                                 }
@@ -221,9 +222,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                 continue;
                             }
 
-                            foreach (var implCallee in implementations) {
+                            foreach (MethodDefinition implCallee in implementations) {
 
-                                foreach (var paramGroup in loadParamsInEveryPaths) {
+                                foreach (MonoModCommon.Stack.StackTopTypePath[] paramGroup in loadParamsInEveryPaths) {
                                     for (int paramIndex = 0; paramIndex < paramGroup.Length; paramIndex++) {
 
                                         var paramIndexInImpl = paramIndex;
@@ -247,29 +248,29 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                                             continue;
                                         }
 
-                                        var loadParam = paramGroup[paramIndex];
+                                        MonoModCommon.Stack.StackTopTypePath loadParam = paramGroup[paramIndex];
 
                                         // If the callMethod do not modify any Parameter, skip
-                                        if (!paramModificationAnalyzer.ModifiedParameters.TryGetValue(implCallee.GetIdentifier(), out var modifiedParameters)) {
+                                        if (!paramModificationAnalyzer.ModifiedParameters.TryGetValue(implCallee.GetIdentifier(), out ImmutableDictionary<int, ParameterMutationInfo>? modifiedParameters)) {
                                             continue;
                                         }
                                         // If the input argument is not modified by the callMethod, skip
-                                        if (!modifiedParameters.TryGetValue(paramIndex, out var modifiedParameter)) {
+                                        if (!modifiedParameters.TryGetValue(paramIndex, out ParameterMutationInfo? modifiedParameter)) {
                                             continue;
                                         }
 
                                         // If the input argument is not coming from a static field, skip
                                         if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
                                             StaticFieldUsageTrack.GenerateStackKey(caller, loadParam.RealPushValueInstruction),
-                                            out var stackValueTrace)) {
+                                            out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                             continue;
                                         }
 
-                                        foreach (var referencedStaticField in stackValueTrace.TracedStaticFields.Values) {
+                                        foreach (StaticFieldProvenance referencedStaticField in stackValueTrace.TracedStaticFields.Values) {
                                             List<MemberAccessStep[]> chains = [];
-                                            foreach (var part in referencedStaticField.PartTracingPaths) {
-                                                foreach (var willBeModified in modifiedParameters.Values) {
-                                                    foreach (var modification in willBeModified.Mutations) {
+                                            foreach (StaticFieldTracingChain part in referencedStaticField.PartTracingPaths) {
+                                                foreach (ParameterMutationInfo willBeModified in modifiedParameters.Values) {
+                                                    foreach (ModifiedComponent modification in willBeModified.Mutations) {
                                                         if (part.EncapsulationHierarchy.Length > 0) {
                                                             if (modification.ModificationAccessPath.Length <= part.EncapsulationHierarchy.Length) {
                                                                 continue;
@@ -310,7 +311,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                             goto case Code.Stsfld;
                         }
                     case Code.Stsfld: {
-                            var field = ((FieldReference)instruction.Operand).TryResolve();
+                            FieldDefinition? field = ((FieldReference)instruction.Operand).TryResolve();
                             if (field is null) {
                                 break;
                             }
@@ -333,22 +334,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                     case Code.Stelem_R4:
                     case Code.Stelem_R8:
                     case Code.Stelem_Ref: {
-                            
+
                             if (staticFieldReferenceData is null) {
                                 continue;
                             }
 
-                            foreach (var callPath in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, instruction, jumpSites)) {
-                                foreach (var loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, callPath.ParametersSources[0].Instructions.Last(), jumpSites)) {
+                            foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> callPath in MonoModCommon.Stack.AnalyzeInstructionArgsSources(caller, instruction, jumpSites)) {
+                                foreach (MonoModCommon.Stack.StackTopTypePath loadInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(caller, callPath.ParametersSources[0].Instructions.Last(), jumpSites)) {
 
                                     if (!staticFieldReferenceData.StackValueTraces.TryGetTrace(
                                         StaticFieldUsageTrack.GenerateStackKey(caller, loadInstance.RealPushValueInstruction),
-                                        out var stackValueTrace)) {
+                                        out AggregatedStaticFieldProvenance? stackValueTrace)) {
                                         continue;
                                     }
 
-                                    foreach (var willBeModified in stackValueTrace.TracedStaticFields.Values) {
-                                        foreach (var part in willBeModified.PartTracingPaths) {
+                                    foreach (StaticFieldProvenance willBeModified in stackValueTrace.TracedStaticFields.Values) {
+                                        foreach (StaticFieldTracingChain part in willBeModified.PartTracingPaths) {
                                             if (part.EncapsulationHierarchy.Length == 0) {
                                                 AddField(storedFields, willBeModified.TracingStaticField);
                                             }

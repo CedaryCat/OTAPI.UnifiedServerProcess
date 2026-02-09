@@ -20,7 +20,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             return enumerableType ??= module.ImportReference(typeof(IEnumerable<>));
         }
         public static bool IsEnumerator(TypeInheritanceGraph graph, TypeDefinition type) {
-            var inheritance = graph.GetInheritanceTypes(type);
+            Dictionary<string, TypeDefinition> inheritance = graph.GetInheritanceTypes(type);
             if (inheritance.Count == 0) {
                 return false;
             }
@@ -39,11 +39,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             if (getEnumerator.Name != "GetEnumerator") {
                 return false;
             }
-            var declaringType = getEnumerator.DeclaringType.TryResolve();
+            TypeDefinition? declaringType = getEnumerator.DeclaringType.TryResolve();
             if (declaringType is null) {
                 return false;
             }
-            var inheritance = graph.GetInheritanceTypes(declaringType);
+            Dictionary<string, TypeDefinition> inheritance = graph.GetInheritanceTypes(declaringType);
             if (inheritance.Count == 0) {
                 return false;
             }
@@ -62,11 +62,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.DataModels.MemberAccess
             if (getCurrent.Name != "get_Current") {
                 return false;
             }
-            var declaringType = getCurrent.DeclaringType.TryResolve();
+            TypeDefinition? declaringType = getCurrent.DeclaringType.TryResolve();
             if (declaringType is null) {
                 return false;
             }
-            var inheritance = graph.GetInheritanceTypes(declaringType);
+            Dictionary<string, TypeDefinition> inheritance = graph.GetInheritanceTypes(declaringType);
             if (inheritance.Count == 0) {
                 return false;
             }

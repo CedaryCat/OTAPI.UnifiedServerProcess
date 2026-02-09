@@ -25,27 +25,27 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
     {
         public override string Name => nameof(HooksCtxAdaptPatcher);
         public override void Patch(PatcherArguments arguments) {
-            var hookEventDelegate = arguments.MainModule.GetType("HookEvents.HookDelegate")
+            TypeDefinition hookEventDelegate = arguments.MainModule.GetType("HookEvents.HookDelegate")
                 ?? throw new Exception("HookEvents.HookDelegate is not defined.");
-            var mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
+            ContextBoundMethodMap mappedMethods = arguments.LoadVariable<ContextBoundMethodMap>();
 
-            foreach (var type in arguments.MainModule.GetAllTypes()) {
+            foreach (TypeDefinition? type in arguments.MainModule.GetAllTypes()) {
                 if (!type.GetRootDeclaringType().Namespace.OrdinalStartsWith("HookEvents.")) {
                     continue;
                 }
                 if (type.BaseType?.Name == "MulticastDelegate") {
                     continue;
                 }
-                foreach (var invokeMethod in type.Methods) {
+                foreach (MethodDefinition? invokeMethod in type.Methods) {
                     if (!invokeMethod.Name.OrdinalStartsWith("Invoke")) {
                         continue;
                     }
                     var methodId = invokeMethod.GetIdentifier();
-                    if (!callGraph.MediatedCallGraph.TryGetValue(methodId, out var callData)) {
+                    if (!callGraph.MediatedCallGraph.TryGetValue(methodId, out MethodCallData? callData)) {
                         continue;
                     }
-                    var containingMethod = callData.UsedByMethods.Single();
-                    if (mappedMethods.originalToContextBound.TryGetValue(containingMethod.GetIdentifier(), out var convertedMethod)) {
+                    MethodDefinition containingMethod = callData.UsedByMethods.Single();
+                    if (mappedMethods.originalToContextBound.TryGetValue(containingMethod.GetIdentifier(), out MethodDefinition? convertedMethod)) {
                         containingMethod = convertedMethod;
                     }
                     ProcessMethod(arguments, hookEventDelegate, mappedMethods, containingMethod, invokeMethod);
@@ -60,66 +60,66 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             MethodDefinition containingMethod,
             MethodDefinition invokeMethod) {
 
-            var module = arguments.MainModule;
+            ModuleDefinition module = arguments.MainModule;
 
-            if (arguments.ContextTypes.TryGetValue(containingMethod.DeclaringType.FullName, out var singletonType)
+            if (arguments.ContextTypes.TryGetValue(containingMethod.DeclaringType.FullName, out ContextTypeData? singletonType)
                 && singletonType.IsReusedSingleton
                 && singletonType.ReusedSingletonMethods.ContainsKey(containingMethod.GetIdentifier())) {
                 return;
             }
 
-            foreach (var instruction in containingMethod.Body.Instructions.ToArray()) {
-                var callInvokeMethod = instruction;
+            foreach (Instruction? instruction in containingMethod.Body.Instructions.ToArray()) {
+                Instruction callInvokeMethod = instruction;
 
-                if (!callInvokeMethod.MatchCall(out var invokeMethodRef)) {
+                if (!callInvokeMethod.MatchCall(out MethodReference? invokeMethodRef)) {
                     continue;
                 }
                 if (invokeMethodRef.Name != invokeMethod.Name || invokeMethodRef.DeclaringType.FullName != invokeMethod.DeclaringType.FullName) {
                     continue;
                 }
-                var invokePaths = MonoModCommon.Stack.AnalyzeParametersSources(containingMethod, instruction, this.GetMethodJumpSites(containingMethod));
+                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] invokePaths = MonoModCommon.Stack.AnalyzeParametersSources(containingMethod, instruction, this.GetMethodJumpSites(containingMethod));
                 if (invokePaths.Length != 1) {
                     throw new Exception("OTAPI HookEvents must have only one path in invoking.");
                 }
-                var invokePath = invokePaths[0];
+                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> invokePath = invokePaths[0];
                 if (invokePath.ParametersSources[0].Instructions.Length != 1) {
                     throw new Exception("OTAPI HookEvents must use only one instruction in loading instance (ldnull or ldarg.0)");
                 }
-                var ldInstanceForInvoke = invokePath.ParametersSources[0].Instructions[0];
+                Instruction ldInstanceForInvoke = invokePath.ParametersSources[0].Instructions[0];
 
-                var createDelegate = invokePath.ParametersSources[1].Instructions.Last();
-                if (!createDelegate.MatchNewobj(out var createDelegateCtor) || createDelegateCtor.DeclaringType.Resolve().BaseType?.Name != "MulticastDelegate") {
+                Instruction createDelegate = invokePath.ParametersSources[1].Instructions.Last();
+                if (!createDelegate.MatchNewobj(out MethodReference? createDelegateCtor) || createDelegateCtor.DeclaringType.Resolve().BaseType?.Name != "MulticastDelegate") {
                     throw new Exception("Unexpected createDelegate");
                 }
 
-                var createDelegatePaths = MonoModCommon.Stack.AnalyzeParametersSources(containingMethod, createDelegate, this.GetMethodJumpSites(containingMethod));
+                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] createDelegatePaths = MonoModCommon.Stack.AnalyzeParametersSources(containingMethod, createDelegate, this.GetMethodJumpSites(containingMethod));
 
                 if (createDelegatePaths.Length != 1) {
                     throw new Exception("OTAPI HookEvents must have only one path in invoking.");
                 }
-                var createDelegatePath = createDelegatePaths[0];
+                MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> createDelegatePath = createDelegatePaths[0];
                 if (createDelegatePath.ParametersSources[0].Instructions.Length != 1) {
                     throw new Exception("OTAPI HookEvents must use only one instruction in loading instance (ldnull or ldarg.0)");
                 }
 
-                var loadInstanceForDeleCtor = createDelegatePath.ParametersSources[0].Instructions.Single();
-                var loadMethodPointer = createDelegatePath.ParametersSources[1].Instructions.Last();
+                Instruction loadInstanceForDeleCtor = createDelegatePath.ParametersSources[0].Instructions.Single();
+                Instruction loadMethodPointer = createDelegatePath.ParametersSources[1].Instructions.Last();
                 var ldftnMethod = (MethodReference)loadMethodPointer.Operand;
 
                 if (ldftnMethod.HasThis && ldInstanceForInvoke.OpCode == OpCodes.Ldnull) {
                     throw new Exception("Unexpected ldftn with this");
                 }
-                if (!mappedMethod.originalToContextBound.TryGetValue(ldftnMethod.GetIdentifier(), out var convertedMethod)) {
+                if (!mappedMethod.originalToContextBound.TryGetValue(ldftnMethod.GetIdentifier(), out MethodDefinition? convertedMethod)) {
                     return;
                 }
 
                 loadMethodPointer.Operand = convertedMethod;
 
                 // context-bound by static-instance-conversion
-                if (ldInstanceForInvoke.OpCode == OpCodes.Ldnull && arguments.OriginalToContextType.TryGetValue(ldftnMethod.DeclaringType.FullName, out var convertedType)) {
+                if (ldInstanceForInvoke.OpCode == OpCodes.Ldnull && arguments.OriginalToContextType.TryGetValue(ldftnMethod.DeclaringType.FullName, out ContextTypeData? convertedType)) {
 
                     var eventFieldName = invokeMethod.Name["Invoke".Length..];
-                    var eventField = invokeMethod.DeclaringType.GetField(eventFieldName);
+                    FieldDefinition eventField = invokeMethod.DeclaringType.GetField(eventFieldName);
                     var oldFieldType = (GenericInstanceType)eventField.FieldType;
                     var oldFieldFullName = eventField.FullName;
 
@@ -129,7 +129,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                     eventField.FieldType = eventTypeWithContext;
 
-                    var theEvent = invokeMethod.DeclaringType.GetEvent(eventFieldName);
+                    EventDefinition theEvent = invokeMethod.DeclaringType.GetEvent(eventFieldName);
                     theEvent.EventType = eventTypeWithContext;
 
                     CastEventMethod(invokeMethod.DeclaringType.GetMethod("add_" + eventFieldName));
@@ -137,10 +137,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                     void CastEventMethod(MethodDefinition method) {
                         method.Parameters[0].ParameterType = eventTypeWithContext;
-                        foreach (var local in method.Body.Variables) {
+                        foreach (VariableDefinition? local in method.Body.Variables) {
                             local.VariableType = eventTypeWithContext;
                         }
-                        foreach (var inst in method.Body.Instructions) {
+                        foreach (Instruction? inst in method.Body.Instructions) {
                             if (inst.Operand is FieldReference eventFieldRef && eventFieldRef.FullName == oldFieldFullName) {
                                 inst.Operand = new FieldReference(eventField.Name, eventField.FieldType, eventField.DeclaringType);
                             }
@@ -166,7 +166,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                     var newFieldFullName = eventField.FullName;
 
-                    foreach (var inst in invokeMethod.Body.Instructions) {
+                    foreach (Instruction? inst in invokeMethod.Body.Instructions) {
                         if (inst.Operand is FieldReference eventFieldRef && eventFieldRef.FullName == oldFieldFullName) {
                             inst.Operand = new FieldReference(eventField.Name, eventField.FieldType, eventField.DeclaringType);
                         }
@@ -204,9 +204,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
                 // context-bound by add root context
                 else {
-                    var delegateDef = createDelegateCtor.DeclaringType.Resolve();
-                    var invokeDef = delegateDef.GetMethod("Invoke");
-                    var beginInvokeDef = delegateDef.GetMethod("BeginInvoke");
+                    TypeDefinition delegateDef = createDelegateCtor.DeclaringType.Resolve();
+                    MethodDefinition invokeDef = delegateDef.GetMethod("Invoke");
+                    MethodDefinition beginInvokeDef = delegateDef.GetMethod("BeginInvoke");
 
                     invokeDef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                     beginInvokeDef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
@@ -224,7 +224,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     else {
                         insertRootContextBeforeTarget = invokePath.ParametersSources[2].Instructions.First();
                     }
-                    var containingMethodIL = containingMethod.Body.GetILProcessor();
+                    ILProcessor containingMethodIL = containingMethod.Body.GetILProcessor();
                     if (containingMethod.IsStatic) {
                         containingMethodIL.InsertBeforeSeamlessly(ref insertRootContextBeforeTarget, Instruction.Create(OpCodes.Ldarg_0));
                     }
@@ -232,11 +232,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         containingMethodIL.InsertBeforeSeamlessly(ref insertRootContextBeforeTarget, Instruction.Create(OpCodes.Ldarg_1));
                     }
 
-                    var createEventArgs = invokeMethod.Body.Instructions[0];
-                    if (!createEventArgs.MatchNewobj(out var createEventArgsCtor)) {
+                    Instruction createEventArgs = invokeMethod.Body.Instructions[0];
+                    if (!createEventArgs.MatchNewobj(out MethodReference? createEventArgsCtor)) {
                         throw new Exception("Unexpected createEventArgs");
                     }
-                    var eventArgsTypeDef = createEventArgsCtor.DeclaringType.Resolve();
+                    TypeDefinition eventArgsTypeDef = createEventArgsCtor.DeclaringType.Resolve();
                     var rootContextField = new FieldDefinition(Constants.RootContextFieldName, FieldAttributes.Public, arguments.RootContextDef);
                     eventArgsTypeDef.Fields.Add(rootContextField);
 
@@ -244,8 +244,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                         throw new Exception("Unexpected invokeMethod");
                     }
 
-                    var invokeMethodIL = invokeMethod.Body.GetILProcessor();
-                    var insertInitRootContextBeforeTarget = createEventArgs.Next;
+                    ILProcessor invokeMethodIL = invokeMethod.Body.GetILProcessor();
+                    Instruction insertInitRootContextBeforeTarget = createEventArgs.Next;
                     invokeMethodIL.InsertBeforeSeamlessly(ref insertInitRootContextBeforeTarget, [
                         Instruction.Create(OpCodes.Dup),
                         Instruction.Create(OpCodes.Ldarg_2),

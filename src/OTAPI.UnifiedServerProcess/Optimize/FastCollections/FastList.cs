@@ -61,7 +61,7 @@ namespace OTAPI.UnifiedServerProcess.Optimize.FastCollections
             //        $"Exceeded maximum capacity of {MaxCapacity}")
             //};
 
-            var newArray = new T[newSize];
+            T[] newArray = new T[newSize];
             Array.Copy(items, newArray, count);
             items = newArray;
         }
@@ -121,7 +121,7 @@ namespace OTAPI.UnifiedServerProcess.Optimize.FastCollections
             (items[i], items[j]) = (items[j], items[i]);
         }
         public FastList<T> CopyReversed() {
-            var copy = new FastList<T> {
+            FastList<T> copy = new FastList<T> {
                 items = new T[this.Capacity],
                 count = this.count
             };
@@ -133,7 +133,7 @@ namespace OTAPI.UnifiedServerProcess.Optimize.FastCollections
             return copy;
         }
         public T[] ReverseToArray() {
-            var copy = new T[this.count];
+            T[] copy = new T[this.count];
 
             for (int i = 0; i < count; i++) {
                 copy[i] = this.items[count - 1 - i];
@@ -143,7 +143,7 @@ namespace OTAPI.UnifiedServerProcess.Optimize.FastCollections
         }
 
         public T[] ToArray() {
-            var result = new T[count];
+            T[] result = new T[count];
             Array.Copy(items, result, count);
             return result;
         }
