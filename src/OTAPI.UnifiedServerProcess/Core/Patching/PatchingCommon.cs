@@ -194,38 +194,30 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 }
             }
 
+            int insertedArgSlot = body.Method.IsStatic ? index : index + 1;
+            int shiftedLdarg3ParamIndex = body.Method.IsStatic ? 4 : 3;
+
             foreach (Instruction instruction in body.Instructions) {
                 switch (instruction.OpCode.Code) {
                     case Code.Ldarg_0:
-                        if (index == 0 && body.Method.IsStatic) {
+                        if (insertedArgSlot <= 0) {
                             instruction.OpCode = OpCodes.Ldarg_1;
                         }
                         break;
                     case Code.Ldarg_1:
-                        if (index <= 1) {
+                        if (insertedArgSlot <= 1) {
                             instruction.OpCode = OpCodes.Ldarg_2;
                         }
                         break;
                     case Code.Ldarg_2:
-                        if (index <= 2) {
+                        if (insertedArgSlot <= 2) {
                             instruction.OpCode = OpCodes.Ldarg_3;
                         }
                         break;
                     case Code.Ldarg_3:
-                        if (index <= 3) {
+                        if (insertedArgSlot <= 3) {
                             instruction.OpCode = OpCodes.Ldarg_S;
-                            int newindex;
-                            if (body.Method.IsStatic) {
-                                // static -> static (add inserted-param at first):
-                                // [[arg0, arg1, arg2, <arg3>]] -> [[param, arg0, arg1, arg2, <arg3>]]
-                                newindex = 4;
-                            }
-                            else {
-                                // instance -> instance (add inserted-param after 'this'):
-                                // [this, [arg0, arg1, <arg2>]] -> [this, [param, arg0, arg1, <arg2>]]
-                                newindex = 3;
-                            }
-                            instruction.Operand = body.Method.Parameters[newindex];
+                            instruction.Operand = body.Method.Parameters[shiftedLdarg3ParamIndex];
                         }
                         break;
                     case Code.Ldarg_S:
