@@ -12,9 +12,9 @@
     <description>
 		An additional IL patch layered on top of OTAPI, enabling multiple Terraria server instances to run concurrently within a single process.
 	</description>
-    <summary>Unified Server Process [INJECT_VERSION] on Open Terraria API [INJECT_OTAPI_VERSION] - Terraria 1.4.4.9[INJECT_GIT_HASH]</summary>
+    <summary>Unified Server Process [INJECT_VERSION] on Open Terraria API [INJECT_OTAPI_VERSION] - Terraria 1.4.5.4[INJECT_GIT_HASH]</summary>
     <releaseNotes>
-      Preliminary Terraria 1.4.4.9
+      Preliminary Terraria 1.4.5.4
     </releaseNotes>
     <copyright>Copyright 2025-[INJECT_YEAR]</copyright>
     <tags>Terraria,OTAPI,MultiServer</tags>

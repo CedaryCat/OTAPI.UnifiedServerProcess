@@ -31,6 +31,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.Net.LegacyNetBufferPool",
             // ignore UIElement._idCounter and UniqueId, it is unused
             "Terraria.UI.UIElement",
+            // ignore DebugNetworkStream it should not run on server
+            "Terraria.Net.Sockets.DebugNetworkStream",
         ];
         public static readonly List<string> forceStaticFieldFullNames = [
             // global singleton
