@@ -1,9 +1,16 @@
 next-version: 1.0.3
-# mode: ContinuousDeployment
 branches:
   main:
     increment: Patch
     prevent-increment-of-merged-branch-version: true
     track-merge-target: false
+  pre_release_upstream:
+    regex: ^pre-release/upstream$
+    mode: ContinuousDeployment
+    tag: pre-release-upstream
+    increment: Patch
+    prevent-increment-of-merged-branch-version: true
+    track-merge-target: false
+    source-branches: [ main ]
 ignore:
   sha: []
