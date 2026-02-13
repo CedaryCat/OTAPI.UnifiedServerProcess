@@ -150,6 +150,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
             }
 
+            static bool IsAtomicModificationMethod(MethodReference callee) {
+                if (callee.Parameters.Count == 0 || callee.Parameters[0].ParameterType is not ByReferenceType) {
+                    return false;
+                }
+
+                if (callee.DeclaringType.FullName == typeof(System.Threading.Volatile).FullName) {
+                    return callee.Name is "Write";
+                }
+
+                if (callee.DeclaringType.FullName == typeof(System.Threading.Interlocked).FullName) {
+                    return callee.Name is "Exchange"
+                        or "CompareExchange"
+                        or "Increment"
+                        or "Decrement"
+                        or "Add"
+                        or "And"
+                        or "Or";
+                }
+
+                return false;
+            }
+
             foreach (Instruction? instruction in method.Body.Instructions) {
 
                 switch (instruction.OpCode.Code) {
@@ -225,6 +247,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
                                 // The called method is a collection method
                                 || (resolvedCallee is not null && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, method, instruction))
+
+                                // The called method performs atomic modification to the ref target
+                                || IsAtomicModificationMethod(calleeRef)
 
                                 // The called method return a reference
                                 || (calleeRef.ReturnType is ByReferenceType && calleeRef.Name is "get_Item")) {

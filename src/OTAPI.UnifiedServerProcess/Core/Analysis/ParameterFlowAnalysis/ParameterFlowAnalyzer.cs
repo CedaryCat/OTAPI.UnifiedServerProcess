@@ -179,9 +179,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         case Code.Ldarg_3:
                         case Code.Ldarg_S:
                         case Code.Ldarg:
+                            HandleLoadArgument(instruction, false);
+                            break;
                         case Code.Ldarga_S:
                         case Code.Ldarga:
-                            HandleLoadArgument(instruction);
+                            HandleLoadArgument(instruction, true);
                             break;
 
                         case Code.Stloc_0:
@@ -199,14 +201,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         case Code.Ldloc_3:
                         case Code.Ldloc_S:
                         case Code.Ldloc:
+                            HandleLoadLocal(instruction, false);
+                            break;
                         case Code.Ldloca_S:
                         case Code.Ldloca:
-                            HandleLoadLocal(instruction);
+                            HandleLoadLocal(instruction, true);
                             break;
 
                         case Code.Ldfld:
+                            HandleLoadField(instruction, false);
+                            break;
                         case Code.Ldflda:
-                            HandleLoadField(instruction);
+                            HandleLoadField(instruction, true);
                             break;
 
                         case Code.Stfld:
@@ -255,9 +261,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
             }
 
-            void HandleLoadArgument(Instruction instruction) {
+            void HandleLoadArgument(Instruction instruction, bool isAddress) {
                 var parameter = MonoModCommon.IL.GetReferencedParameter(method, instruction);
-                if (parameter.ParameterType.IsTruelyValueType()) return;
+                if (parameter.ParameterType.IsTruelyValueType() && !isAddress) return;
 
                 ParameterTracingChain chain = new ParameterTracingChain(parameter, [], []);
                 var stackKey = ParameterUsageTrack.GenerateStackKey(method, instruction);
@@ -285,9 +291,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
             }
 
-            void HandleLoadLocal(Instruction instruction) {
+            void HandleLoadLocal(Instruction instruction, bool isAddress) {
                 var variable = MonoModCommon.IL.GetReferencedVariable(method, instruction);
-                if (variable.VariableType.IsTruelyValueType()) return;
+                if (variable.VariableType.IsTruelyValueType() && !isAddress) return;
 
                 if (localTrace.TryGetTrace(variable, out var trace)) {
                     var stackKey = ParameterUsageTrack.GenerateStackKey(method, instruction);
@@ -297,9 +303,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 }
             }
 
-            void HandleLoadField(Instruction instruction) {
+            void HandleLoadField(Instruction instruction, bool isAddress) {
                 FieldReference fieldRef = (FieldReference)instruction.Operand;
-                if (fieldRef.FieldType.IsTruelyValueType()) return;
+                if (fieldRef.FieldType.IsTruelyValueType() && !isAddress) return;
 
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                     foreach (var instanceLoad in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {

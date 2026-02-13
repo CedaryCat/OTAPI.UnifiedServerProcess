@@ -123,6 +123,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
                 dict.TryAdd(field.GetIdentifier(), field);
             }
 
+            static bool IsAtomicModificationMethod(MethodReference callee) {
+                if (callee.Parameters.Count == 0 || callee.Parameters[0].ParameterType is not ByReferenceType) {
+                    return false;
+                }
+
+                if (callee.DeclaringType.FullName == typeof(System.Threading.Volatile).FullName) {
+                    return callee.Name is "Write";
+                }
+
+                if (callee.DeclaringType.FullName == typeof(System.Threading.Interlocked).FullName) {
+                    return callee.Name is "Exchange"
+                        or "CompareExchange"
+                        or "Increment"
+                        or "Decrement"
+                        or "Add"
+                        or "And"
+                        or "Or";
+                }
+
+                return false;
+            }
+
             staticFieldReferenceAnalyzer.AnalyzedMethods.TryGetValue(caller.GetIdentifier(), out StaticFieldUsageTrack? staticFieldReferenceData);
 
             Dictionary<Instruction, List<Instruction>> jumpSites = this.GetMethodJumpSites(caller);
@@ -199,6 +221,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldModificationAnalys
 
                                 // The called method is a collection method
                                 || (resolvedCallee is not null && CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, caller, instruction))
+
+                                // The called method performs atomic modification to the ref target
+                                || IsAtomicModificationMethod(methodRef)
 
                                 // The called method return a reference
                                 || (methodRef.ReturnType is ByReferenceType && methodRef.Name is "get_Item")) {

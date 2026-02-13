@@ -227,6 +227,28 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 return result;
             }
 
+            static bool IsAtomicModificationMethod(MethodReference callee) {
+                if (callee.Parameters.Count == 0 || callee.Parameters[0].ParameterType is not ByReferenceType) {
+                    return false;
+                }
+
+                if (callee.DeclaringType.FullName == typeof(System.Threading.Volatile).FullName) {
+                    return callee.Name is "Write";
+                }
+
+                if (callee.DeclaringType.FullName == typeof(System.Threading.Interlocked).FullName) {
+                    return callee.Name is "Exchange"
+                        or "CompareExchange"
+                        or "Increment"
+                        or "Decrement"
+                        or "Add"
+                        or "And"
+                        or "Or";
+                }
+
+                return false;
+            }
+
             void HandleModifyField(Instruction instruction) {
                 FieldReference field = (FieldReference)instruction.Operand;
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
@@ -325,6 +347,32 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                     }
                 }
             }
+            void HandleModifyAtomicOperation(ParameterUsageTrack tracedMethodData, MonoModCommon.Stack.StackTopTypePath[][] loadParamsInEveryPaths) {
+                const int atomicRefParameterIndex = 0;
+
+                foreach (var paramGroup in loadParamsInEveryPaths) {
+                    if (paramGroup.Length <= atomicRefParameterIndex) {
+                        continue;
+                    }
+
+                    var loadModifyingInstance = paramGroup[atomicRefParameterIndex];
+
+                    // If loadModifyingInstance.RealPushValueInstruction is not coming from the Mutations of caller method, skip
+                    if (!tracedMethodData.StackValueTraces.TryGetTrace(ParameterUsageTrack.GenerateStackKey(method, loadModifyingInstance.RealPushValueInstruction), out var tracedStackData)) {
+                        continue;
+                    }
+
+                    foreach (var modifiedParameter in tracedStackData.ReferencedParameters.Values) {
+                        // Ignore the ModificationAccessPath of "this" in constructors, we only care about input parameters.
+                        if (modifiedParameter.TracedParameter.IsParameterThis(method) && method.IsConstructor) {
+                            continue;
+                        }
+                        if (CheckAndAddModifications(modifiedParametersAllMethods, processingMethodId, method, modifiedParameter)) {
+                            hasExternalChange = true;
+                        }
+                    }
+                }
+            }
             void HandleMethodCall(Instruction instruction) {
 
                 MethodReference callee = (MethodReference)instruction.Operand;
@@ -359,6 +407,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                 }
                 if (CollectionElementLayer.IsModificationMethod(typeInheritanceGraph, method, instruction)) {
                     HandleModifyCollectionElement(tracedMethodData, loadParamsInEveryPaths, instruction);
+                    return;
+                }
+                if (IsAtomicModificationMethod(callee)) {
+                    HandleModifyAtomicOperation(tracedMethodData, loadParamsInEveryPaths);
                     return;
                 }
 

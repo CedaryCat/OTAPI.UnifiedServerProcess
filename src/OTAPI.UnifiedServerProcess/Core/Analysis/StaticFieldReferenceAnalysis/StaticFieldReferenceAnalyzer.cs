@@ -186,19 +186,25 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                         case Code.Ldloc_3:
                         case Code.Ldloc_S:
                         case Code.Ldloc:
+                            HandleLoadLocal(instruction, false);
+                            break;
                         case Code.Ldloca_S:
                         case Code.Ldloca:
-                            HandleLoadLocal(instruction);
+                            HandleLoadLocal(instruction, true);
                             break;
 
                         case Code.Ldsfld:
+                            HandleLoadStaticField(instruction, false);
+                            break;
                         case Code.Ldsflda:
-                            HandleLoadStaticField(instruction);
+                            HandleLoadStaticField(instruction, true);
                             break;
 
                         case Code.Ldfld:
+                            HandleLoadField(instruction, false);
+                            break;
                         case Code.Ldflda:
-                            HandleLoadField(instruction);
+                            HandleLoadField(instruction, true);
                             break;
 
                         case Code.Stfld:
@@ -247,10 +253,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
             }
 
-            void HandleLoadStaticField(Instruction instruction) {
+            void HandleLoadStaticField(Instruction instruction, bool isAddress) {
                 var fieldDef = ((FieldReference)instruction.Operand).TryResolve();
                 if (fieldDef is null) return;
-                if (fieldDef.FieldType.IsTruelyValueType()) return;
+                if (fieldDef.FieldType.IsTruelyValueType() && !isAddress) return;
 
                 var stackKey = StaticFieldUsageTrack.GenerateStackKey(method, instruction);
 
@@ -277,9 +283,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
             }
 
-            void HandleLoadLocal(Instruction instruction) {
+            void HandleLoadLocal(Instruction instruction, bool isAddress) {
                 var variable = MonoModCommon.IL.GetReferencedVariable(method, instruction);
-                if (variable.VariableType.IsTruelyValueType()) return;
+                if (variable.VariableType.IsTruelyValueType() && !isAddress) return;
 
                 // If loading a traced variable to the stack, then we need to update the stack trace
                 if (localTrace.TryGetTrace(variable, out var trace)) {
@@ -290,9 +296,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 }
             }
 
-            void HandleLoadField(Instruction instruction) {
+            void HandleLoadField(Instruction instruction, bool isAddress) {
                 FieldReference fieldRef = (FieldReference)instruction.Operand;
-                if (fieldRef.FieldType.IsTruelyValueType()) return;
+                if (fieldRef.FieldType.IsTruelyValueType() && !isAddress) return;
 
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                     foreach (var instanceLoad in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
