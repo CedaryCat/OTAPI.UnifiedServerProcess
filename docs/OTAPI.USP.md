@@ -13,7 +13,7 @@ Unlike standard OTAPI builds, this package introduces a **breaking change** by r
 
 ## Compatibility
 
-- Terraria: **1.4.4.9**
+- Terraria: **1.4.5.5**
 - OTAPI: `[INJECT_OTAPI_VERSION]`
 
 ## Important Notes

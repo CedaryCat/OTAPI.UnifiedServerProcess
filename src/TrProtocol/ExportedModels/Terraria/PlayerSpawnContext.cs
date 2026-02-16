@@ -3,5 +3,6 @@ public enum PlayerSpawnContext : byte
 {
     ReviveFromDeath,
     SpawningIntoWorld,
-    RecallFromItem
+    RecallFromItem,
+    TeamSwap
 }

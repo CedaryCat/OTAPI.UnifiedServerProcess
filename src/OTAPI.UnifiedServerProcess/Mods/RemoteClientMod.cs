@@ -56,11 +56,13 @@ namespace Terraria
 {
     public class patch_RemoteClient : RemoteClient
     {
+        public void ResetSections() => mfwh_ResetSections();
+
         [MonoMod.MonoModReplace]
         public new void mfwh_ResetSections() {
             if (Main.maxSectionsX > TileSections.GetLength(0) || Main.maxSectionsY > TileSections.GetLength(1)) {
-                TileSections = new bool[Main.maxSectionsX, Main.maxSectionsY];
-                TileSectionsCheckTime = new uint[Main.maxSectionsX, Main.maxSectionsY];
+                TileSections = new bool[Main.maxSectionsX + 1, Main.maxSectionsY + 1];
+                TileSectionsCheckTime = new uint[Main.maxSectionsX + 1, Main.maxSectionsY + 1];
                 return;
             }
             Array.Clear(this.TileSections, 0, this.TileSections.Length);
@@ -70,8 +72,8 @@ namespace Terraria
         public new void mfwh_orig_ctor_RemoteClient() {
             Name = "Anonymous";
             StatusText = "";
-            TileSections = new bool[2, 2];
-            TileSectionsCheckTime = new uint[2, 2];
+            TileSections = new bool[2 + 1, 2 + 1];
+            TileSectionsCheckTime = new uint[2 + 1, 2 + 1];
             SpamProjectileMax = 100f;
             SpamAddBlockMax = 100f;
             SpamDeleteBlockMax = 500f;
