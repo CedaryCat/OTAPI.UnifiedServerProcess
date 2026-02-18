@@ -74,29 +74,35 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     this.GenericParameterMap = [];
                 }
                 public MapOption(
+                    bool ignoreParams,
                     Dictionary<TypeDefinition, TypeDefinition>? typeReplace = null,
                     Dictionary<MethodDefinition, MethodDefinition>? methodReplace = null,
                     Dictionary<IGenericParameterProvider, IGenericParameterProvider>? providers = null,
                     Dictionary<GenericParameter, TypeReference>? genericParameterMap = null) {
+                    this.IgnoreMethodParameter = ignoreParams;
                     this.MethodReplaceMap = methodReplace ?? [];
                     this.TypeReplaceMap = typeReplace ?? [];
                     this.GenericProvider = providers ?? [];
                     this.GenericParameterMap = genericParameterMap?.ToDictionary(kv => GenerateKeyForGenericParameter(kv.Key), kv => kv.Value) ?? [];
                 }
                 public static MapOption Create(
+                    bool ignoreParams,
                     (TypeDefinition from, TypeDefinition to)[]? replaceType = null,
                     (MethodDefinition from, MethodDefinition to)[]? replaceMethod = null,
                     (IGenericParameterProvider provideFrom, IGenericParameterProvider provideTo)[]? providers = null,
                     (GenericParameter paramFrom, TypeReference typeTo)[]? genericParameterMap = null) {
                     return new MapOption(
+                        ignoreParams,
                         replaceType?.ToDictionary(x => x.from, x => x.to) ?? [],
                         replaceMethod?.ToDictionary(x => x.from, x => x.to) ?? [],
                         providers?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? [],
                         genericParameterMap?.ToDictionary(x => x.paramFrom, x => x.typeTo) ?? []);
                 }
                 public static MapOption CreateGenericProviderMap(
+                    bool ignoreParams = false,
                     (IGenericParameterProvider provideFrom, IGenericParameterProvider provideTo)[]? providers = null) {
                     return new MapOption(
+                        ignoreParams,
                         [],
                         [],
                         providers?.ToDictionary(x => x.provideFrom, x => x.provideTo) ?? []);
@@ -105,6 +111,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 public readonly Dictionary<MethodDefinition, MethodDefinition> MethodReplaceMap;
                 public readonly Dictionary<IGenericParameterProvider, IGenericParameterProvider> GenericProvider;
                 public readonly Dictionary<string, TypeReference> GenericParameterMap;
+                public readonly bool IgnoreMethodParameter;
             }
             public static GenericInstanceType DeepMapGenericInstanceType(GenericInstanceType instance, MapOption option) {
                 var pattern = instance.ElementType;
@@ -237,7 +244,12 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         declaringType) {
                         HasThis = method.HasThis
                     };
-                    mref.Parameters.AddRange(method.Parameters.Select(p => new ParameterDefinition(DeepMapTypeReference(p.ParameterType, option))));
+                    mref.Parameters.AddRange(method.Parameters.Select(p => new ParameterDefinition(
+                        p.Name,
+                        p.Attributes,
+                        option.IgnoreMethodParameter
+                        ? p.ParameterType
+                        : DeepMapTypeReference(p.ParameterType, option))));
 
                     return mref;
                 }
@@ -254,7 +266,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 if (option.MethodReplaceMap.TryGetValue(method, out var mappedMethod)) {
                     return mappedMethod;
                 }
-                MethodDefinition result = new MethodDefinition(method.Name, method.Attributes, method.Module.TypeSystem.Void);
+                var result = new MethodDefinition(method.Name, method.Attributes, method.Module.TypeSystem.Void);
 
                 result.CustomAttributes.AddRange(method.CustomAttributes.Select(c => c.Clone()));
 
@@ -278,7 +290,9 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                 foreach (var param in method.Parameters) {
                     var clonedParam = param.Clone();
-                    clonedParam.ParameterType = DeepMapTypeReference(param.ParameterType, option);
+                    if (!option.IgnoreMethodParameter) {
+                        clonedParam.ParameterType = DeepMapTypeReference(param.ParameterType, option);
+                    }
                     result.Parameters.Add(clonedParam);
                 }
 
@@ -424,11 +438,11 @@ namespace OTAPI.UnifiedServerProcess.Commons
 
                 return copied;
             }
-            public static TypeDefinition MemberClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition>? mappedTypes = null, Dictionary<MethodDefinition, MethodDefinition>? mappedMethods = null) {
+            public static TypeDefinition MemberClonedType(TypeDefinition type, string newName, bool ignoreMethodParameters, Dictionary<TypeDefinition, TypeDefinition>? mappedTypes = null, Dictionary<MethodDefinition, MethodDefinition>? mappedMethods = null) {
                 mappedTypes ??= [];
                 mappedMethods ??= [];
                 Dictionary<TypeDefinition, TypeDefinition> inputTypes = mappedTypes.ToDictionary();
-                MapOption mapCondition = new MonoModCommon.Structure.MapOption(mappedTypes, mappedMethods, [], []);
+                var mapCondition = new MapOption(ignoreMethodParameters, mappedTypes, mappedMethods, [], []);
 
                 static TypeDefinition ClonedType(TypeDefinition type, string newName, Dictionary<TypeDefinition, TypeDefinition> mappedTypes) {
 
@@ -456,7 +470,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return copied;
                 }
                 static void ClonedMember(TypeDefinition from,
-                    MonoModCommon.Structure.MapOption mapContext) {
+                    MapOption mapContext) {
                     var copied = mapContext.TypeReplaceMap[from];
 
                     foreach (var interfaceImpl in from.Interfaces) {
@@ -548,7 +562,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return impl;
                 }
 
-                MapOption option = new MapOption(genericParameterMap: map);
+                MapOption option = new MapOption(false, genericParameterMap: map);
                 return DeepMapMethodReference(patten, option);
             }
             /// <summary>
@@ -575,7 +589,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return methodDef;
                 }
 
-                MapOption option = new MapOption(genericParameterMap: map);
+                var option = new MapOption(false, genericParameterMap: map);
                 return DeepMapMethodReference(methodDef, option);
             }
         }

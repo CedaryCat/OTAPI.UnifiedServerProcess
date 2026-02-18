@@ -293,10 +293,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     var typeMap = new Dictionary<TypeDefinition, TypeDefinition>() {
                         { closureType.DeclaringType, containingType }
                     };
-                    var option = new MonoModCommon.Structure.MapOption(typeMap);
+                    var option = new MonoModCommon.Structure.MapOption(true, typeMap);
 
                     TypeDefinition oldClosureType = closureType;
-                    closureType = MonoModCommon.Structure.MemberClonedType(closureType, closureType.Name, typeMap);
+                    closureType = MonoModCommon.Structure.MemberClonedType(closureType, closureType.Name, option.IgnoreMethodParameter, typeMap);
 
                     static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
                         yield return (oldTypeDef, newTypeDef);
@@ -313,12 +313,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                                 continue;
                             }
                             MethodDefinition omethod = otype.Methods.Single(
-                                m => 
-                                m.GetIdentifier(withDeclaring: false) 
-                                == 
-                                method.GetIdentifier(
-                                    withDeclaring: false, 
-                                    typeNameMap: arguments.OriginalToContextType.ToDictionary(kv => kv.Value.ContextTypeDef.FullName, kv => kv.Key)));
+                                m => m.GetIdentifier(withDeclaring: false) == method.GetIdentifier(withDeclaring: false));
                             mappedMethods.contextBoundMethods.Add(method.GetIdentifier(), method);
                             mappedMethods.originalToContextBound.Add(omethod.GetIdentifier(), method);
                         }
@@ -343,7 +338,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                     ((MethodReference)oldCreateClosure.Operand).DeclaringType = closureVariable.VariableType;
 
-                    option = new(typeReplace: new() { { oldClosureType, closureType } });
+                    option = new(true, typeReplace: new() { { oldClosureType, closureType } });
 
                     foreach (Instruction? inst in userMethod.Body.Instructions) {
                         if (inst.Operand is TypeReference typeRef) {
@@ -546,7 +541,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             Collection<Instruction> generatedMethodBody = generatedMethod.Body.Instructions;
 
             FieldDefinition closureField = closureObjData.Captures.First().CaptureField;
-            var mapOption = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
+            var mapOption = MonoModCommon.Structure.MapOption.Create(true, providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
             TypeReference fieldType = MonoModCommon.Structure.DeepMapTypeReference(closureField.FieldType, mapOption);
             TypeReference declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
             var fieldRef = new FieldReference(closureField.Name, fieldType, declaringTypeRef);
@@ -899,7 +894,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             FieldDefinition thisField = closureObjData.Captures[1].CaptureField;
 
 
-            var mapOption = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
+            var mapOption = MonoModCommon.Structure.MapOption.Create(true, providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
             TypeReference declaringTypeRef = MonoModCommon.Structure.DeepMapTypeReference(closureObjData.Closure.VariableType, mapOption);
 
             var contextFieldTypeRef = new FieldReference(contextField.Name, contextField.FieldType, declaringTypeRef);
@@ -1144,7 +1139,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             MethodDefinition generatedMethod = MonoModCommon.Structure.DeepMapMethodDef(
                 compilerGeneratedMethodOrig,
-                MonoModCommon.Structure.MapOption.Create([(compilerGeneratedMethodOrig.DeclaringType.Resolve(), closureObjData.ClosureType)]),
+                MonoModCommon.Structure.MapOption.Create(true, [(compilerGeneratedMethodOrig.DeclaringType.Resolve(), closureObjData.ClosureType)]),
                 true);
             foreach (ParameterDefinition? param in generatedMethod.Parameters) {
                 param.HasConstant = false;
@@ -1215,7 +1210,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         void HandleMethodCall(Instruction methodCallInstruction, MethodDefinition caller, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, ClosureData closureObjData, ClosureDataCache cachedClosureObjs, ref bool anyModified) {
             var calleeRef = (MethodReference)methodCallInstruction.Operand;
 
-            var option = MonoModCommon.Structure.MapOption.Create(providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
+            var option = MonoModCommon.Structure.MapOption.Create(true, providers: [(closureObjData.ClosureType.DeclaringType, closureObjData.ClosureType)]);
             calleeRef = MonoModCommon.Structure.DeepMapMethodReference(calleeRef, option);
             if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out MethodDefinition? contextBound, out MethodReference? vanillaCallee, out ContextTypeData? contextProvider)) {
                 return;

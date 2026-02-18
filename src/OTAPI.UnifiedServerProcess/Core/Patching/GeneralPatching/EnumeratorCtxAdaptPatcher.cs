@@ -92,9 +92,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
 
                 if (caller.DeclaringType.FullName != enumeratorDef.DeclaringType.FullName) {
-                    var option = new MonoModCommon.Structure.MapOption(typeReplace: new() { { enumeratorDef.DeclaringType, caller.DeclaringType } });
+                    var option = new MonoModCommon.Structure.MapOption(true, typeReplace: new() { { enumeratorDef.DeclaringType, caller.DeclaringType } });
                     TypeDefinition oldEnumeratorDef = enumeratorDef;
-                    enumeratorDef = MonoModCommon.Structure.MemberClonedType(enumeratorDef, enumeratorDef.Name, option.TypeReplaceMap);
+                    enumeratorDef = MonoModCommon.Structure.MemberClonedType(enumeratorDef, enumeratorDef.Name, option.IgnoreMethodParameter, option.TypeReplaceMap);
 
                     static IEnumerable<(TypeDefinition otype, TypeDefinition ntype)> GetTypeReplacePairs(TypeDefinition oldTypeDef, TypeDefinition newTypeDef) {
                         yield return (oldTypeDef, newTypeDef);
@@ -264,7 +264,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         private void HandleMethodCall(Instruction methodCallInstruction, MethodDefinition enumeratorMethod, PatcherArguments arguments, ContextBoundMethodMap mappedMethods, FieldDefinition captureContextField, FieldReference captureContextFieldRef) {
             var calleeRef = (MethodReference)methodCallInstruction.Operand;
 
-            var option = MonoModCommon.Structure.MapOption.Create(providers: [(enumeratorMethod.DeclaringType.DeclaringType, enumeratorMethod.DeclaringType)]);
+            var option = MonoModCommon.Structure.MapOption.Create(true, providers: [(enumeratorMethod.DeclaringType.DeclaringType, enumeratorMethod.DeclaringType)]);
             calleeRef = MonoModCommon.Structure.DeepMapMethodReference(calleeRef, option);
             if (!this.AdjustMethodReferences(arguments, mappedMethods, ref calleeRef, out MethodDefinition? contextBoundMethodDef, out MethodReference? vanillaCallee, out ContextTypeData? contextProvider)) {
                 return;

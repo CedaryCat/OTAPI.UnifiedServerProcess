@@ -503,7 +503,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         for (int i = 0; i < git.GenericArguments.Count; i++) {
                             map.Add(git.ElementType.GenericParameters[i], git.GenericArguments[i]);
                         }
-                        option = new MonoModCommon.Structure.MapOption(genericParameterMap: map);
+                        option = new MonoModCommon.Structure.MapOption(false, genericParameterMap: map);
                     }
 
                     TypeReference ret = MonoModCommon.Structure.DeepMapTypeReference(invoke.ReturnType, option);
