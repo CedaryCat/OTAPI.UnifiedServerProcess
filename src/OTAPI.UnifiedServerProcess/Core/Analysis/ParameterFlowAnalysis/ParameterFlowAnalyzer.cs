@@ -312,7 +312,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
                         var instanceKey = ParameterUsageTrack.GenerateStackKey(method, instanceLoad.RealPushValueInstruction);
 
-                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryExtendTracingWithMemberAccess(fieldRef, typeFlowSccIndex, out var newTrace)) {
+                        if (stackTrace.TryGetTrace(instanceKey, out var instanceTrace) && instanceTrace.TryApplyMemberAccess(fieldRef, isAddress ? MemberAccessOperation.GetAddress : MemberAccessOperation.Read, typeFlowSccIndex, out var newTrace)) {
                             var stackKey = ParameterUsageTrack.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(stackKey, newTrace)) {
                                 hasInnerChange = true;
@@ -435,7 +435,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     var stackKey = ParameterUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                     if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                        baseTrace.TryExtendTracingWithArrayAccess(arrayType, typeFlowSccIndex, out var newTrace)) {
+                        baseTrace.TryApplyArrayAccess(arrayType, isLoadAddress ? MemberAccessOperation.GetAddress : MemberAccessOperation.Read, typeFlowSccIndex, out var newTrace)) {
                         var targetKey = ParameterUsageTrack.GenerateStackKey(method, loadEleInstruction);
                         if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                             hasInnerChange = true;
@@ -483,7 +483,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                     }
                     valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracedParameter, []);
                     foreach (var chain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                        if (chain.TryExtendTracingWithArrayAccess((ArrayType)instancePath.StackTopType, typeFlowSccIndex, out var newChain)
+                        if (chain.TryApplyArrayAccess((ArrayType)instancePath.StackTopType, MemberAccessOperation.Write, typeFlowSccIndex, out var newChain)
                             && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
                             hasInnerChange = true;
                             valueTraceHasChange = true;
@@ -535,7 +535,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         var stackKey = ParameterUsageTrack.GenerateStackKey(method, loadInstance.RealPushValueInstruction);
 
                         if (stackTrace.TryGetTrace(stackKey, out var baseTrace) &&
-                            baseTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, typeFlowSccIndex, out var newTrace)) {
+                            baseTrace.TryApplyCollectionAccess(loadInstance.StackTopType, MonoModCommon.Stack.GetPushType(instruction, method, jumpSites)!, MemberAccessOperation.Read, typeFlowSccIndex, out var newTrace)) {
                             var targetKey = ParameterUsageTrack.GenerateStackKey(method, instruction);
                             if (stackTrace.TryAddTrace(targetKey, newTrace)) {
                                 hasInnerChange = true;
@@ -589,7 +589,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                             valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracedParameter, []);
                         }
                         foreach (var chain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (chain.TryExtendTracingWithCollectionAccess(instancePath.StackTopType, valuePath.StackTopType, typeFlowSccIndex, out var newChain)
+                            if (chain.TryApplyCollectionAccess(instancePath.StackTopType, valuePath.StackTopType, MemberAccessOperation.Write, typeFlowSccIndex, out var newChain)
                                 && valueSingleParamTrace.PartTracingPaths.Add(newChain)) {
                                 hasInnerChange = true;
                                 valueTraceHasChange = true;
@@ -664,7 +664,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                         }
                         instanceSingleParamTrace = new(valueSingleParamTraceKV.Value.TracedParameter, []);
                         foreach (var valueChain in valueSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (valueChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, typeFlowSccIndex, out var elementChain)
+                            if (valueChain.TryApplyCollectionAccess(valueType, valueElementType, MemberAccessOperation.Read, typeFlowSccIndex, out var elementChain)
                                 && instanceSingleParamTrace.PartTracingPaths.Add(elementChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType, typeFlowSccIndex))) {
                                 hasInnerChange = true;
                                 instanceTraceHasChange = true;
@@ -678,7 +678,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                             valueSingleParamTrace = new(instanceSingleParamTraceKV.Value.TracedParameter, []);
                         }
                         foreach (var containChain in instanceSingleParamTraceKV.Value.PartTracingPaths) {
-                            if (containChain.TryExtendTracingWithCollectionAccess(valueType, valueElementType, typeFlowSccIndex, out var innerChain)
+                            if (containChain.TryApplyCollectionAccess(valueType, valueElementType, MemberAccessOperation.Write, typeFlowSccIndex, out var innerChain)
                                 && valueSingleParamTrace.PartTracingPaths.Add(innerChain.CreateEncapsulatedCollectionInstance(instancePath.StackTopType, valueElementType, typeFlowSccIndex))) {
                                 hasInnerChange = true;
                                 valueTraceHasChange = true;
@@ -876,7 +876,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                                     continue;
                                 }
 
-                                if (!instanceTrace.TryExtendTracingWithCollectionAccess(loadInstance.StackTopType, loadParam.StackTopType, typeFlowSccIndex, out var elementAccess)) {
+                                if (!instanceTrace.TryApplyCollectionAccess(loadInstance.StackTopType, loadParam.StackTopType, MemberAccessOperation.Read, typeFlowSccIndex, out var elementAccess)) {
                                     continue;
                                 }
 

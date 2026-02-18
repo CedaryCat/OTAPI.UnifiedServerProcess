@@ -74,7 +74,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return result;
         }
 
-        public bool TryExtendTracingWithMemberAccess(MemberReference member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace) {
+        // Compatibility shim: legacy extend APIs default to read semantics.
+        public bool TryExtendTracingWithMemberAccess(MemberReference member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace)
+            => TryApplyMemberAccess(member, MemberAccessOperation.Read, sccIndex, out resultTrace);
+        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace)
+            => TryApplyArrayAccess(arrayType, MemberAccessOperation.Read, sccIndex, out resultTrace);
+        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace)
+            => TryApplyCollectionAccess(collectionType, elementType, MemberAccessOperation.Read, sccIndex, out resultTrace);
+
+        public bool TryApplyMemberAccess(MemberReference member, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace) {
             resultTrace = new AggregatedStaticFieldProvenance();
             bool foundAny = false;
 
@@ -82,7 +90,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 HashSet<StaticFieldTracingChain> newChains = new HashSet<StaticFieldTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
-                    if (chain.TryExtendTracingWithMemberAccess(member, sccIndex, out StaticFieldTracingChain? newChain)) {
+                    if (chain.TryApplyMemberAccess(member, operation, sccIndex, out StaticFieldTracingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }
@@ -100,7 +108,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return true;
         }
 
-        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace) {
+        public bool TryApplyArrayAccess(ArrayType arrayType, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace) {
             resultTrace = new AggregatedStaticFieldProvenance();
             bool foundAny = false;
 
@@ -108,7 +116,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 HashSet<StaticFieldTracingChain> newChains = new HashSet<StaticFieldTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
-                    if (chain.TryExtendTracingWithArrayAccess(arrayType, sccIndex, out StaticFieldTracingChain? newChain)) {
+                    if (chain.TryApplyArrayAccess(arrayType, operation, sccIndex, out StaticFieldTracingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }
@@ -126,7 +134,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
             return true;
         }
 
-        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace) {
+        public bool TryApplyCollectionAccess(TypeReference collectionType, TypeReference elementType, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedStaticFieldProvenance? resultTrace) {
             resultTrace = new AggregatedStaticFieldProvenance();
             bool foundAny = false;
 
@@ -134,7 +142,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis
                 HashSet<StaticFieldTracingChain> newChains = new HashSet<StaticFieldTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
-                    if (chain.TryExtendTracingWithCollectionAccess(collectionType, elementType, sccIndex, out StaticFieldTracingChain? newChain)) {
+                    if (chain.TryApplyCollectionAccess(collectionType, elementType, operation, sccIndex, out StaticFieldTracingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }

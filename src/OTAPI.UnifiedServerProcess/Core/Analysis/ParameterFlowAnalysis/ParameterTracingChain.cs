@@ -177,22 +177,35 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
         }
 
+        // Compatibility shim: legacy extend APIs default to read semantics.
         public bool TryExtendTracingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out ParameterTracingChain? result)
-            => TryExtendTracingWithMemberAccess((MemberAccessStep)member, null, out result);
+            => TryApplyMemberAccess(member, MemberAccessOperation.Read, null, out result);
         public bool TryExtendTracingWithMemberAccess(MemberReference member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result)
-            => TryExtendTracingWithMemberAccess((MemberAccessStep)member, sccIndex, out result);
-        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
+            => TryApplyMemberAccess(member, MemberAccessOperation.Read, sccIndex, out result);
+        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result)
+            => TryApplyArrayAccess(arrayType, MemberAccessOperation.Read, sccIndex, out result);
+        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result)
+            => TryApplyCollectionAccess(collectionType, elementType, MemberAccessOperation.Read, sccIndex, out result);
+
+        public bool TryApplyMemberAccess(MemberReference member, MemberAccessOperation operation, [NotNullWhen(true)] out ParameterTracingChain? result)
+            => TryApplyMemberAccess((MemberAccessStep)member, operation, null, out result);
+        public bool TryApplyMemberAccess(MemberReference member, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result)
+            => TryApplyMemberAccess((MemberAccessStep)member, operation, sccIndex, out result);
+        public bool TryApplyArrayAccess(ArrayType arrayType, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
             var indexer = new ArrayElementLayer(arrayType);
-            return TryExtendTracingWithMemberAccess(indexer, sccIndex, out result);
+            return TryApplyMemberAccess(indexer, operation, sccIndex, out result);
         }
-        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
+        public bool TryApplyCollectionAccess(TypeReference collectionType, TypeReference elementType, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
             var collection = new CollectionElementLayer(collectionType, elementType);
-            return TryExtendTracingWithMemberAccess(collection, sccIndex, out result);
+            return TryApplyMemberAccess(collection, operation, sccIndex, out result);
         }
-        private bool TryExtendTracingWithMemberAccess(MemberAccessStep member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
+        private bool TryApplyMemberAccess(MemberAccessStep member, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out ParameterTracingChain? result) {
             result = null;
 
             if (EncapsulationHierarchy.IsEmpty) {
+                if (operation is MemberAccessOperation.GetAddress or MemberAccessOperation.Write) {
+                    return TryExtendComponentAccessPath(member, sccIndex, out result);
+                }
 
                 bool isValidReference;
 

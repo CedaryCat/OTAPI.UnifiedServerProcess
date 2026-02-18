@@ -52,7 +52,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             continue;
                         }
 
-                        var originalId = targetRef.GetIdentifier(withDeclaring: false);
+                        var originalId = targetRef.GetIdentifier(
+                            withDeclaring: false, 
+                            typeNameMap: arguments.OriginalToContextType.ToDictionary(kv => kv.Value.ContextTypeDef.FullName, kv => kv.Key));
 
                         targetRef.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
                         targetDef = targetRef.TryResolve();

@@ -312,7 +312,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                             if (method.IsConstructor) {
                                 continue;
                             }
-                            MethodDefinition omethod = otype.Methods.Single(m => m.GetIdentifier(withDeclaring: false) == method.GetIdentifier(withDeclaring: false));
+                            MethodDefinition omethod = otype.Methods.Single(
+                                m => 
+                                m.GetIdentifier(withDeclaring: false) 
+                                == 
+                                method.GetIdentifier(
+                                    withDeclaring: false, 
+                                    typeNameMap: arguments.OriginalToContextType.ToDictionary(kv => kv.Value.ContextTypeDef.FullName, kv => kv.Key)));
                             mappedMethods.contextBoundMethods.Add(method.GetIdentifier(), method);
                             mappedMethods.originalToContextBound.Add(omethod.GetIdentifier(), method);
                         }

@@ -251,6 +251,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
 
             void HandleModifyField(Instruction instruction) {
                 FieldReference field = (FieldReference)instruction.Operand;
+                MemberAccessOperation operation = instruction.OpCode.Code switch {
+                    Code.Stfld => MemberAccessOperation.Write,
+                    Code.Ldflda => MemberAccessOperation.GetAddress,
+                    _ => MemberAccessOperation.Read,
+                };
                 foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, instruction, jumpSites)) {
                     foreach (var loadModifyingInstance in MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)) {
 
@@ -267,7 +272,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis
                             continue;
                         }
 
-                        if (!tracedStackData.TryExtendTracingWithMemberAccess(field, out var modified)) {
+                        if (!tracedStackData.TryApplyMemberAccess(field, operation, out var modified)) {
                             continue;
                         }
 

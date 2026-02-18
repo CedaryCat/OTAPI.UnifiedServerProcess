@@ -75,11 +75,23 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             return result;
         }
 
-        public bool TryExtendTracingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
-            return TryExtendTracingWithMemberAccess(member, null, out resultTrace);
-        }
+        // Compatibility shim: legacy extend APIs default to read semantics.
+        public bool TryExtendTracingWithMemberAccess(MemberReference member, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyMemberAccess(member, MemberAccessOperation.Read, null, out resultTrace);
+        public bool TryExtendTracingWithMemberAccess(MemberReference member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyMemberAccess(member, MemberAccessOperation.Read, sccIndex, out resultTrace);
+        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyArrayAccess(arrayType, MemberAccessOperation.Read, null, out resultTrace);
+        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyArrayAccess(arrayType, MemberAccessOperation.Read, sccIndex, out resultTrace);
+        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyCollectionAccess(collectionType, elementType, MemberAccessOperation.Read, null, out resultTrace);
+        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyCollectionAccess(collectionType, elementType, MemberAccessOperation.Read, sccIndex, out resultTrace);
 
-        public bool TryExtendTracingWithMemberAccess(MemberReference member, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
+        public bool TryApplyMemberAccess(MemberReference member, MemberAccessOperation operation, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyMemberAccess(member, operation, null, out resultTrace);
+        public bool TryApplyMemberAccess(MemberReference member, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
             resultTrace = new AggregatedParameterProvenance();
             bool foundAny = false;
 
@@ -87,7 +99,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 HashSet<ParameterTracingChain> newChains = new HashSet<ParameterTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
-                    if (chain.TryExtendTracingWithMemberAccess(member, sccIndex, out ParameterTracingChain? newChain)) {
+                    if (chain.TryApplyMemberAccess(member, operation, sccIndex, out ParameterTracingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }
@@ -104,11 +116,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
             return true;
         }
-        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
-            return TryExtendTracingWithArrayAccess(arrayType, null, out resultTrace);
-        }
-
-        public bool TryExtendTracingWithArrayAccess(ArrayType arrayType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
+        public bool TryApplyArrayAccess(ArrayType arrayType, MemberAccessOperation operation, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyArrayAccess(arrayType, operation, null, out resultTrace);
+        public bool TryApplyArrayAccess(ArrayType arrayType, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
             resultTrace = new AggregatedParameterProvenance();
             bool foundAny = false;
 
@@ -116,7 +126,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 HashSet<ParameterTracingChain> newChains = new HashSet<ParameterTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
-                    if (chain.TryExtendTracingWithArrayAccess(arrayType, sccIndex, out ParameterTracingChain? newChain)) {
+                    if (chain.TryApplyArrayAccess(arrayType, operation, sccIndex, out ParameterTracingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }
@@ -133,11 +143,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
             }
             return true;
         }
-        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
-            return TryExtendTracingWithCollectionAccess(collectionType, elementType, null, out resultTrace);
-        }
-
-        public bool TryExtendTracingWithCollectionAccess(TypeReference collectionType, TypeReference elementType, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
+        public bool TryApplyCollectionAccess(TypeReference collectionType, TypeReference elementType, MemberAccessOperation operation, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace)
+            => TryApplyCollectionAccess(collectionType, elementType, operation, null, out resultTrace);
+        public bool TryApplyCollectionAccess(TypeReference collectionType, TypeReference elementType, MemberAccessOperation operation, TypeFlowSccIndex? sccIndex, [NotNullWhen(true)] out AggregatedParameterProvenance? resultTrace) {
             resultTrace = new AggregatedParameterProvenance();
             bool foundAny = false;
 
@@ -145,7 +153,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
                 HashSet<ParameterTracingChain> newChains = new HashSet<ParameterTracingChain>();
 
                 foreach (var chain in originGroup.Value.PartTracingPaths) {
-                    if (chain.TryExtendTracingWithCollectionAccess(collectionType, elementType, sccIndex, out ParameterTracingChain? newChain)) {
+                    if (chain.TryApplyCollectionAccess(collectionType, elementType, operation, sccIndex, out ParameterTracingChain? newChain)) {
                         newChains.Add(newChain);
                         foundAny = true;
                     }
