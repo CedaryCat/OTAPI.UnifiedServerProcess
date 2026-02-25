@@ -18,6 +18,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        submodules: recursive
 
     - name: Setup .NET SDK
       uses: actions/setup-dotnet@v4
@@ -57,6 +58,11 @@ jobs:
           --password "${{ steps.package_token.outputs.token }}" `
           --store-password-in-clear-text `
           --configfile NuGet.config
+
+    - name: Show submodule status
+      shell: pwsh
+      run: |
+        git submodule status --recursive
 
     - name: Restore dependencies
       shell: pwsh

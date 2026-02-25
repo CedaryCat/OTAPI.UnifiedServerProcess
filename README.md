@@ -26,7 +26,8 @@ You only need a local source build when experimenting with patches or contributi
 
 
 ## Quick Start
-1) Restore and build
+1) Initialize submodules, restore and build
+- `git submodule update --init --recursive`
 - `dotnet restore src/OTAPI.UnifiedServerProcess.sln`
 - `dotnet build src/OTAPI.UnifiedServerProcess.sln -c Release`
 
@@ -44,7 +45,7 @@ You only need a local source build when experimenting with patches or contributi
 - RootContext: Per‑server root that holds the instance‑bound systems you previously accessed as statics (e.g., Main, Netplay, NetMessage, Collision). See `src/OTAPI.UnifiedServerProcess/Mods/RootContext.cs` and `src/OTAPI.UnifiedServerProcess/Core/PatchingLogic.cs`.
 - Context‑bound systems: USP’s patching pass rewrites static state and call sites to live under the context. From a mod/plugin perspective you use `ctx.Main`, `ctx.Netplay`, `ctx.NetMessage`, `ctx.Collision`, etc., instead of global `Terraria.*` statics.
 - GlobalNetwork sample: Demonstrates sharing global sockets while routing per‑client processing to the correct server context. See `src/OTAPI.UnifiedServerProcess.GlobalNetwork/Network/Router.cs` and `src/OTAPI.UnifiedServerProcess.GlobalNetwork/Servers/ServerContext.cs`.
-- TrProtocol: Strong‑typed packet models under `src/TrProtocol/NetPackets/*` plus a source generator for fast (de)serialization.
+- TrProtocol: Strong‑typed packet models under `src/TrProtocol/src/TrProtocol/NetPackets/*` plus a source generator for fast (de)serialization.
 - TileProvider: Replaces ITile/Tile with TileData + RefTileData and a context‑aware TileCollection. See `src/OTAPI.UnifiedServerProcess/Mods/TileProviderMod.cs`.
 
 
@@ -112,7 +113,7 @@ Note: This is a development/engineering project; APIs and features may evolve ov
 - Patching pipeline: `src/OTAPI.UnifiedServerProcess/Core/PatchingLogic.cs`
 - GlobalNetwork components: `Program.cs`, `Network/Router.cs`, `Servers/ServerContext.cs` under `src/OTAPI.UnifiedServerProcess.GlobalNetwork`
 - TileProvider: `Mods/TileProviderMod.cs`
-- TrProtocol: models and generators under `src/TrProtocol` and `src/TrProtocol.SerializerGenerator`
+- TrProtocol: models and generators under `src/TrProtocol/src/TrProtocol` and `src/TrProtocol/src/TrProtocol.SerializerGenerator`
 
 External resources for deeper technical detail:
 - DeepWiki: `https://deepwiki.com/CedaryCat/OTAPI.UnifiedServerProcess`

@@ -1,0 +1,3 @@
+[submodule "src/TrProtocol"]
+	path = src/TrProtocol
+	url = https://github.com/CedaryCat/TrProtocol.git

@@ -41,6 +41,7 @@ After restore/build, the assemblies are available from NuGet; you don’t need t
 ## Build from Source (secondary)
 ```
 cd OTAPI.UnifiedServerProcess
+git submodule update --init --recursive
 dotnet restore src/OTAPI.UnifiedServerProcess.sln
 dotnet build src/OTAPI.UnifiedServerProcess.sln -c Release
 dotnet run -c Debug -p src/OTAPI.UnifiedServerProcess
