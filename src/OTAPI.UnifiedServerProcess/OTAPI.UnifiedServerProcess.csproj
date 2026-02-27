@@ -19,9 +19,9 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-	  <PackageReference Include="OTAPI.Upcoming" Version="3.3.8-mf-a807e26.16" />
+	  <PackageReference Include="OTAPI.Upcoming" Version="3.3.9-mf-a807e26.17" />
 	  <PackageReference Include="MonoMod.RuntimeDetour.HookGen" Version="22.7.31.1" />
-		<PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.15-mf-a807e26.16" />
+		<PackageReference Include="ModFramework.Modules.CSharp" Version="1.1.15-mf-a807e26.17" />
 	</ItemGroup>
 
 	<ItemGroup>
