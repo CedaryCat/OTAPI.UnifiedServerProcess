@@ -7,14 +7,20 @@ using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess
 {
+    public record struct MergeOption(ImmutableArray<string> IgnoreExistingMethods);
     public class ModAssemblyMerger
     {
+        readonly HashSet<string> IgnoreExistingMethods;
         readonly Dictionary<string, ModuleDefinition> modModules = [];
-        public ModAssemblyMerger(params System.Reflection.Assembly[] mods) {
+        public ModAssemblyMerger(MergeOption option, params System.Reflection.Assembly[] mods) {
+
+            IgnoreExistingMethods = [.. option.IgnoreExistingMethods];
+
             foreach (System.Reflection.Assembly assembly in mods) {
                 var mod = AssemblyDefinition.ReadAssembly(assembly.Location);
                 modModules.TryAdd(mod.FullName, mod.MainModule);
@@ -270,7 +276,7 @@ namespace OTAPI.UnifiedServerProcess
 
             return mappedMethod;
         }
-        static void SetModTypePlaceholder(ModuleDefinition module, Dictionary<string, TypeDefinition> uspTypes, TypeDefinition modType, TypeDefinition? declaringType) {
+        void SetModTypePlaceholder(ModuleDefinition module, Dictionary<string, TypeDefinition> uspTypes, TypeDefinition modType, TypeDefinition? declaringType) {
             if (!uspTypes.TryGetValue(modType.FullName, out TypeDefinition? target)) {
                 target = new TypeDefinition(modType.Namespace, modType.Name, modType.Attributes, modType.BaseType) {
                     Attributes = modType.Attributes,
@@ -315,7 +321,8 @@ namespace OTAPI.UnifiedServerProcess
                 SetModTypePlaceholder(module, uspTypes, nested, target);
             }
         }
-        static void PrepareMethod(TypeDefinition targetType, MethodDefinition modMethod, MethodDefinition? originalMethod) {
+        void PrepareMethod(TypeDefinition targetType, MethodDefinition modMethod, MethodDefinition? originalMethod) {
+            bool ignored = false;
             if (modMethod.IsConstructor && !modMethod.IsStatic) {
                 int instCount = 0;
                 foreach (Instruction? inst in modMethod.Body.Instructions) {
@@ -324,13 +331,20 @@ namespace OTAPI.UnifiedServerProcess
                     }
                 }
                 if (instCount <= 3 && originalMethod is not null) {
-                    TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
-                    modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+                    if (!ignored) {
+                        ignored = true;
+                        TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
+                        modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+                    }
                 }
                 else {
                     TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
                     modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
                 }
+            }
+            if (!ignored && originalMethod is not null && IgnoreExistingMethods.Contains(modMethod.Name)) {
+                TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
+                modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
             }
         }
         static void SetMemberReplace(ModuleDefinition module, Collection<CustomAttribute> attributes, bool isEnum) {

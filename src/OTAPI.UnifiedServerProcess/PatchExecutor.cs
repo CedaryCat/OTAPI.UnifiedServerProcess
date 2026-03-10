@@ -103,7 +103,10 @@ namespace OTAPI.UnifiedServerProcess
 
             var logger = new DefaultLogger(Logger.DEBUG);
 
-            new ModAssemblyMerger(typeof(TrProtocol.MessageID).Assembly)
+            new ModAssemblyMerger(new(
+                    IgnoreExistingMethods: [nameof(ToString)]
+                ), 
+                typeof(TrProtocol.MessageID).Assembly)
                 .Attach(modcontext);
 
             modcontext.OnApply += (modType, modder) => {
