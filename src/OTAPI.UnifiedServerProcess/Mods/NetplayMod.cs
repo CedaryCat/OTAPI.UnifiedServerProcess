@@ -6,7 +6,6 @@ using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using MonoMod.Cil;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.InteropServices;
 using Terraria;
 
@@ -20,9 +19,12 @@ void NetplayConnectionCheck(ModFwModder modder) {
             if (!method.HasBody || method.Name == nameof(NetMessage.CheckCanSend)) {
                 continue;
             }
-            if (method.Body.Instructions.Any(inst => inst is { Operand: MemberReference { Name: "IsConnected", DeclaringType.Name: "RemoteClient" } })) {
-                methods.Add(method);
-                continue;
+
+            foreach (var inst in method.Body.Instructions) {
+                if (inst is { Operand: MemberReference { Name: "IsConnected", DeclaringType.Name: "RemoteClient" } }) {
+                    methods.Add(method);
+                    break;
+                }
             }
         }
     }

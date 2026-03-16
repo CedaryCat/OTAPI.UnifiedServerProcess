@@ -7,7 +7,7 @@ using MonoMod.Utils;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using Terraria;
 
 [Modification(ModType.PostMerge, "Rewrite RemoteClient ResetSections", ModPriority.Early)]
@@ -17,26 +17,29 @@ void NetplayConnectionCheck(ModFwModder modder) {
 
     TypeDefinition remoteClientDef = modder.Module.GetType("Terraria.RemoteClient");
     MethodDefinition mfwh_orig_ResetMDef = remoteClientDef.GetMethod("mfwh_orig_Reset");
-    System.Collections.Generic.Dictionary<Instruction, System.Collections.Generic.List<Instruction>> jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(mfwh_orig_ResetMDef);
+    var jumpSites = MonoModCommon.Stack.BuildJumpSitesMap(mfwh_orig_ResetMDef);
 
-    Instruction[] clearArrayInst = mfwh_orig_ResetMDef.Body.Instructions.Select(inst => {
+    List<Instruction> clearArrayInst = [];
+    foreach (var inst in mfwh_orig_ResetMDef.Body.Instructions) {
         if (inst is not Instruction { OpCode.Code: Code.Call, Operand: MethodReference { DeclaringType.FullName: "System.Array", Name: "Clear" } }) {
-            return null;
+            continue;
         }
         MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource>[] path = MonoModCommon.Stack.AnalyzeParametersSources(mfwh_orig_ResetMDef, inst, jumpSites);
         if (path.Length != 1) {
-            return null;
+            continue;
         }
-        if (path[0].ParametersSources[0].Instructions.Last() is not Instruction {
+        if (path[0].ParametersSources[0].Instructions[^1] is not Instruction {
             OpCode.Code: Code.Ldfld,
             Operand: FieldReference { Name: nameof(RemoteClient.TileSections) or nameof(RemoteClient.TileSectionsCheckTime) }
         }) {
-            return null;
+            continue;
         }
 
-        return path[0].ParametersSources.SelectMany(x => x.Instructions).Append(inst);
-
-    }).SelectMany(x => x ?? []).ToArray();
+        foreach (var s in path[0].ParametersSources) {
+            clearArrayInst.AddRange(s.Instructions);
+        }
+        clearArrayInst.Add(inst);
+    }
 
     foreach (Instruction? inst in clearArrayInst) {
         mfwh_orig_ResetMDef.Body.Instructions.Remove(inst);

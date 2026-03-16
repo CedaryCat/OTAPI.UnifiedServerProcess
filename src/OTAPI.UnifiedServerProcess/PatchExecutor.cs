@@ -117,6 +117,7 @@ namespace OTAPI.UnifiedServerProcess
                         modder.AddTask<CoreLibRelinker>();
                     }
                     else if (modType == ModType.Read) {
+                        // DEBUG.Load(modder.Module);
                     }
                     else if (modType == ModType.PreWrite) {
                         PatchingLogic.Patch(logger, modder.Module);
@@ -141,6 +142,8 @@ namespace OTAPI.UnifiedServerProcess
             mm.Read();
             mm.MapDependencies();
             mm.AutoPatch();
+
+            mm.Module.Types.Remove(mm.Module.Types.Single(t => t.FullName is "Program"));
 
             Console.WriteLine($"[OTAPI-ProC] Writing: {status}, Path={new Uri(Environment.CurrentDirectory).MakeRelativeUri(new(mm.OutputPath))}");
 

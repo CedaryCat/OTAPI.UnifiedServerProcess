@@ -547,7 +547,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis
 
             void HandleStoreCollectionElement(Instruction instruction, int indexOfValueInArguments) {
                 if (instruction.Offset is 155 && method.GetIdentifier() == "Terraria.GameContent.Generation.Dungeon.LayoutProviders.DualDungeonLayoutProvider/HallwayCalculator.MakeHall(Terraria.GameContent.Generation.Dungeon.LayoutProviders.DualDungeonLayoutProvider/HallwayCalculator/HallLine,Terraria.GameContent.Generation.Dungeon.Halls.DungeonHallType)") {
-                    // Debug
+                    // DEBUG
                 }
                 foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, instruction, jumpSites)) {
                     var instancePath = MonoModCommon.Stack.AnalyzeStackTopTypeAllPaths(method, path.ParametersSources[0].Instructions.Last(), jumpSites)

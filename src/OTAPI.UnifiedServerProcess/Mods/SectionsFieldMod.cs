@@ -11,31 +11,45 @@ using Terraria;
 [Modification(ModType.PostMerge, "Reset Sections aware array when reset world size", ModPriority.Early)]
 [MonoMod.MonoModIgnore]
 void PatchSectionsAwareFields(ModFwModder modder) {
+    new SectionMod(modder).Run();
+}
 
-    ModuleDefinition module = modder.Module;
 
-    MethodDefinition resetAndResize = module
-        .GetType("UnifiedServerProcess.SectionsHelper")
-        .GetMethod("ResetAndResize");
+[MonoMod.MonoModIgnore]
+class SectionMod
+{
+    readonly ModFwModder modder;
+    readonly MethodDefinition resetAndResize;
+    readonly MethodDefinition setWorldSize;
+    readonly Instruction ret;
+    public SectionMod(ModFwModder modder) {
+        this.modder = modder;
+        var module = modder.Module;
+        resetAndResize = module
+            .GetType("UnifiedServerProcess.SectionsHelper")
+            .GetMethod("ResetAndResize");
+        setWorldSize = module
+            .GetType("Terraria.WorldGen")
+            .GetMethod("mfwh_setWorldSize");
+        ret = setWorldSize.Body.Instructions.Single(i => i.OpCode.Code is Code.Ret);
+    }
 
-    MethodDefinition setWorldSize = module
-        .GetType("Terraria.WorldGen")
-        .GetMethod("mfwh_setWorldSize");
+    public void Run() {
 
-    Instruction ret = setWorldSize.Body.Instructions.Single(i => i.OpCode.Code is Code.Ret);
+        ModuleDefinition module = modder.Module;
 
-    MethodDefinition activeSections_Reset = module
-        .GetType("Terraria.DataStructures.ActiveSections")
-        .GetMethod("Reset");
-    Process(activeSections_Reset, "LastActiveTime");
-    setWorldSize.Body.GetILProcessor()
-        .InsertBefore(ret, Instruction.Create(OpCodes.Call, MonoModCommon.Structure.CreateMethodReference(activeSections_Reset, activeSections_Reset)));
+        MethodDefinition activeSections_Reset = module
+            .GetType("Terraria.DataStructures.ActiveSections")
+            .GetMethod("Reset");
+        Process(activeSections_Reset, "LastActiveTime");
+        setWorldSize.Body.GetILProcessor()
+            .InsertBefore(ret, Instruction.Create(OpCodes.Call, MonoModCommon.Structure.CreateMethodReference(activeSections_Reset, activeSections_Reset)));
 
-    MethodDefinition leashedEntityClear = module
-        .GetType("Terraria.GameContent.LeashedEntity")
-        .GetMethod("Clear");
-    Process(leashedEntityClear, "BySection");
-
+        MethodDefinition leashedEntityClear = module
+            .GetType("Terraria.GameContent.LeashedEntity")
+            .GetMethod("Clear");
+        Process(leashedEntityClear, "BySection");
+    }
 
     void Process(MethodDefinition method, string fieldName) {
         foreach (Instruction? inst in method.Body.Instructions) {

@@ -1367,7 +1367,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 Stack<ValueSeed> valueWork,
                 Stack<MethodSeedWorkItem> globalWork) {
 
-                if (calleeDef is null || calleeDef.Module != module) {
+                // Direct delegate calls such as `oldDelegate.Invoke(...)` need the callee itself
+                // retargeted to the generated placeholder delegate, even when the old delegate
+                // type lives in this module.
+                bool shouldRetargetDirectDelegateCall =
+                    calleeRef.DeclaringType is not null
+                    && infectedThis.Transform.OldDelegateFullNames.Contains(calleeRef.DeclaringType.FullName);
+
+                if (shouldRetargetDirectDelegateCall || calleeDef is null || calleeDef.Module != module) {
                     if (TryRetargetCallToTransformedDeclaringType(callInst, calleeRef, infectedThis.Transform)) {
                         calleeRef = (MethodReference)callInst.Operand;
                         calleeDef = calleeRef.TryResolve();

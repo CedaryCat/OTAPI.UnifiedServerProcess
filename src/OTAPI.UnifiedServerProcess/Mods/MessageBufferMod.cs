@@ -8,7 +8,6 @@ using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.IO;
-using System.Linq;
 
 [Modification(ModType.PostMerge, "Add overload of GetData", ModPriority.Early)]
 [MonoMod.MonoModIgnore]
@@ -85,7 +84,11 @@ void PatchMessageBuffer(ModFwModder modder) {
     body.Add(Instruction.Create(OpCodes.Ldarg_0));
     body.Add(Instruction.Create(OpCodes.Ldfld, new FieldReference("reader", param_reader.ParameterType, messageBufferTypeDef)));
     var overloadRef = new MethodReference(overload.Name, overload.ReturnType, overload.DeclaringType) { HasThis = overload.HasThis };
-    overloadRef.Parameters.AddRange(overload.Parameters.Select(p => new ParameterDefinition(p.ParameterType)));
+
+    foreach (var p in overload.Parameters) {
+        overloadRef.Parameters.Add(new ParameterDefinition(p.ParameterType));
+    }
+
     body.Add(Instruction.Create(OpCodes.Call, overloadRef));
     body.Add(Instruction.Create(OpCodes.Ret));
 }

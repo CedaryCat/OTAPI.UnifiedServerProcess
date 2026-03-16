@@ -4,6 +4,7 @@ using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using Mono.Collections.Generic;
 using MonoMod.Utils;
+using Newtonsoft.Json.Linq;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
@@ -330,21 +331,29 @@ namespace OTAPI.UnifiedServerProcess
                         instCount += 1;
                     }
                 }
-                if (instCount <= 3 && originalMethod is not null) {
+
+                if (instCount <= 3 && (originalMethod is not null || shouldBeIgnore(targetType, modMethod))) {
                     if (!ignored) {
                         ignored = true;
-                        TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
+                        TypeReference attType_ctor = targetType.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
                         modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
                     }
                 }
                 else {
-                    TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
+                    TypeReference attType_ctor = targetType.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
                     modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
                 }
             }
             if (!ignored && originalMethod is not null && IgnoreExistingMethods.Contains(modMethod.Name)) {
-                TypeReference attType_ctor = modMethod.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
+                TypeReference attType_ctor = targetType.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
                 modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+            }
+
+            static bool shouldBeIgnore(TypeDefinition targetType, MethodDefinition modMethod) {
+                return 
+                    modMethod.Parameters.Count is 0 &&
+                    !targetType.Methods.Any(m => m is { IsConstructor: true, IsStatic: false, Parameters: [] }) && 
+                    targetType.Methods.Any(m => m.IsConstructor && !m.IsStatic);
             }
         }
         static void SetMemberReplace(ModuleDefinition module, Collection<CustomAttribute> attributes, bool isEnum) {
