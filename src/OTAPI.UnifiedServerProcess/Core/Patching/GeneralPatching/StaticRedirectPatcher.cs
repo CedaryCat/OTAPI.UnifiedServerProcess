@@ -38,6 +38,13 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         public DelegateInvocationGraph DelegateInvocationGraph => delegateInvocationGraph;
         public MethodInheritanceGraph MethodInheritanceGraph => methodInheritanceGraph;
         public MethodCallGraph MethodCallGraph => callGraph;
+
+        static List<TypeDefinition> GetDelegatesRequiringInvocationCtxParam(ModuleDefinition module) {
+            return [
+                .. module.GetType($"{Constants.DelegatesNameSpace}.{Constants.CtxDelegatesContainerName}").NestedTypes.ToList(),
+            ];
+        }
+
         public override void Patch(PatcherArguments arguments) {
             ModuleDefinition module = arguments.MainModule;
 
@@ -47,7 +54,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
             ContextBoundMethodMap.DebugMap convertedMethodOrigMap = mappedMethods.originalToContextBound;
             ContextBoundMethodMap.DebugMap contextBoundMethods = mappedMethods.contextBoundMethods;
 
-            foreach (TypeDefinition? dele in module.GetType($"{Constants.DelegatesNameSpace}.{Constants.CtxDelegatesContainerName}").NestedTypes) {
+            foreach (var dele in GetDelegatesRequiringInvocationCtxParam(module)) {
                 MethodDefinition md = dele.GetMethod(nameof(Action.Invoke));
                 var oldkey = md.GetIdentifier();
                 md.Parameters.Insert(0, new ParameterDefinition(Constants.RootContextParamName, ParameterAttributes.None, arguments.RootContextDef));
@@ -174,6 +181,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 }
             }
         }
+
         static MethodDefinition? FindAnotherAccessor(MethodDefinition method) {
             if (!method.IsSpecialName) {
                 return null;

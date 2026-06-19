@@ -8,6 +8,7 @@ using OTAPI.UnifiedServerProcess.Core.Analysis.ParameterFlowAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.ParamModificationAnalysis;
 using OTAPI.UnifiedServerProcess.Core.Analysis.StaticFieldReferenceAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
+using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Extensions;
 using OTAPI.UnifiedServerProcess.Loggers;
@@ -34,6 +35,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 if (cctor is null) {
                     continue;
                 }
+
                 if (!this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, cctor)) {
                     continue;
                 }
@@ -45,7 +47,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 AggregatedStaticFieldProvenance? trace = null;
 
                 foreach (Instruction? inst in cctor.Body.Instructions) {
-
                     if (!this.IsAboutStaticFieldModification(cctor, inst, out HashSet<FieldDefinition>? fields, out HashSet<Instruction>? checkSource)) {
                         continue;
                     }
@@ -132,7 +133,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         }
 
         bool CheckUsedContext(PatcherArgumentSource arg, MethodDefinition cctor, params IEnumerable<Instruction> checkSource) {
-            Instruction[] sourceInsts = ExtractSources(cctor, checkSource);
+            Instruction[] sourceInsts = CollectSources(cctor, checkSource);
             foreach (Instruction check in sourceInsts) {
                 if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj or Code.Ldftn or Code.Ldvirtftn) {
                     MethodDefinition? methodDef = ((MethodReference)check.Operand).TryResolve();
@@ -146,62 +147,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             }
             return false;
         }
-        Instruction[] ExtractSources(MethodDefinition cctor, params IEnumerable<Instruction> extractSources) {
+        Instruction[] CollectSources(MethodDefinition cctor, params IEnumerable<Instruction> sourceSeeds) {
             HashSet<Instruction> extracted = [];
             HashSet<VariableDefinition> checkedLocals = [];
 
-
-            Dictionary<Instruction, List<Instruction>> jumpSite = this.GetMethodJumpSites(cctor);
-
-            Stack<Instruction> stack = [];
-            foreach (Instruction checkSource in extractSources) {
-                stack.Push(checkSource);
-            }
-            while (stack.Count > 0) {
-                Instruction check = stack.Pop();
-                if (!extracted.Add(check)) {
-                    continue;
-                }
-
-                if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
-                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(cctor, check, jumpSite)) {
-                        foreach (MonoModCommon.Stack.ParameterSource source in path.ParametersSources) {
-                            foreach (Instruction inst in source.Instructions) {
-                                stack.Push(inst);
-                            }
-                        }
-                    }
-                }
-                // Only pop value from stack
-                else if (MonoModCommon.Stack.GetPopCount(cctor.Body, check) > 0) {
-                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(cctor, check, jumpSite)) {
-                        foreach (MonoModCommon.Stack.InstructionArgsSource source in path.ParametersSources) {
-                            foreach (Instruction inst in source.Instructions) {
-                                stack.Push(inst);
-                            }
-                        }
-                    }
-                }
-                // Only push value to stack
-                else if (MonoModCommon.IL.TryGetReferencedVariable(cctor, check, out VariableDefinition? local)) {
-                    if (checkedLocals.Contains(local)) {
-                        continue;
-                    }
-                    foreach (Instruction? inst in cctor.Body.Instructions) {
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out VariableDefinition? otherLocal) || otherLocal.Index != local.Index) {
-                            continue;
-                        }
-                        // store local
-                        if (MonoModCommon.Stack.GetPopCount(cctor.Body, inst) > 0) {
-                            stack.Push(inst);
-                        }
-                        else {
-                            extracted.Add(inst);
-                        }
-                    }
-                    checkedLocals.Add(local);
-                }
-            }
+            InstructionSourceCollector.CollectSources(
+                this,
+                cctor,
+                extracted,
+                new InstructionSourceCollector.LocalPropagationOptions(checkedLocals.Add),
+                sourceSeeds);
 
             return extracted.ToArray();
         }

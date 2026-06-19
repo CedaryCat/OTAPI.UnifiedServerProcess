@@ -433,96 +433,10 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             ilProcessor.InsertBeforeSeamlessly(ref firstLoadRoot_shouldMoveCtorCallWhenNotNull, movedInstructions.Select(i => i.Clone()));
         }
         static void TraceUsage(IContextInjectFeature feature, MethodDefinition method, HashSet<Instruction> checkInsts, HashSet<VariableDefinition> checkLocals, Instruction instruction) {
-
-            Stack<Instruction> works = [];
-            if (!checkInsts.Contains(instruction)) {
-                works.Push(instruction);
-            }
-
-            while (works.Count > 0) {
-                var current = works.Pop();
-                var usages = MonoModCommon.Stack.TraceStackValueConsumers(method, current);
-                ExtractSources(feature, method, checkInsts, checkLocals, usages);
-                foreach (var usage in usages) {
-                    if (MonoModCommon.Stack.GetPushCount(method.Body, usage) > 0) {
-                        works.Push(usage);
-                    }
-                }
-            }
-
-            foreach (var inst in method.Body.Instructions) {
-                if (!MonoModCommon.IL.TryGetReferencedVariable(method, inst, out var local)) {
-                    continue;
-                }
-                if (!checkLocals.Contains(local)) {
-                    continue;
-                }
-                switch (inst.OpCode.Code) {
-                    case Code.Ldloc_0:
-                    case Code.Ldloc_1:
-                    case Code.Ldloc_2:
-                    case Code.Ldloc_3:
-                    case Code.Ldloc_S:
-                    case Code.Ldloca_S:
-                    case Code.Ldloca:
-                        if (!checkInsts.Contains(inst)) {
-                            var usages = MonoModCommon.Stack.TraceStackValueConsumers(method, inst);
-                            ExtractSources(feature, method, checkInsts, checkLocals, usages);
-                            checkInsts.Add(inst);
-                        }
-                        break;
-                }
-            }
+            InstructionSourceCollector.CollectTransitiveUsageSources(feature, method, checkInsts, CreateLocalPropagation(checkLocals), instruction);
         }
-        static void ExtractSources(IContextInjectFeature point, MethodDefinition method, HashSet<Instruction> checkInsts, HashSet<VariableDefinition> checkLocals, params IEnumerable<Instruction> extractSources) {
-            var jumpSite = point.GetMethodJumpSites(method);
-
-            Stack<Instruction> stack = [];
-            foreach (var checkSource in extractSources) {
-                stack.Push(checkSource);
-            }
-            while (stack.Count > 0) {
-                var check = stack.Pop();
-                if (!checkInsts.Add(check)) {
-                    continue;
-                }
-
-                if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeParametersSources(method, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
-                                stack.Push(inst);
-                            }
-                        }
-                    }
-                }
-                // Only pop value from stack
-                else if (MonoModCommon.Stack.GetPopCount(method.Body, check) > 0) {
-                    foreach (var path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(method, check, jumpSite)) {
-                        foreach (var source in path.ParametersSources) {
-                            foreach (var inst in source.Instructions) {
-                                stack.Push(inst);
-                            }
-                        }
-                    }
-                }
-                // Only push value to stack
-                else if (MonoModCommon.IL.TryGetReferencedVariable(method, check, out var local)) {
-                    if (checkLocals.Contains(local)) {
-                        continue;
-                    }
-                    foreach (var inst in method.Body.Instructions) {
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(method, inst, out var otherLocal) || otherLocal.Index != local.Index) {
-                            continue;
-                        }
-                        // store local
-                        if (MonoModCommon.Stack.GetPopCount(method.Body, inst) > 0) {
-                            stack.Push(inst);
-                        }
-                    }
-                    checkLocals.Add(local);
-                }
-            }
+        static InstructionSourceCollector.LocalPropagationOptions CreateLocalPropagation(HashSet<VariableDefinition> checkLocals) {
+            return new InstructionSourceCollector.LocalPropagationOptions(checkLocals.Add, FollowValueTypeLoadConsumers: true);
         }
     }
 }

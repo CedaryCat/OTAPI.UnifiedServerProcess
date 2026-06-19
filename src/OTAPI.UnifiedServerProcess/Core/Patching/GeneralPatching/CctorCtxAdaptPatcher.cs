@@ -7,6 +7,7 @@ using NuGet.Packaging;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.Analysis.MethodCallAnalysis;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
+using OTAPI.UnifiedServerProcess.Core.Patching;
 using OTAPI.UnifiedServerProcess.Core.Patching.DataModels;
 using OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -226,19 +227,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 ExtractSources(feature, cctor, transformInsts, localMap, extractSources);
             }
             static void TraceUsage(IJumpSitesCacheFeature feature, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
-                Stack<Instruction> works = [];
-                works.Push(inst);
-
-                while (works.Count > 0) {
-                    Instruction current = works.Pop();
-                    Instruction[] usages = MonoModCommon.Stack.TraceStackValueConsumers(cctor, current);
-                    ExtractSources(feature, cctor, transformInsts, localMap, usages);
-                    foreach (Instruction usage in usages) {
-                        if (MonoModCommon.Stack.GetPushCount(cctor.Body, usage) > 0) {
-                            works.Push(usage);
-                        }
-                    }
-                }
+                InstructionSourceCollector.CollectTransitiveUsageSources(feature, cctor, transformInsts, CreateLocalPropagation(localMap), inst);
             }
             static void HandleStoreStaticField(IJumpSitesCacheFeature feature, PatcherArguments arguments, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, Instruction inst) {
                 FieldDefinition? fieldDef = ((FieldReference)inst.Operand).TryResolve();
@@ -366,57 +355,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         }
 
         static void ExtractSources(IJumpSitesCacheFeature feature, MethodDefinition cctor, HashSet<Instruction> transformInsts, Dictionary<VariableDefinition, VariableDefinition> localMap, params IEnumerable<Instruction> extractSources) {
-            Dictionary<Instruction, List<Instruction>> jumpSite = feature.GetMethodJumpSites(cctor);
+            InstructionSourceCollector.CollectSources(feature, cctor, transformInsts, CreateLocalPropagation(localMap), extractSources);
+        }
 
-            Stack<Instruction> stack = [];
-            foreach (Instruction checkSource in extractSources) {
-                stack.Push(checkSource);
-            }
-            while (stack.Count > 0) {
-                Instruction check = stack.Pop();
-                if (!transformInsts.Add(check)) {
-                    continue;
+        static InstructionSourceCollector.LocalPropagationOptions CreateLocalPropagation(Dictionary<VariableDefinition, VariableDefinition> localMap) {
+            return new InstructionSourceCollector.LocalPropagationOptions(local => {
+                if (localMap.ContainsKey(local)) {
+                    return false;
                 }
-
-                if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj) {
-                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.ParameterSource> path in MonoModCommon.Stack.AnalyzeParametersSources(cctor, check, jumpSite)) {
-                        foreach (MonoModCommon.Stack.ParameterSource source in path.ParametersSources) {
-                            foreach (Instruction inst in source.Instructions) {
-                                stack.Push(inst);
-                            }
-                        }
-                    }
-                }
-                // Only pop value from stack
-                else if (MonoModCommon.Stack.GetPopCount(cctor.Body, check) > 0) {
-                    foreach (MonoModCommon.Stack.FlowPath<MonoModCommon.Stack.InstructionArgsSource> path in MonoModCommon.Stack.AnalyzeInstructionArgsSources(cctor, check, jumpSite)) {
-                        foreach (MonoModCommon.Stack.InstructionArgsSource source in path.ParametersSources) {
-                            foreach (Instruction inst in source.Instructions) {
-                                stack.Push(inst);
-                            }
-                        }
-                    }
-                }
-                // Only push value to stack
-                else if (MonoModCommon.IL.TryGetReferencedVariable(cctor, check, out VariableDefinition? local)) {
-                    if (localMap.ContainsKey(local)) {
-                        continue;
-                    }
-                    foreach (Instruction? inst in cctor.Body.Instructions) {
-                        if (!MonoModCommon.IL.TryGetReferencedVariable(cctor, inst, out VariableDefinition? otherLocal) || otherLocal.Index != local.Index) {
-                            continue;
-                        }
-                        // store local
-                        if (MonoModCommon.Stack.GetPopCount(cctor.Body, inst) > 0) {
-                            stack.Push(inst);
-                        }
-                        else {
-                            transformInsts.Add(inst);
-                        }
-                    }
-                    localMap.Add(local, new VariableDefinition(local.VariableType));
-                }
-            }
+                localMap.Add(local, new VariableDefinition(local.VariableType));
+                return true;
+            });
         }
 
         public void ProcessNewCtor(PatcherArguments arguments, MethodDefinition newCtor, ContextTypeData contextTypeData) {

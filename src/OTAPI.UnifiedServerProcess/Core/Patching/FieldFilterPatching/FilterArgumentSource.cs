@@ -20,6 +20,15 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
 
         public class DebugMap : Dictionary<string, FieldDefinition>
         {
+            public new FieldDefinition this[string key] {
+                get => base[key];
+                set {
+                    base[key] = value;
+                }
+            }
+            public new void Add(string key, FieldDefinition field) {
+                base.Add(key, field);
+            }
             public new bool TryAdd(string key, FieldDefinition field) {
                 return base.TryAdd(key, field);
             }
