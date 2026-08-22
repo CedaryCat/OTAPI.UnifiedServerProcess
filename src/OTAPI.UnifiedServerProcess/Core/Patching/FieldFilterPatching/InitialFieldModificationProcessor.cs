@@ -448,7 +448,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             Dictionary<VariableDefinition, (VariableDefinition local, Dictionary<string, FieldDefinition> fields)> localMap = [];
 
             Dictionary<VariableDefinition, LoopBlockData> loopBlocks = ExtractLoopBlock(method);
-            BuildConditionBranchMaps(method, out Dictionary<Instruction, HashSet<Instruction>>? conditionBranchInstructions, out Dictionary<Instruction, HashSet<Instruction>>? branchBlockMapToConditions);
+            Dictionary<Instruction, HashSet<Instruction>> branchBlockMapToConditions =
+                InstructionSourceCollector.BuildBranchBlockToConditionsMap(method);
             var ignoreExtractLocalModifications = loopBlocks.Keys.ToHashSet();
 
             foreach (LoopBlockData blockData in loopBlocks.Values) {
@@ -1078,40 +1079,6 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
                 }
             }
             while (incremented);
-        }
-
-        private static void BuildConditionBranchMaps(MethodDefinition method, out Dictionary<Instruction, HashSet<Instruction>> conditionBranchInstructions, out Dictionary<Instruction, HashSet<Instruction>> branchBlockMapToConditions) {
-            conditionBranchInstructions = [];
-            branchBlockMapToConditions = [];
-
-            Dictionary<Instruction, (Instruction next, HashSet<Instruction> block)> currentProcessing = [];
-            foreach (Instruction? instruction in method.Body.Instructions) {
-                foreach (KeyValuePair<Instruction, (Instruction next, HashSet<Instruction> block)> currentKV in currentProcessing.ToArray()) {
-                    if (currentKV.Value.next == instruction) {
-                        conditionBranchInstructions[currentKV.Key] = currentKV.Value.block;
-                        currentProcessing.Remove(currentKV.Key);
-                    }
-                    else {
-                        currentKV.Value.block.Add(instruction);
-                    }
-                }
-                if (instruction.Operand is Instruction jumpTarget && jumpTarget.Offset > instruction.Offset && MonoModCommon.Stack.GetPopCount(method.Body, instruction) > 0) {
-                    currentProcessing.Add(instruction, (jumpTarget, []));
-                }
-            }
-
-            if (currentProcessing.Count > 0) {
-                throw new InvalidOperationException();
-            }
-
-            foreach (KeyValuePair<Instruction, HashSet<Instruction>> condBranch in conditionBranchInstructions) {
-                foreach (Instruction inst in condBranch.Value) {
-                    if (!branchBlockMapToConditions.TryGetValue(inst, out HashSet<Instruction>? conditions)) {
-                        conditions = branchBlockMapToConditions[inst] = [];
-                    }
-                    conditions.Add(condBranch.Key);
-                }
-            }
         }
 
         private bool IsExtractableStaticPart(FilterArgumentSource source, FieldDefinition initFieldDef, IEnumerable<Instruction> instructions) {

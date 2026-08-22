@@ -1,10 +1,11 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Cil;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Core.FunctionalFeatures;
 using OTAPI.UnifiedServerProcess.Extensions;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching
 {
@@ -79,6 +80,52 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
 
                 QueueArgumentSources(method, jumpSites, worklist, current);
             }
+        }
+
+        /// <summary>
+        /// Maps instructions in a forward conditional branch body to the branch instructions
+        /// whose conditions control whether those instructions execute.
+        /// </summary>
+        public static Dictionary<Instruction, HashSet<Instruction>> BuildBranchBlockToConditionsMap(MethodDefinition method) {
+            Dictionary<Instruction, HashSet<Instruction>> conditionBranchInstructions = [];
+            Dictionary<Instruction, HashSet<Instruction>> branchBlockMapToConditions = [];
+            Dictionary<Instruction, int> instructionIndices = method.Body.Instructions
+                .Select((instruction, index) => (instruction, index))
+                .ToDictionary(item => item.instruction, item => item.index);
+
+            Dictionary<Instruction, (Instruction Next, HashSet<Instruction> Block)> currentProcessing = [];
+            foreach (Instruction instruction in method.Body.Instructions) {
+                foreach (KeyValuePair<Instruction, (Instruction Next, HashSet<Instruction> Block)> current in currentProcessing.ToArray()) {
+                    if (current.Value.Next == instruction) {
+                        conditionBranchInstructions[current.Key] = current.Value.Block;
+                        currentProcessing.Remove(current.Key);
+                    }
+                    else {
+                        current.Value.Block.Add(instruction);
+                    }
+                }
+
+                if (instruction.Operand is Instruction jumpTarget
+                    && MonoModCommon.Stack.GetPopCount(method.Body, instruction) > 0
+                    && instructionIndices[jumpTarget] > instructionIndices[instruction]) {
+                    currentProcessing.Add(instruction, (jumpTarget, []));
+                }
+            }
+
+            if (currentProcessing.Count > 0) {
+                throw new InvalidOperationException($"Could not close all forward conditional branches in {method.FullName}.");
+            }
+
+            foreach (KeyValuePair<Instruction, HashSet<Instruction>> conditionalBranch in conditionBranchInstructions) {
+                foreach (Instruction instruction in conditionalBranch.Value) {
+                    if (!branchBlockMapToConditions.TryGetValue(instruction, out HashSet<Instruction>? conditions)) {
+                        branchBlockMapToConditions[instruction] = conditions = [];
+                    }
+                    conditions.Add(conditionalBranch.Key);
+                }
+            }
+
+            return branchBlockMapToConditions;
         }
 
         public static void CollectSources(

@@ -22,6 +22,58 @@ namespace UnifiedServerProcess
 
             Console = new ConsoleSystemContext(this);
         }
+
+        internal static class AmbientDiagnostics
+        {
+            [ThreadStatic]
+            private static WeakReference<RootContext>? current;
+
+            internal static RootContext? Push(RootContext root) {
+                ArgumentNullException.ThrowIfNull(root);
+
+                RootContext? previous = null;
+                if (current is null) {
+                    current = new WeakReference<RootContext>(root);
+                }
+                else {
+                    current.TryGetTarget(out previous);
+                    current.SetTarget(root);
+                }
+                return previous;
+            }
+
+            internal static void Pop(RootContext? previous) {
+                if (current is null) {
+                    if (previous is not null) {
+                        current = new WeakReference<RootContext>(previous);
+                    }
+                    return;
+                }
+                current.SetTarget(previous!);
+            }
+
+            private static bool TryGetCurrent(out RootContext? root) {
+                root = null;
+                return current?.TryGetTarget(out root) == true;
+            }
+
+            // These methods deliberately contain no context-dependent references while the
+            // regular USP context analysis runs. AmbientDiagnosticsPostPatcher replaces their
+            // bodies after all SystemContext types have been generated.
+            internal static void Write(string? value) {
+                throw new InvalidOperationException("Ambient diagnostics were not finalized.");
+            }
+
+            internal static void WriteLine(string? value) {
+                throw new InvalidOperationException("Ambient diagnostics were not finalized.");
+            }
+
+            internal static void BroadcastText(
+                Terraria.Localization.NetworkText text,
+                Microsoft.Xna.Framework.Color color) {
+                throw new InvalidOperationException("Ambient diagnostics were not finalized.");
+            }
+        }
     }
     public class ConsoleSystemContext(RootContext root) : IDisposable
     {

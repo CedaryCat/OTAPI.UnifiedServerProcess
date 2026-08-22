@@ -1,4 +1,4 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using System;
 using System.Collections.Generic;
 using System.Text;
@@ -89,6 +89,12 @@ namespace OTAPI.UnifiedServerProcess.Extensions
             }
 
             identifierBuilder.Append(')');
+
+            if (methodToFormat.Name is "op_Explicit" or "op_Implicit" or "orig_op_Implicit" or "orig_op_Explicit") {
+                identifierBuilder.Append(" -> ");
+                identifierBuilder.Append(GetParameterTypeName(methodToFormat.ReturnType, typeNameMap));
+            }
+
             return identifierBuilder.ToString();
         }
 

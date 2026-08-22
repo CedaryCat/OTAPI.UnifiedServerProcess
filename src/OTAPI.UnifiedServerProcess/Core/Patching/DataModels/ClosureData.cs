@@ -150,14 +150,50 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             }
         }
 
-        private static void CreateClosureParam(PatcherArguments arguments, TypeDefinition declaringType, string closureTypeName, ClosureCaptureData[] captures, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition closure) {
+        private static void CreateClosureParam(
+            PatcherArguments arguments,
+            TypeDefinition declaringType,
+            MethodDefinition containingMethod,
+            string closureTypeName,
+            ClosureCaptureData[] captures,
+            out TypeDefinition closureTypeDef,
+            out MethodDefinition closureConstructor,
+            out VariableDefinition closure) {
+
             ModuleDefinition module = arguments.MainModule;
 
             closureTypeDef = new TypeDefinition("", closureTypeName, TypeAttributes.NestedPublic | TypeAttributes.Class, module.TypeSystem.Object) {
                 DeclaringType = declaringType
             };
-            foreach (GenericParameter? genericParam in declaringType.GenericParameters) {
-                closureTypeDef.GenericParameters.Add(genericParam.Clone());
+
+            List<(GenericParameter paramFrom, TypeReference typeTo)> genericParameterMap = [];
+            foreach (GenericParameter genericParameter in declaringType.GenericParameters) {
+                GenericParameter mappedParameter = CloneGenericParameterForType(
+                    genericParameter,
+                    closureTypeDef);
+                closureTypeDef.GenericParameters.Add(mappedParameter);
+                genericParameterMap.Add((genericParameter, mappedParameter));
+            }
+            foreach (GenericParameter genericParameter in containingMethod.GenericParameters) {
+                GenericParameter mappedParameter = CloneGenericParameterForType(
+                    genericParameter,
+                    closureTypeDef);
+                closureTypeDef.GenericParameters.Add(mappedParameter);
+                genericParameterMap.Add((genericParameter, mappedParameter));
+            }
+
+            var closureMapOption = MonoModCommon.Structure.MapOption.Create(
+                true,
+                providers: [(declaringType, closureTypeDef)],
+                genericParameterMap: [.. genericParameterMap]);
+
+            foreach (GenericParameter genericParameter in closureTypeDef.GenericParameters) {
+                for (int i = 0; i < genericParameter.Constraints.Count; i++) {
+                    genericParameter.Constraints[i] = new GenericParameterConstraint(
+                        MonoModCommon.Structure.DeepMapTypeReference(
+                            genericParameter.Constraints[i].ConstraintType,
+                            closureMapOption));
+                }
             }
 
             var compilerGeneratedAttribute = new TypeReference("System.Runtime.CompilerServices", "CompilerGeneratedAttribute", module, module.TypeSystem.CoreLibrary);
@@ -171,11 +207,11 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             insts.Add(Instruction.Create(OpCodes.Call, new MethodReference(".ctor", module.TypeSystem.Void, module.TypeSystem.Object) { HasThis = true }));
             insts.Add(Instruction.Create(OpCodes.Ret));
 
-            if (declaringType.HasGenericParameters) {
+            if (closureTypeDef.HasGenericParameters) {
                 foreach (ClosureCaptureData capture in captures) {
                     capture.CaptureField.FieldType = MonoModCommon.Structure.DeepMapTypeReference(
                         capture.CaptureField.FieldType,
-                        MonoModCommon.Structure.MapOption.Create(true, providers: [(declaringType, closureTypeDef)]));
+                        closureMapOption);
                     closureTypeDef.Fields.Add(capture.CaptureField);
                 }
             }
@@ -183,9 +219,12 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                 closureTypeDef.Fields.AddRange(captures.Select(c => c.CaptureField));
             }
             TypeReference closureTypeRef = closureTypeDef;
-            if (declaringType.HasGenericParameters) {
+            if (closureTypeDef.HasGenericParameters) {
                 var genericClosureTypeRef = new GenericInstanceType(closureTypeRef);
                 foreach (GenericParameter? genericParam in declaringType.GenericParameters) {
+                    genericClosureTypeRef.GenericArguments.Add(genericParam);
+                }
+                foreach (GenericParameter? genericParam in containingMethod.GenericParameters) {
                     genericClosureTypeRef.GenericArguments.Add(genericParam);
                 }
                 closureTypeRef = genericClosureTypeRef;
@@ -194,9 +233,22 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
             closure = new VariableDefinition(closureTypeRef);
         }
 
+        private static GenericParameter CloneGenericParameterForType(
+            GenericParameter source,
+            TypeDefinition owner) {
+
+            var result = new GenericParameter(source.Name, owner) {
+                Attributes = source.Attributes,
+            };
+            result.CustomAttributes.AddRange(source.CustomAttributes.Select(attribute => attribute.Clone()));
+            result.Constraints.AddRange(source.Constraints.Select(
+                constraint => new GenericParameterConstraint(constraint.ConstraintType)));
+            return result;
+        }
+
         public static ClosureData CreateClosureByCaptureThis(PatcherArguments arguments, TypeDefinition declaringType, MethodDefinition containingMethod, string closureTypeName) {
             ClosureCaptureData[] datas = [new ClosureCaptureData(containingMethod, containingMethod.Body.ThisParameter)];
-            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
+            CreateClosureParam(arguments, declaringType, containingMethod, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, datas);
         }
 
@@ -205,17 +257,17 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.DataModels
                 return CreateClosureByCaptureThis(arguments, declaringType, containingMethod, closureTypeName);
             }
             ClosureCaptureData[] datas = [new ClosureCaptureData(containingMethod, parameter)];
-            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
+            CreateClosureParam(arguments, declaringType, containingMethod, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, datas);
         }
         public static ClosureData CreateClosureByCaptureLocal(PatcherArguments arguments, TypeDefinition declaringType, MethodDefinition containingMethod, string closureTypeName, VariableDefinition local, string localName) {
             ClosureCaptureData[] datas = [new ClosureCaptureData(localName, local)];
-            CreateClosureParam(arguments, declaringType, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
+            CreateClosureParam(arguments, declaringType, containingMethod, closureTypeName, datas, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, datas);
         }
 
         public static ClosureData CreateClosureByCaptureVariables(PatcherArguments arguments, TypeDefinition declaringType, MethodDefinition containingMethod, string closureTypeName, params ClosureCaptureData[] captures) {
-            CreateClosureParam(arguments, declaringType, closureTypeName, captures, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
+            CreateClosureParam(arguments, declaringType, containingMethod, closureTypeName, captures, out TypeDefinition closureTypeDef, out MethodDefinition closureConstructor, out VariableDefinition? closure);
             return new ClosureData(closureTypeDef, closureConstructor, closure, captures);
         }
         public static ClosureData CreateClosureDataFromExisting(TypeDefinition closureTypeDef, VariableDefinition closure, params ClosureCaptureData[] additionalCaptures) {

@@ -29,16 +29,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.FieldFilterPatching
             "Terraria.HitTile",
             // global share buffer pool
             "Terraria.Net.LegacyNetBufferPool",
+            // Ambient diagnostics intentionally bind a physical thread without becoming a context object.
+            "UnifiedServerProcess.RootContext/AmbientDiagnostics",
             // ignore UIElement._idCounter and UniqueId, it is unused
             "Terraria.UI.UIElement",
             // ignore DebugNetworkStream it should not run on server
             "Terraria.Net.Sockets.DebugNetworkStream",
+            // ignore BufferPool, it should be a global singleton
+            "Terraria.DataStructures.BufferPool",
         ];
         public static readonly List<string> forceStaticFieldFullNames = [
             // global singleton
             "Terraria.Localization.LocalizedText.Empty",
             // lazy loading cache, should be global
-            "Terraria.Localization.LocalizedText._propertyLookupCache",
+            "Terraria.Localization.LocalizedText._propertyLookupCache"
         ];
         public void Apply(LoggedComponent logger, ref FilterArgumentSource source) {
             foreach (KeyValuePair<string, FieldDefinition> modified in source.ModifiedStaticFields.ToArray()) {

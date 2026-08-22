@@ -16,12 +16,9 @@ using System.Linq;
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 {
     /// <summary>
-    /// If the implementation of a function that implements a certain interface uses context-related content,
-    /// <para>we need to evaluate whether to modify the interface definition to add a RootContext Parameter to achieve context attachment</para>
-    /// <para>or to introduce a RootContext field within the instance to achieve context attachment</para>
-    /// <para>based on: </para>
-    /// <para>1. Whether the interface is defined in an external assembly;</para>
-    /// <para>2. Ensuring the consistency of all implementations of the interface in the tail module.</para>
+    /// Keeps inherited external method contracts stable by binding RootContext to their implementation instances.
+    /// <para>This prevents later context propagation from adding a RootContext parameter to an external signature.</para>
+    /// <para>Local interface implementations are still diffused consistently within the main module.</para>
     /// </summary>
     /// <param name="methodCallGraph"></param>
     public class ExternalInterfaceProcessor(MethodCallGraph methodCallGraph) : IGeneralArgProcessor, IMethodCheckCacheFeature
@@ -60,7 +57,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                 if (type.Name.OrdinalStartsWith('<')) {
                     continue;
                 }
-                foreach (FieldDefinition? field in type.Fields) {
+                foreach (FieldDefinition? field in type.Fields.ToArray()) {
                     if (!field.IsStatic) {
                         continue;
                     }
@@ -125,6 +122,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         foreach (MethodDefinition interfaceMethod in interfaceMethods) {
                             fixedInterfaceMethods.TryAdd(interfaceMethod.GetIdentifier(), interfaceMethod);
                             foreach (MethodDefinition impl in methodCallGraph.MethodInheritanceGraph.RawMethodImplementationChains[interfaceMethod.GetIdentifier()]) {
+                                if (impl.Module.Name != source.MainModule.Name) {
+                                    continue;
+                                }
                                 if (impl.DeclaringType.IsInterface) {
                                     continue;
                                 }
@@ -166,17 +166,18 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
         }
 
         public bool AnyExternalInterfaceMethodUsedContext(PatcherArgumentSource source, MethodDefinition[] checkMethods, Dictionary<string, MethodDefinition> fixedInterfaceMethods) {
-            bool anyExternalInterface = false;
+            bool anyExternalContract = false;
             foreach (MethodDefinition check in checkMethods) {
-                if (check.DeclaringType.IsInterface && check.DeclaringType.Module.Name != source.MainModule.Name) {
+                if (check.Module.Name != source.MainModule.Name) {
                     fixedInterfaceMethods.TryAdd(check.GetIdentifier(), check);
-                    anyExternalInterface = true;
+                    anyExternalContract = true;
                     break;
                 }
             }
-            if (anyExternalInterface) {
+            if (anyExternalContract) {
                 foreach (MethodDefinition check in checkMethods) {
-                    if (this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, check)) {
+                    if (this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, check,
+                        useCache: false, includePairedAccessors: true)) {
                         return true;
                     }
                 }

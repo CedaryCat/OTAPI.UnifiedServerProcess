@@ -74,7 +74,6 @@ namespace Terraria
         [MonoMod.MonoModReplace]
         public new void mfwh_orig_ctor_RemoteClient() {
             Name = "Anonymous";
-            StatusText = "";
             TileSections = new bool[2 + 1, 2 + 1];
             TileSectionsCheckTime = new uint[2 + 1, 2 + 1];
             SpamProjectileMax = 100f;

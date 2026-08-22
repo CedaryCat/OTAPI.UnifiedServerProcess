@@ -168,7 +168,8 @@ namespace OTAPI.UnifiedServerProcess.Commons
             }
             public static GenericInstanceMethod DeepMapGenericInstanceMethod(GenericInstanceMethod instance, MapOption option) {
                 var pattern = instance.ElementMethod;
-                if (option.MethodReplaceMap.TryGetValue(pattern.Resolve(), out var mappedPattern)) {
+                MethodDefinition? patternDefinition = pattern.TryResolve();
+                if (patternDefinition is not null && option.MethodReplaceMap.TryGetValue(patternDefinition, out var mappedPattern)) {
                     pattern = mappedPattern;
                 }
 
@@ -238,6 +239,14 @@ namespace OTAPI.UnifiedServerProcess.Commons
                         && mappedDeclaringType.Methods.Any(m => m.GetIdentifier(false) == method.GetIdentifier(false)
                         && m.HasThis == method.HasThis)) {
                         declaringType = DeepMapTypeReference(method.DeclaringType, option);
+                    }
+                    else if (declaringType is GenericInstanceType genericDeclaringType) {
+                        var mappedGenericDeclaringType = new GenericInstanceType(genericDeclaringType.ElementType);
+                        foreach (TypeReference genericArgument in genericDeclaringType.GenericArguments) {
+                            mappedGenericDeclaringType.GenericArguments.Add(
+                                DeepMapTypeReference(genericArgument, option));
+                        }
+                        declaringType = mappedGenericDeclaringType;
                     }
                     MethodReference mref = new MethodReference(method.Name,
                         DeepMapTypeReference(method.ReturnType, option),

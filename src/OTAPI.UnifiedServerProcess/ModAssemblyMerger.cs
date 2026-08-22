@@ -13,18 +13,40 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess
 {
+    /// <summary>
+    /// Configures how source members are overlaid onto an existing target assembly.
+    /// Entries in <see cref="IgnoreExistingMethods"/> may be a method name or a
+    /// complete identifier produced by <see cref="MonoModExtensions.GetIdentifier(MethodReference, bool)"/>.
+    /// </summary>
     public record struct MergeOption(ImmutableArray<string> IgnoreExistingMethods);
     public class ModAssemblyMerger
     {
+        private enum MethodMergeAction
+        {
+            AddSource,
+            IgnoreSource,
+            ReplaceTarget,
+            ComposeStaticConstructor,
+        }
+
         readonly HashSet<string> IgnoreExistingMethods;
         readonly Dictionary<string, ModuleDefinition> modModules = [];
+        readonly Dictionary<string, ModuleDefinition> metadataSourceModules = [];
         public ModAssemblyMerger(MergeOption option, params System.Reflection.Assembly[] mods) {
 
-            IgnoreExistingMethods = [.. option.IgnoreExistingMethods];
+            IgnoreExistingMethods = option.IgnoreExistingMethods.IsDefaultOrEmpty
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new HashSet<string>(option.IgnoreExistingMethods, StringComparer.Ordinal);
 
             foreach (System.Reflection.Assembly assembly in mods) {
                 var mod = AssemblyDefinition.ReadAssembly(assembly.Location);
                 modModules.TryAdd(mod.FullName, mod.MainModule);
+
+                // MonoMod mutates the module passed to PatchModule, including custom-attribute
+                // backing blobs. Keep an untouched metadata source for the final interface
+                // attribute refresh performed immediately before writing the target assembly.
+                var metadataSource = AssemblyDefinition.ReadAssembly(assembly.Location);
+                metadataSourceModules.TryAdd(metadataSource.FullName, metadataSource.MainModule);
             }
         }
         public void Attach(ModContext context) {
@@ -57,6 +79,54 @@ namespace OTAPI.UnifiedServerProcess
                 }
                 return ModContext.EApplyResult.Continue;
             };
+        }
+
+        internal void RefreshMergedInterfaceAttributes(ModuleDefinition target) {
+            Dictionary<string, TypeDefinition> targetTypes = target.GetAllTypes()
+                .ToDictionary(type => type.FullName, type => type);
+            foreach (ModuleDefinition mod in metadataSourceModules.Values) {
+                foreach (TypeDefinition type in mod.GetAllTypes()) {
+                    if (targetTypes.TryGetValue(type.FullName, out TypeDefinition? mappedType)) {
+                        RefreshInterfaceAttributes(target, mod, type, mappedType);
+                    }
+                }
+            }
+        }
+
+        private static void RefreshInterfaceAttributes(
+            ModuleDefinition target,
+            ModuleDefinition mod,
+            TypeDefinition type,
+            TypeDefinition mappedType) {
+            foreach (InterfaceImplementation sourceInterface in type.Interfaces) {
+                InterfaceImplementation? mappedInterface = mappedType.Interfaces.FirstOrDefault(
+                    candidate => candidate.InterfaceType.FullName == sourceInterface.InterfaceType.FullName);
+                if (mappedInterface is null) {
+                    continue;
+                }
+                int mappedInterfaceIndex = mappedType.Interfaces.IndexOf(mappedInterface);
+
+                var mappedAttributes = new List<CustomAttribute>();
+                foreach (CustomAttribute sourceAttribute in sourceInterface.CustomAttributes) {
+                    MethodReference? existingConstructor = mappedInterface.CustomAttributes
+                        .FirstOrDefault(attribute =>
+                            attribute.AttributeType.FullName == sourceAttribute.AttributeType.FullName &&
+                            attribute.Constructor.FullName == sourceAttribute.Constructor.FullName)
+                        ?.Constructor;
+                    CustomAttribute? mappedAttribute = MapCustomAttributePreservingBlob(
+                        target, mod, sourceAttribute, existingConstructor);
+                    if (mappedAttribute is not null) {
+                        mappedAttributes.Add(mappedAttribute);
+                    }
+                }
+
+                TypeReference refreshedInterfaceType = target.ImportReference(
+                    mappedType.Interfaces[mappedInterfaceIndex].InterfaceType);
+                var refreshedInterface = new InterfaceImplementation(refreshedInterfaceType);
+                refreshedInterface.CustomAttributes.AddRange(mappedAttributes);
+                mappedType.Interfaces.RemoveAt(mappedInterfaceIndex);
+                mappedType.Interfaces.Add(refreshedInterface);
+            }
         }
 
         private static void AdjustTypeInfo(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {
@@ -289,8 +359,7 @@ namespace OTAPI.UnifiedServerProcess
                     module.Types.Add(target);
                 }
                 foreach (MethodDefinition? method in modType.Methods) {
-                    PrepareMethod(target, method, null);
-                    SetMemberReplace(module, method.CustomAttributes, false);
+                    ApplyMethodMergePolicy(target, method, null);
                 }
             }
             else {
@@ -301,20 +370,17 @@ namespace OTAPI.UnifiedServerProcess
                     if (!existingMethods.TryGetValue(method.GetIdentifier(), out MethodDefinition? existingMethod)) {
                         existingMethod = null;
                     }
-                    PrepareMethod(target, method, existingMethod);
-                    if (!method.IsSpecialName) {
-                        SetMemberReplace(module, method.CustomAttributes, false);
-                    }
+                    ApplyMethodMergePolicy(target, method, existingMethod);
                 }
                 if (modType.IsEnum) {
-                    SetMemberReplace(module, modType.CustomAttributes, true);
+                    SetMemberReplace(modType.Module, modType.CustomAttributes, true);
                 }
                 foreach (FieldDefinition? field in modType.Fields) {
                     if (modType.IsEnum && !field.IsStatic) {
-                        SetMemberReplace(module, field.CustomAttributes, false);
+                        SetMemberReplace(modType.Module, field.CustomAttributes, false);
                     }
                     else {
-                        SetMemberReplace(module, field.CustomAttributes, modType.IsEnum);
+                        SetMemberReplace(modType.Module, field.CustomAttributes, modType.IsEnum);
                     }
                 }
             }
@@ -322,47 +388,147 @@ namespace OTAPI.UnifiedServerProcess
                 SetModTypePlaceholder(module, uspTypes, nested, target);
             }
         }
-        void PrepareMethod(TypeDefinition targetType, MethodDefinition modMethod, MethodDefinition? originalMethod) {
-            bool ignored = false;
-            if (modMethod.IsConstructor && !modMethod.IsStatic) {
-                int instCount = 0;
-                foreach (Instruction? inst in modMethod.Body.Instructions) {
-                    if (inst.OpCode != OpCodes.Nop) {
-                        instCount += 1;
-                    }
-                }
+        void ApplyMethodMergePolicy(TypeDefinition targetType, MethodDefinition sourceMethod, MethodDefinition? targetMethod) {
+            MethodMergeAction action = ResolveMethodMergeAction(targetType, sourceMethod, targetMethod);
 
-                if (instCount <= 3 && (originalMethod is not null || shouldBeIgnore(targetType, modMethod))) {
-                    if (!ignored) {
-                        ignored = true;
-                        TypeReference attType_ctor = targetType.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
-                        modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+            switch (action) {
+                case MethodMergeAction.IgnoreSource:
+                    SetMonoModAttribute(sourceMethod.Module, sourceMethod.CustomAttributes, typeof(MonoMod.MonoModIgnore));
+                    break;
+                case MethodMergeAction.AddSource:
+                    if (sourceMethod.IsConstructor && !sourceMethod.IsStatic) {
+                        SetMonoModAttribute(sourceMethod.Module, sourceMethod.CustomAttributes, typeof(MonoMod.MonoModConstructor));
                     }
-                }
-                else {
-                    TypeReference attType_ctor = targetType.Module.ImportReference(typeof(MonoMod.MonoModConstructor));
-                    modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
-                }
+                    break;
+                case MethodMergeAction.ReplaceTarget:
+                    if (sourceMethod.IsConstructor && !sourceMethod.IsStatic) {
+                        SetMonoModAttribute(sourceMethod.Module, sourceMethod.CustomAttributes, typeof(MonoMod.MonoModConstructor));
+                    }
+                    PreserveTargetVirtualContract(sourceMethod, targetMethod!);
+                    SetMemberReplace(sourceMethod.Module, sourceMethod.CustomAttributes, false);
+                    break;
+                case MethodMergeAction.ComposeStaticConstructor:
+                    // MonoMod composes a source .cctor with the existing target .cctor by
+                    // retaining and calling the old body. MonoModReplace would discard it.
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(action), action, null);
             }
-            if (!ignored && originalMethod is not null && IgnoreExistingMethods.Contains(modMethod.Name)) {
-                TypeReference attType_ctor = targetType.Module.ImportReference(typeof(MonoMod.MonoModIgnore));
-                modMethod.CustomAttributes.Add(new CustomAttribute(new MethodReference(".ctor", modMethod.Module.TypeSystem.Void, attType_ctor) { HasThis = true }));
+        }
+
+        MethodMergeAction ResolveMethodMergeAction(
+            TypeDefinition targetType,
+            MethodDefinition sourceMethod,
+            MethodDefinition? targetMethod) {
+
+            if (targetMethod is not null && ShouldIgnoreExistingMethod(sourceMethod)) {
+                return MethodMergeAction.IgnoreSource;
             }
 
-            static bool shouldBeIgnore(TypeDefinition targetType, MethodDefinition modMethod) {
-                return 
-                    modMethod.Parameters.Count is 0 &&
-                    !targetType.Methods.Any(m => m is { IsConstructor: true, IsStatic: false, Parameters: [] }) && 
-                    targetType.Methods.Any(m => m.IsConstructor && !m.IsStatic);
+            if (sourceMethod.IsConstructor && !sourceMethod.IsStatic && IsTrivialInstanceConstructor(sourceMethod)) {
+                if (targetMethod is not null || ShouldSuppressSyntheticDefaultConstructor(targetType, sourceMethod)) {
+                    return MethodMergeAction.IgnoreSource;
+                }
             }
+
+            if (targetMethod is null) {
+                return MethodMergeAction.AddSource;
+            }
+
+            if (sourceMethod.IsConstructor && sourceMethod.IsStatic) {
+                return MethodMergeAction.ComposeStaticConstructor;
+            }
+
+            // Accessors, event methods, operators and instance constructors are all
+            // replaceable methods in MonoMod. IsSpecialName does not mean "preserve";
+            // omitting MonoModReplace merely creates an orig_* clone before replacement.
+            return MethodMergeAction.ReplaceTarget;
+        }
+
+        static void PreserveTargetVirtualContract(MethodDefinition sourceMethod, MethodDefinition targetMethod) {
+            if (!targetMethod.IsVirtual) {
+                return;
+            }
+
+            // Replacing a method body must not silently rewrite the target assembly's vtable.
+            // This is especially important for implicit interface implementations on value
+            // types, which the CLR represents as virtual + newslot + final methods even when
+            // the equivalent standalone source method is not declared virtual in C#.
+            const MethodAttributes virtualContractMask =
+                MethodAttributes.MemberAccessMask
+                | MethodAttributes.Virtual
+                | MethodAttributes.Final
+                | MethodAttributes.VtableLayoutMask
+                | MethodAttributes.CheckAccessOnOverride;
+            const MethodAttributes identityMask =
+                MethodAttributes.HideBySig
+                | MethodAttributes.SpecialName
+                | MethodAttributes.RTSpecialName;
+
+            sourceMethod.Attributes =
+                (sourceMethod.Attributes & ~virtualContractMask)
+                | (targetMethod.Attributes & virtualContractMask)
+                | (targetMethod.Attributes & identityMask);
+        }
+
+        bool ShouldIgnoreExistingMethod(MethodDefinition method) {
+            return IgnoreExistingMethods.Contains(method.Name)
+                || IgnoreExistingMethods.Contains(method.GetIdentifier(withDeclaring: false))
+                || IgnoreExistingMethods.Contains(method.GetIdentifier());
+        }
+
+        static bool ShouldSuppressSyntheticDefaultConstructor(TypeDefinition targetType, MethodDefinition sourceMethod) {
+            return sourceMethod.Parameters.Count is 0
+                && !targetType.Methods.Any(m => m is { IsConstructor: true, IsStatic: false, Parameters: [] })
+                && targetType.Methods.Any(m => m.IsConstructor && !m.IsStatic);
+        }
+
+        static bool IsTrivialInstanceConstructor(MethodDefinition method) {
+            if (!method.IsConstructor || method.IsStatic || !method.HasBody) {
+                return false;
+            }
+
+            Instruction[] instructions = method.Body.Instructions
+                .Where(instruction => instruction.OpCode != OpCodes.Nop)
+                .ToArray();
+
+            // An explicitly empty value-type constructor can consist solely of ret.
+            if (instructions is [{ OpCode: var onlyOpCode }]
+                && onlyOpCode == OpCodes.Ret
+                && method.DeclaringType.IsValueType) {
+                return true;
+            }
+
+            if (instructions.Length != 3
+                || instructions[0].OpCode != OpCodes.Ldarg_0
+                || instructions[2].OpCode != OpCodes.Ret) {
+                return false;
+            }
+
+            Instruction initializer = instructions[1];
+            if (initializer.OpCode == OpCodes.Call
+                && initializer.Operand is MethodReference calledConstructor
+                && calledConstructor.Name == ".ctor") {
+                // A this(...) constructor delegates real work and must not be treated as empty.
+                return calledConstructor.DeclaringType.FullName != method.DeclaringType.FullName;
+            }
+
+            return method.DeclaringType.IsValueType
+                && initializer.OpCode == OpCodes.Initobj
+                && initializer.Operand is TypeReference initializedType
+                && initializedType.FullName == method.DeclaringType.FullName;
         }
         static void SetMemberReplace(ModuleDefinition module, Collection<CustomAttribute> attributes, bool isEnum) {
             Type type = isEnum ? typeof(MonoMod.MonoModEnumReplace) : typeof(MonoMod.MonoModReplace);
-            if (attributes.Any(a => a.AttributeType.Name == type.Name)) {
+            SetMonoModAttribute(module, attributes, type);
+        }
+
+        static void SetMonoModAttribute(ModuleDefinition module, Collection<CustomAttribute> attributes, Type type) {
+            if (attributes.Any(attribute => attribute.AttributeType.FullName == type.FullName)) {
                 return;
             }
-            TypeReference attType_replace = module.ImportReference(type);
-            attributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, attType_replace) { HasThis = true }));
+            TypeReference attributeType = module.ImportReference(type);
+            attributes.Add(new CustomAttribute(new MethodReference(".ctor", module.TypeSystem.Void, attributeType) { HasThis = true }));
         }
 
         static void AdjustInterfaces(ModuleDefinition target, ModuleDefinition mod, TypeDefinition type, TypeDefinition mappedType) {
@@ -371,12 +537,17 @@ namespace OTAPI.UnifiedServerProcess
                 if (old is not null) {
                     mappedType.Interfaces.Remove(old);
                 }
-                AdjustMemberAttributes(target, mod, interfImpl.CustomAttributes);
                 TypeReference mappedInterfType = interfImpl.InterfaceType;
-                if (RedirectTypeRef(target, mod, ref mappedInterfType)) {
-                    interfImpl.InterfaceType = mappedInterfType;
+                RedirectTypeRef(target, mod, ref mappedInterfType);
+
+                var mappedInterface = new InterfaceImplementation(mappedInterfType);
+                foreach (CustomAttribute attribute in interfImpl.CustomAttributes) {
+                    CustomAttribute? mappedAttribute = MapCustomAttribute(target, mod, attribute);
+                    if (mappedAttribute is not null) {
+                        mappedInterface.CustomAttributes.Add(mappedAttribute);
+                    }
                 }
-                mappedType.Interfaces.Add(interfImpl);
+                mappedType.Interfaces.Add(mappedInterface);
             }
         }
         static void AdjustMemberAttributes(ModuleDefinition target, ModuleDefinition mod, Collection<CustomAttribute> attributes) {
@@ -392,7 +563,8 @@ namespace OTAPI.UnifiedServerProcess
 
         private static CustomAttribute? MapCustomAttribute(ModuleDefinition target, ModuleDefinition mod, CustomAttribute attr) {
             try {
-                var mappedAttr = new CustomAttribute(RedirectElementMethodRef(target, mod, attr.Constructor));
+                MethodReference mappedConstructor = RedirectElementMethodRef(target, mod, attr.Constructor);
+                var mappedAttr = new CustomAttribute(target.ImportReference(mappedConstructor));
                 for (int i = 0; i < attr.ConstructorArguments.Count; i++) {
                     CustomAttributeArgument arg = attr.ConstructorArguments[i];
                     TypeReference mappedArgType = arg.Type;
@@ -430,6 +602,23 @@ namespace OTAPI.UnifiedServerProcess
             }
             catch {
                 return null;
+            }
+        }
+
+        private static CustomAttribute? MapCustomAttributePreservingBlob(
+            ModuleDefinition target,
+            ModuleDefinition mod,
+            CustomAttribute attr,
+            MethodReference? existingTargetConstructor = null) {
+            try {
+                byte[] blob = attr.GetBlob().ToArray();
+                MethodReference mappedConstructor = existingTargetConstructor is not null
+                    ? existingTargetConstructor
+                    : RedirectElementMethodRef(target, mod, attr.Constructor);
+                return new CustomAttribute(target.ImportReference(mappedConstructor), blob);
+            }
+            catch (NotSupportedException) {
+                return MapCustomAttribute(target, mod, attr);
             }
         }
 

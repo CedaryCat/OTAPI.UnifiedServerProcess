@@ -1,4 +1,4 @@
-using Mono.Cecil;
+﻿using Mono.Cecil;
 using Mono.Cecil.Rocks;
 using OTAPI.UnifiedServerProcess.Commons;
 using OTAPI.UnifiedServerProcess.Extensions;
@@ -635,6 +635,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
                             if (!interfaceMethod.DeclaringType.IsInterface) {
                                 continue;
                             }
+                            if (currentType != method.DeclaringType
+                                && !ImplementsInterface(method.DeclaringType, interfaceMethod.DeclaringType)) {
+                                continue;
+                            }
                             result.Add(interfaceMethod);
                         }
                     }
@@ -654,6 +658,31 @@ namespace OTAPI.UnifiedServerProcess.Core.Analysis
             }
 
             return result.ToArray();
+        }
+
+        private static bool ImplementsInterface(TypeReference type, TypeDefinition expectedInterface) {
+            HashSet<string> visited = [];
+            Stack<TypeReference> pending = [];
+            pending.Push(type);
+
+            while (pending.Count > 0) {
+                TypeReference current = pending.Pop();
+                TypeDefinition? currentDefinition = current.TryResolve();
+                if (currentDefinition is null || !visited.Add(currentDefinition.FullName)) {
+                    continue;
+                }
+                if (currentDefinition.IsInterface && currentDefinition.FullName == expectedInterface.FullName) {
+                    return true;
+                }
+                foreach (InterfaceImplementation implementation in currentDefinition.Interfaces) {
+                    pending.Push(implementation.InterfaceType);
+                }
+                if (currentDefinition.BaseType is not null) {
+                    pending.Push(currentDefinition.BaseType);
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

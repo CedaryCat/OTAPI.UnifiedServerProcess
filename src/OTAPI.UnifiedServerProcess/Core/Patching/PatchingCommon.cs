@@ -110,8 +110,14 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching
                 if (definition is null) {
                     throw new ArgumentNullException($"The {nameof(definition)} is required when {nameof(mode)} is {InsertParamMode.Insert}");
                 }
+                if (body.Method.Name == "ToString") {
+                }
                 if (body.Method.HasOverrides) {
                     foreach (MethodReference? overrides in body.Method.Overrides) {
+                        MethodDefinition? overridden = overrides.TryResolve();
+                        if (overridden is not null && overridden.Module.Name != body.Method.Module.Name) {
+                            continue;
+                        }
                         overrides.Parameters.Insert(0, new ParameterDefinition("", definition.Attributes, definition.ParameterType));
                     }
                 }

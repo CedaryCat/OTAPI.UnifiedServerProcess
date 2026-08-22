@@ -306,6 +306,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 foreach (MethodDefinition baseMethod in lowestBaseMethods) {
                     if (methodInheritanceGraph.RawMethodImplementationChains.TryGetValue(baseMethod.GetIdentifier(), out MethodDefinition[]? inheritedMethods)) {
                         foreach (MethodDefinition inheritedMethod in inheritedMethods) {
+                            if (inheritedMethod.Module.Name != module.Name) {
+                                continue;
+                            }
                             var inheritedMethodId = inheritedMethod.GetIdentifier();
                             if (mappedMethods.originalToContextBound.ContainsKey(inheritedMethodId) || mappedMethods.contextBoundMethods.ContainsKey(inheritedMethodId)) {
                                 continue;

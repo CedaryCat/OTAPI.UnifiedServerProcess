@@ -73,7 +73,8 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
             this TFeature point,
             IDictionary<string, FieldDefinition> instanceConvdFieldOrigMap,
             MethodDefinition checkMethod,
-            bool useCache = true)
+            bool useCache = true,
+            bool includePairedAccessors = false)
             where TFeature : IMethodCheckCacheFeature {
 
             if (!checkMethod.HasBody) {
@@ -105,6 +106,18 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
                 if (!currentCheck.HasBody) {
                     continue;
                 }
+
+                if (includePairedAccessors) {
+                    PropertyDefinition? property = currentCheck.DeclaringType.Properties
+                        .FirstOrDefault(p => p.GetMethod == currentCheck || p.SetMethod == currentCheck);
+                    MethodDefinition? otherAccessor = property?.GetMethod == currentCheck
+                        ? property.SetMethod
+                        : property?.GetMethod;
+                    if (otherAccessor?.HasBody == true && !visited.Contains(otherAccessor)) {
+                        worklist.Push(otherAccessor);
+                    }
+                }
+
                 foreach (var inst in currentCheck.Body.Instructions) {
                     if (inst.Operand is FieldReference field) {
                         if (field.FieldType.FullName == Constants.RootContextFullName) {

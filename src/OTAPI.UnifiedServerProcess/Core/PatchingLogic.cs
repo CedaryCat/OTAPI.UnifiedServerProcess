@@ -17,6 +17,7 @@ namespace OTAPI.UnifiedServerProcess.Core
             new PatchProjHookSets(module).Patch();
             new PatchCollision(module).Patch();
             new NetworkLogicPruner(module).Prune("Terraria.Player");
+            new AmbientDiagnosticsPrePatcher(logger, module).Patch();
 
             AnalyzerGroups analyzers = new AnalyzerGroups(logger, module);
             // var cacheHelper = new CacheManager(logger);
@@ -78,10 +79,11 @@ namespace OTAPI.UnifiedServerProcess.Core
                 .Then(new TrivialDefaultValuePatcher(logger))
                 .Finalize()
 
+                .Then(new AmbientDiagnosticsPostPatcher(logger, module))
                 .Then(new ThreadLocalInitPatcher(logger, module))
                 .Then(new AdjustAutoPropertiesPatcher(logger, module))
                 .Then(new LangManagerPostPatcher(logger, module))
-                .Then(new RemoveUnusedCodePatcherAtEnd(logger, rootContextDef, module))
+                .Then(new RemoveUnusedCodePatcherAtEnd(logger, module))
                 .Then(new OptimizeMacrosPatcher(logger, module))
                 .Then(new InitLocalsFixPatcher(logger, module))
 

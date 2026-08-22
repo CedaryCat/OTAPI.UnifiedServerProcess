@@ -17,7 +17,7 @@ using System.Linq;
 
 namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 {
-    public class StaticConstructorProcessor(AnalyzerGroups analyzers) : IGeneralArgProcessor, IMethodCheckCacheFeature, IStaticModificationCheckFeature, IJumpSitesCacheFeature
+    public class StaticConstructorProcessor(AnalyzerGroups analyzers) : IGeneralArgProcessor, IStaticModificationCheckFeature, IInitializationDependencyCheckFeature
     {
         public MethodCallGraph MethodCallGraph => analyzers.MethodCallGraph;
         public StaticFieldReferenceAnalyzer StaticFieldReferenceAnalyzer => analyzers.StaticFieldReferenceAnalyzer;
@@ -26,6 +26,16 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
 
 
         public void Apply(LoggedComponent logger, ref PatcherArgumentSource source) {
+            bool incremented;
+            do {
+                int contextualFieldCount = source.OriginalToInstanceConvdField.Count;
+                ApplyPass(source);
+                incremented = source.OriginalToInstanceConvdField.Count != contextualFieldCount;
+            }
+            while (incremented);
+        }
+
+        private void ApplyPass(PatcherArgumentSource source) {
             ModuleDefinition module = source.MainModule;
             foreach (TypeDefinition? type in module.GetAllTypes().ToArray()) {
                 if (type.Name.OrdinalStartsWith('<')) {
@@ -36,7 +46,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                     continue;
                 }
 
-                if (!this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, cctor)) {
+                if (!this.CheckUsedContextBoundField(source.OriginalToInstanceConvdField, cctor, useCache: false)) {
                     continue;
                 }
                 if (!source.OriginalToContextType.TryGetValue(type.FullName, out ContextTypeData? contextType)) {
@@ -51,7 +61,10 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
                         continue;
                     }
 
-                    if (!CheckUsedContext(source, cctor, checkSource)) {
+                    if (!this.IsContextDependentInitialization(
+                        source.OriginalToInstanceConvdField,
+                        cctor,
+                        checkSource)) {
                         continue;
                     }
 
@@ -132,33 +145,5 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching.Arguments
             }
         }
 
-        bool CheckUsedContext(PatcherArgumentSource arg, MethodDefinition cctor, params IEnumerable<Instruction> checkSource) {
-            Instruction[] sourceInsts = CollectSources(cctor, checkSource);
-            foreach (Instruction check in sourceInsts) {
-                if (check.OpCode.Code is Code.Call or Code.Callvirt or Code.Newobj or Code.Ldftn or Code.Ldvirtftn) {
-                    MethodDefinition? methodDef = ((MethodReference)check.Operand).TryResolve();
-                    if (methodDef is null) {
-                        continue;
-                    }
-                    if (this.CheckUsedContextBoundField(arg.OriginalToInstanceConvdField, methodDef)) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-        Instruction[] CollectSources(MethodDefinition cctor, params IEnumerable<Instruction> sourceSeeds) {
-            HashSet<Instruction> extracted = [];
-            HashSet<VariableDefinition> checkedLocals = [];
-
-            InstructionSourceCollector.CollectSources(
-                this,
-                cctor,
-                extracted,
-                new InstructionSourceCollector.LocalPropagationOptions(checkedLocals.Add),
-                sourceSeeds);
-
-            return extracted.ToArray();
-        }
     }
 }

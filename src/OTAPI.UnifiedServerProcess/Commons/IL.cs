@@ -106,7 +106,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                     return method.Body?.ThisParameter ?? new ParameterDefinition("", ParameterAttributes.None, method.DeclaringType);
                 }
                 var param = method.Parameters[paramIndex];
-                if (tmpCheck is not null && tmpCheck.Name != param.Name) {
+                if (tmpCheck is not null && tmpCheck.Name != param.Name && !method.Name.StartsWith("op_")) {
                     throw new InvalidOperationException("Operand TracingParameter is invalid");
                 }
                 return param;
@@ -142,7 +142,7 @@ namespace OTAPI.UnifiedServerProcess.Commons
                 else {
                     int paramIndex = paramInnerIndex - (method.HasThis ? 1 : 0);
                     parameter = method.Parameters[paramIndex];
-                    if (tmpCheck is not null && tmpCheck.Name != parameter.Name) {
+                    if (tmpCheck is not null && tmpCheck.Name != parameter.Name && !method.Name.StartsWith("op_")) {
                         throw new InvalidOperationException("Operand TracingParameter is invalid");
                     }
                 }

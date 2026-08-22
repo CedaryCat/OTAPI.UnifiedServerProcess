@@ -57,7 +57,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
                 // Only context bound methods could process,
                 if (!mappedMethod.contextBoundMethods.ContainsKey(methodId)
-                    && !arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(type.FullName)) {
+                    && (method.IsStatic || !arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(type.FullName))) {
                     continue;
                 }
                 Progress(progress, methods.Length, $"Processing: {method.GetDebugName()}");
@@ -117,6 +117,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             public int Count => _count;
         }
+
+        static string GetClosureCacheKey(TypeReference type) =>
+            type is GenericInstanceType instance ? instance.ElementType.FullName : type.FullName;
 
         public void ProcessMethod(PatcherArguments arguments, ContextBoundMethodMap mappedMethods, ClosureDataCache cachedClosureObjs, MethodDefinition method) {
             Dictionary<Instruction, int> instructionIndexes = [];
@@ -229,7 +232,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             TypeDefinition containingType = userMethod.DeclaringType;
 
-            var perferKey = closureTypeOrigRef.FullName;
+            var perferKey = GetClosureCacheKey(closureTypeOrigRef);
 
 
             while (containingType.Name.OrdinalStartsWith("<>")) {
@@ -272,8 +275,8 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
 
             ParameterDefinition captureParam;
 
-            if (arguments.ContextTypes.ContainsKey(containingType.FullName)
-                || arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(containingType.FullName)
+            if ((!userMethod.IsStatic && (arguments.ContextTypes.ContainsKey(containingType.FullName)
+                || arguments.RootContextFieldToAdaptExternalInterface.ContainsKey(containingType.FullName)))
                 || userMethod.DeclaringType.Name.OrdinalStartsWith("<>c__DisplayClass")) {
                 captureParam = userMethod.Body.ThisParameter;
             }
@@ -969,7 +972,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     return false;
                 }
                 FieldDefinition? cachedNoCaptureClosureField = ((FieldReference)checkBegin.Operand).TryResolve();
-                if (cachedNoCaptureClosureField is null || cachedNoCaptureClosureField.DeclaringType.Name != "<>c" || !cachedNoCaptureClosureField.DeclaringType.IsNested) {
+                if (!IsDefaultNoCaptureClosureType(cachedNoCaptureClosureField?.DeclaringType)) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(checkBegin);
@@ -1007,7 +1010,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     return false;
                 }
                 FieldDefinition? cachedDelegateField = ((FieldReference)checkBegin.Operand).TryResolve();
-                if (cachedDelegateField is null || cachedDelegateField.DeclaringType.Name != "<>c" || !cachedDelegateField.DeclaringType.IsNested) {
+                if (!IsDefaultNoCaptureClosureType(cachedDelegateField?.DeclaringType)) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(checkBegin);
@@ -1019,7 +1022,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 origBlockInstructions.Enqueue(dupCache);
 
                 Instruction? brTrue = dupCache.Next;
-                if (brTrue is null || brTrue.OpCode != OpCodes.Brtrue) {
+                if (brTrue is null || (brTrue.OpCode != OpCodes.Brtrue && brTrue.OpCode != OpCodes.Brtrue_S)) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(brTrue);
@@ -1058,13 +1061,20 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                 origBlockInstructions.Enqueue(dupDelegate);
 
                 Instruction? cacheDelegate = dupDelegate.Next;
-                if (cacheDelegate is null || cacheDelegate.OpCode != OpCodes.Stsfld || ((FieldReference)cacheDelegate.Operand).FullName != cachedDelegateField.FullName) {
+                if (cacheDelegate is null
+                    || cacheDelegate.OpCode != OpCodes.Stsfld
+                    || ((FieldReference)cacheDelegate.Operand).TryResolve() != cachedDelegateField) {
                     return false;
                 }
                 origBlockInstructions.Enqueue(cacheDelegate);
                 nextInstruction = cacheDelegate.Next;
                 return true;
             }
+        }
+        static bool IsDefaultNoCaptureClosureType(TypeDefinition? type) {
+            return type is not null
+                && type.IsNested
+                && RegexTool.DefaultNoCaptureClosureTypeNameRegex().IsMatch(type.Name);
         }
         Instruction? RefactorNoCaptureAnonymousMethodDelegateCache(
             PatcherArguments arguments,
@@ -1251,7 +1261,7 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
                     Instruction.Create(OpCodes.Ldfld, contextFieldRef)
                 ];
             }
-            if (cachedClosureObjs.TryGet(contextField.FieldType.FullName, out ClosureData? nestedClosureDatas)) {
+            if (cachedClosureObjs.TryGet(GetClosureCacheKey(contextField.FieldType), out ClosureData? nestedClosureDatas)) {
                 return [
                     Instruction.Create(OpCodes.Ldarg_0),
                     Instruction.Create(OpCodes.Ldfld, contextFieldRef),
@@ -1322,6 +1332,9 @@ namespace OTAPI.UnifiedServerProcess.Core.Patching.GeneralPatching
         }
         static partial class RegexTool
         {
+            [GeneratedRegex(@"^<>c(?:__\d+`\d+)?$", RegexOptions.Compiled)]
+            public static partial Regex DefaultNoCaptureClosureTypeNameRegex();
+
             [GeneratedRegex(@"^<(?<MethodName>[^>]+)>b__(?<MethodIndex>\d+)_(?<ScopeIndex>\d+)$", RegexOptions.Compiled)]
             public static partial Regex DefaultClosureMethodNameRegex();
         }

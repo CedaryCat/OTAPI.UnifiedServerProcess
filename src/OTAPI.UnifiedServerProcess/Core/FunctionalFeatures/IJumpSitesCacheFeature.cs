@@ -12,16 +12,27 @@ namespace OTAPI.UnifiedServerProcess.Core.FunctionalFeatures
 
         static readonly Dictionary<MethodDefinition, Dictionary<Instruction, List<Instruction>>> cachedJumpSites =
             new(ReferenceEqualityComparer.Instance);
+        static readonly object cachedJumpSitesLock = new();
 
         #region Tools
         public static Dictionary<Instruction, List<Instruction>> GetMethodJumpSites<TFeature>(this TFeature _, MethodDefinition method) where TFeature : IJumpSitesCacheFeature {
-            if (!cachedJumpSites.TryGetValue(method, out Dictionary<Instruction, List<Instruction>>? result)) {
-                cachedJumpSites.Add(method, result = MonoModCommon.Stack.BuildJumpSitesMap(method));
+            lock (cachedJumpSitesLock) {
+                if (!cachedJumpSites.TryGetValue(method, out Dictionary<Instruction, List<Instruction>>? result)) {
+                    cachedJumpSites.Add(method, result = MonoModCommon.Stack.BuildJumpSitesMap(method));
+                }
+                return result;
             }
-            return result;
         }
-        public static void ClearJumpSitesCache(this IJumpSitesCacheFeature _) => cachedJumpSites.Clear();
-        public static void ClearJumpSitesCache(this IJumpSitesCacheFeature _, MethodDefinition method) => cachedJumpSites.Remove(method);
+        public static void ClearJumpSitesCache(this IJumpSitesCacheFeature _) {
+            lock (cachedJumpSitesLock) {
+                cachedJumpSites.Clear();
+            }
+        }
+        public static void ClearJumpSitesCache(this IJumpSitesCacheFeature _, MethodDefinition method) {
+            lock (cachedJumpSitesLock) {
+                cachedJumpSites.Remove(method);
+            }
+        }
         #endregion
     }
 }

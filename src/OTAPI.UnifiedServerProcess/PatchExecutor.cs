@@ -103,11 +103,11 @@ namespace OTAPI.UnifiedServerProcess
 
             var logger = new DefaultLogger(Logger.DEBUG);
 
-            new ModAssemblyMerger(new(
+            var assemblyMerger = new ModAssemblyMerger(new(
                     IgnoreExistingMethods: [nameof(ToString)]
-                ), 
-                typeof(TrProtocol.MessageID).Assembly)
-                .Attach(modcontext);
+                ),
+                typeof(TrProtocol.MessageID).Assembly);
+            assemblyMerger.Attach(modcontext);
 
             modcontext.OnApply += (modType, modder) => {
 
@@ -139,7 +139,16 @@ namespace OTAPI.UnifiedServerProcess
 
             string status = "OTAPI";
 
+            // C# modules register additional PreWrite handlers while being loaded. Append the
+            // metadata refresh after Read, but before AutoPatch snapshots the handlers, so no
+            // later handler can replace the freshly imported interface-implementation attributes.
             mm.Read();
+            modcontext.OnApply += (modType, modder) => {
+                if (modType == ModType.PreWrite && modder is not null) {
+                    assemblyMerger.RefreshMergedInterfaceAttributes(modder.Module);
+                }
+                return ModContext.EApplyResult.Continue;
+            };
             mm.MapDependencies();
             mm.AutoPatch();
 
