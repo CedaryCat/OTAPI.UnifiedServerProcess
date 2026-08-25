@@ -115,6 +115,7 @@ namespace OTAPI.UnifiedServerProcess
                     if (modType == ModType.PreRead) {
                         modder.AssemblyResolver.AddSearchDirectory(embeddedResources);
                         modder.AddTask<CoreLibRelinker>();
+                        modder.AddTask(assemblyMerger.CreateInterfaceMetadataRefreshTask(modder));
                     }
                     else if (modType == ModType.Read) {
                         // DEBUG.Load(modder.Module);
@@ -139,16 +140,7 @@ namespace OTAPI.UnifiedServerProcess
 
             string status = "OTAPI";
 
-            // C# modules register additional PreWrite handlers while being loaded. Append the
-            // metadata refresh after Read, but before AutoPatch snapshots the handlers, so no
-            // later handler can replace the freshly imported interface-implementation attributes.
             mm.Read();
-            modcontext.OnApply += (modType, modder) => {
-                if (modType == ModType.PreWrite && modder is not null) {
-                    assemblyMerger.RefreshMergedInterfaceAttributes(modder.Module);
-                }
-                return ModContext.EApplyResult.Continue;
-            };
             mm.MapDependencies();
             mm.AutoPatch();
 

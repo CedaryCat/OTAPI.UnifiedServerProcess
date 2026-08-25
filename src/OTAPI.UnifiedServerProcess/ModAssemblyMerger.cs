@@ -1,5 +1,6 @@
 ﻿using ModFramework;
 using Mono.Cecil;
+using ModFramework.Relinker;
 using Mono.Cecil.Cil;
 using Mono.Cecil.Rocks;
 using Mono.Collections.Generic;
@@ -29,25 +30,47 @@ namespace OTAPI.UnifiedServerProcess
             ComposeStaticConstructor,
         }
 
+        private sealed record InterfaceAttributeMetadataSnapshot(
+            string AttributeTypeFullName,
+            string ConstructorFullName,
+            MethodReference Constructor,
+            ImmutableArray<byte> Blob);
+
+        private sealed record InterfaceMetadataSnapshot(
+            string InterfaceTypeFullName,
+            ImmutableArray<InterfaceAttributeMetadataSnapshot> Attributes);
+
+        private sealed record TypeInterfaceMetadataSnapshot(
+            ModuleDefinition SourceModule,
+            string TypeFullName,
+            ImmutableArray<InterfaceMetadataSnapshot> Interfaces);
+
         readonly HashSet<string> IgnoreExistingMethods;
         readonly Dictionary<string, ModuleDefinition> modModules = [];
-        readonly Dictionary<string, ModuleDefinition> metadataSourceModules = [];
+        readonly ImmutableArray<TypeInterfaceMetadataSnapshot> interfaceMetadataSnapshots;
         public ModAssemblyMerger(MergeOption option, params System.Reflection.Assembly[] mods) {
 
             IgnoreExistingMethods = option.IgnoreExistingMethods.IsDefaultOrEmpty
                 ? new HashSet<string>(StringComparer.Ordinal)
                 : new HashSet<string>(option.IgnoreExistingMethods, StringComparer.Ordinal);
 
+            var metadataSnapshots = ImmutableArray.CreateBuilder<TypeInterfaceMetadataSnapshot>();
+
             foreach (System.Reflection.Assembly assembly in mods) {
                 var mod = AssemblyDefinition.ReadAssembly(assembly.Location);
                 modModules.TryAdd(mod.FullName, mod.MainModule);
 
-                // MonoMod mutates the module passed to PatchModule, including custom-attribute
-                // backing blobs. Keep an untouched metadata source for the final interface
-                // attribute refresh performed immediately before writing the target assembly.
-                var metadataSource = AssemblyDefinition.ReadAssembly(assembly.Location);
-                metadataSourceModules.TryAdd(metadataSource.FullName, metadataSource.MainModule);
+                // A second deferred Cecil graph is not an immutable metadata snapshot: a
+                // CustomAttribute reads its blob through Constructor.Module, and constructor
+                // references are shared between attributes. Capture every interface attribute
+                // blob before MonoMod or any reference mapper can touch either source graph.
+                var metadataSource = AssemblyDefinition.ReadAssembly(
+                    assembly.Location,
+                    new ReaderParameters(ReadingMode.Deferred) { InMemory = true });
+                SnapshotInterfaceMetadata(metadataSource.MainModule, metadataSnapshots);
             }
+
+            interfaceMetadataSnapshots = metadataSnapshots.ToImmutable();
         }
         public void Attach(ModContext context) {
             context.OnApply += (progress, modder) => {
@@ -84,40 +107,51 @@ namespace OTAPI.UnifiedServerProcess
         internal void RefreshMergedInterfaceAttributes(ModuleDefinition target) {
             Dictionary<string, TypeDefinition> targetTypes = target.GetAllTypes()
                 .ToDictionary(type => type.FullName, type => type);
-            foreach (ModuleDefinition mod in metadataSourceModules.Values) {
-                foreach (TypeDefinition type in mod.GetAllTypes()) {
-                    if (targetTypes.TryGetValue(type.FullName, out TypeDefinition? mappedType)) {
-                        RefreshInterfaceAttributes(target, mod, type, mappedType);
-                    }
+            foreach (TypeInterfaceMetadataSnapshot type in interfaceMetadataSnapshots) {
+                if (targetTypes.TryGetValue(type.TypeFullName, out TypeDefinition? mappedType)) {
+                    RefreshInterfaceAttributes(target, type, mappedType);
                 }
+            }
+        }
+
+        internal RelinkTask CreateInterfaceMetadataRefreshTask(ModFwModder modder) {
+            return new InterfaceMetadataRefreshTask(modder, this);
+        }
+
+        private sealed class InterfaceMetadataRefreshTask(
+            ModFwModder modder,
+            ModAssemblyMerger merger) : RelinkTask(modder)
+        {
+            // ModFwModder executes tasks in ascending order immediately before the Cecil
+            // writer. Keep the metadata restore after the framework's relink tasks.
+            public override int Order { get; set; } = 1_000_000;
+
+            public override void PreWrite() {
+                merger.RefreshMergedInterfaceAttributes(Modder.Module);
             }
         }
 
         private static void RefreshInterfaceAttributes(
             ModuleDefinition target,
-            ModuleDefinition mod,
-            TypeDefinition type,
+            TypeInterfaceMetadataSnapshot type,
             TypeDefinition mappedType) {
-            foreach (InterfaceImplementation sourceInterface in type.Interfaces) {
+            foreach (InterfaceMetadataSnapshot sourceInterface in type.Interfaces) {
                 InterfaceImplementation? mappedInterface = mappedType.Interfaces.FirstOrDefault(
-                    candidate => candidate.InterfaceType.FullName == sourceInterface.InterfaceType.FullName);
+                    candidate => candidate.InterfaceType.FullName == sourceInterface.InterfaceTypeFullName);
                 if (mappedInterface is null) {
                     continue;
                 }
                 int mappedInterfaceIndex = mappedType.Interfaces.IndexOf(mappedInterface);
 
                 var mappedAttributes = new List<CustomAttribute>();
-                foreach (CustomAttribute sourceAttribute in sourceInterface.CustomAttributes) {
+                foreach (InterfaceAttributeMetadataSnapshot sourceAttribute in sourceInterface.Attributes) {
                     MethodReference? existingConstructor = mappedInterface.CustomAttributes
                         .FirstOrDefault(attribute =>
-                            attribute.AttributeType.FullName == sourceAttribute.AttributeType.FullName &&
-                            attribute.Constructor.FullName == sourceAttribute.Constructor.FullName)
+                            attribute.AttributeType.FullName == sourceAttribute.AttributeTypeFullName &&
+                            attribute.Constructor.FullName == sourceAttribute.ConstructorFullName)
                         ?.Constructor;
-                    CustomAttribute? mappedAttribute = MapCustomAttributePreservingBlob(
-                        target, mod, sourceAttribute, existingConstructor);
-                    if (mappedAttribute is not null) {
-                        mappedAttributes.Add(mappedAttribute);
-                    }
+                    mappedAttributes.Add(MapCustomAttributeSnapshot(
+                        target, type.SourceModule, sourceAttribute, existingConstructor));
                 }
 
                 TypeReference refreshedInterfaceType = target.ImportReference(
@@ -126,6 +160,45 @@ namespace OTAPI.UnifiedServerProcess
                 refreshedInterface.CustomAttributes.AddRange(mappedAttributes);
                 mappedType.Interfaces.RemoveAt(mappedInterfaceIndex);
                 mappedType.Interfaces.Add(refreshedInterface);
+            }
+        }
+
+        private static void SnapshotInterfaceMetadata(
+            ModuleDefinition source,
+            ImmutableArray<TypeInterfaceMetadataSnapshot>.Builder snapshots) {
+            foreach (TypeDefinition type in source.GetAllTypes()) {
+                if (!type.HasInterfaces) {
+                    continue;
+                }
+
+                var interfaces = ImmutableArray.CreateBuilder<InterfaceMetadataSnapshot>(type.Interfaces.Count);
+                foreach (InterfaceImplementation implementation in type.Interfaces) {
+                    var attributes = ImmutableArray.CreateBuilder<InterfaceAttributeMetadataSnapshot>(
+                        implementation.CustomAttributes.Count);
+                    foreach (CustomAttribute attribute in implementation.CustomAttributes) {
+                        byte[] blob = attribute.GetBlob().ToArray();
+                        if (blob.Length < 2 || blob[0] != 0x01 || blob[1] != 0x00) {
+                            throw new BadImageFormatException(
+                                $"Interface custom attribute {attribute.AttributeType.FullName} on " +
+                                $"{type.FullName} has an invalid prolog.");
+                        }
+
+                        attributes.Add(new InterfaceAttributeMetadataSnapshot(
+                            attribute.AttributeType.FullName,
+                            attribute.Constructor.FullName,
+                            attribute.Constructor,
+                            ImmutableArray.CreateRange(blob)));
+                    }
+
+                    interfaces.Add(new InterfaceMetadataSnapshot(
+                        implementation.InterfaceType.FullName,
+                        attributes.ToImmutable()));
+                }
+
+                snapshots.Add(new TypeInterfaceMetadataSnapshot(
+                    source,
+                    type.FullName,
+                    interfaces.ToImmutable()));
             }
         }
 
@@ -326,7 +399,9 @@ namespace OTAPI.UnifiedServerProcess
             RedirectTypeRef(target, mod, ref declaringType);
             RedirectTypeRef(target, mod, ref methodType);
             var mappedMethod = new MethodReference(methodRef.Name, methodType, declaringType) {
-                HasThis = methodRef.HasThis
+                HasThis = methodRef.HasThis,
+                ExplicitThis = methodRef.ExplicitThis,
+                CallingConvention = methodRef.CallingConvention,
             };
             foreach (ParameterDefinition? param in methodRef.Parameters) {
                 TypeReference paramType = param.ParameterType;
@@ -335,11 +410,13 @@ namespace OTAPI.UnifiedServerProcess
             }
             if (methodRef.HasGenericParameters) {
                 foreach (GenericParameter? genericParam in methodRef.GenericParameters) {
-                    var mappedGenericParam = new GenericParameter(mappedMethod);
+                    var mappedGenericParam = new GenericParameter(genericParam.Name, mappedMethod) {
+                        Attributes = genericParam.Attributes,
+                    };
                     foreach (GenericParameterConstraint? constraint in genericParam.Constraints) {
                         TypeReference constraintType = constraint.ConstraintType;
                         RedirectTypeRef(target, mod, ref constraintType);
-                        genericParam.Constraints.Add(new GenericParameterConstraint(constraintType));
+                        mappedGenericParam.Constraints.Add(new GenericParameterConstraint(constraintType));
                     }
                     mappedMethod.GenericParameters.Add(mappedGenericParam);
                 }
@@ -605,160 +682,241 @@ namespace OTAPI.UnifiedServerProcess
             }
         }
 
-        private static CustomAttribute? MapCustomAttributePreservingBlob(
+        private static CustomAttribute MapCustomAttributeSnapshot(
             ModuleDefinition target,
-            ModuleDefinition mod,
-            CustomAttribute attr,
+            ModuleDefinition source,
+            InterfaceAttributeMetadataSnapshot attribute,
             MethodReference? existingTargetConstructor = null) {
-            try {
-                byte[] blob = attr.GetBlob().ToArray();
-                MethodReference mappedConstructor = existingTargetConstructor is not null
-                    ? existingTargetConstructor
-                    : RedirectElementMethodRef(target, mod, attr.Constructor);
-                return new CustomAttribute(target.ImportReference(mappedConstructor), blob);
+            MethodReference mappedConstructor;
+            if (existingTargetConstructor is not null) {
+                mappedConstructor = existingTargetConstructor;
             }
-            catch (NotSupportedException) {
-                return MapCustomAttribute(target, mod, attr);
+            else {
+                ModuleDefinition? constructorModule = attribute.Constructor.Module;
+                mappedConstructor = RedirectElementMethodRef(target, source, attribute.Constructor);
+                if (!ReferenceEquals(attribute.Constructor.Module, constructorModule)) {
+                    throw new InvalidOperationException(
+                        $"Mapping custom attribute {attribute.AttributeTypeFullName} mutated its source constructor module.");
+                }
             }
+
+            return new CustomAttribute(
+                target.ImportReference(mappedConstructor),
+                attribute.Blob.ToArray());
         }
 
         static bool RedirectTypeRef(ModuleDefinition target, ModuleDefinition mod, ref TypeReference reference) {
-            bool anyChanged = false;
             if (reference is null) {
-                return anyChanged;
+                return false;
             }
+
+            TypeReference mapped = MapTypeReferenceWithoutMutatingSource(target, mod, reference);
+            if (ReferenceEquals(mapped, reference)) {
+                return false;
+            }
+
+            reference = mapped;
+            return true;
+        }
+
+        private static TypeReference MapTypeReferenceWithoutMutatingSource(
+            ModuleDefinition target,
+            ModuleDefinition source,
+            TypeReference reference) {
             if (reference is GenericParameter genericParameter) {
                 if (genericParameter.DeclaringType is not null) {
-                    TypeDefinition? newDeclaringType = target.GetType(genericParameter.DeclaringType.FullName);
-                    if (newDeclaringType is not null) {
-                        reference = newDeclaringType.GenericParameters[genericParameter.Position];
-                        anyChanged = true;
+                    TypeDefinition? declaringType = target.GetType(genericParameter.DeclaringType.FullName);
+                    if (declaringType is not null && genericParameter.Position < declaringType.GenericParameters.Count) {
+                        return declaringType.GenericParameters[genericParameter.Position];
                     }
                 }
-                AdjustMemberAttributes(target, mod, genericParameter.CustomAttributes);
-                return anyChanged;
+                return genericParameter;
             }
-            else if (reference is GenericInstanceType genericOrig) {
-                for (int i = 0; i < genericOrig.GenericArguments.Count; i++) {
-                    TypeReference arg = genericOrig.GenericArguments[i];
-                    if (RedirectTypeRef(target, mod, ref arg)) {
-                        genericOrig.GenericArguments[i] = arg;
-                        anyChanged = true;
+
+            if (reference is GenericInstanceType genericInstance) {
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(
+                    target, source, genericInstance.ElementType);
+                var arguments = new TypeReference[genericInstance.GenericArguments.Count];
+                bool changed = !ReferenceEquals(elementType, genericInstance.ElementType);
+                for (int i = 0; i < arguments.Length; i++) {
+                    TypeReference original = genericInstance.GenericArguments[i];
+                    arguments[i] = MapTypeReferenceWithoutMutatingSource(target, source, original);
+                    changed |= !ReferenceEquals(arguments[i], original);
+                }
+                if (!changed) {
+                    return genericInstance;
+                }
+
+                var mapped = new GenericInstanceType(elementType);
+                mapped.GenericArguments.AddRange(arguments);
+                return mapped;
+            }
+
+            if (reference is ArrayType array) {
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(target, source, array.ElementType);
+                if (ReferenceEquals(elementType, array.ElementType)) {
+                    return array;
+                }
+
+                var mapped = new ArrayType(elementType);
+                if (!array.IsVector) {
+                    mapped.Dimensions.Clear();
+                    foreach (ArrayDimension dimension in array.Dimensions) {
+                        mapped.Dimensions.Add(new ArrayDimension(dimension.LowerBound, dimension.UpperBound));
                     }
                 }
-                TypeReference elementType = genericOrig.ElementType;
-                if (RedirectTypeRef(target, mod, ref elementType)) {
-                    var genericInstance = new GenericInstanceType(elementType);
-                    genericInstance.GenericArguments.AddRange(genericOrig.GenericArguments);
-                    reference = genericInstance;
-                    anyChanged = true;
-                }
-                return anyChanged;
-            }
-            else if (reference is ArrayType array) {
-                TypeReference elementType = array.ElementType;
-                if (RedirectTypeRef(target, mod, ref elementType)) {
-                    reference = new ArrayType(elementType, array.Rank);
-                    anyChanged = true;
-                }
-                return anyChanged;
-            }
-            else if (reference is PointerType pointer) {
-                TypeReference elementType = pointer.ElementType;
-                if (RedirectTypeRef(target, mod, ref elementType)) {
-                    reference = new PointerType(elementType);
-                    anyChanged = true;
-                }
-                return anyChanged;
-            }
-            else if (reference is ByReferenceType byReference) {
-                TypeReference elementType = byReference.ElementType;
-                if (RedirectTypeRef(target, mod, ref elementType)) {
-                    reference = new ByReferenceType(elementType);
-                    anyChanged = true;
-                }
-                return anyChanged;
-            }
-            else if (reference is FunctionPointerType function) {
-                TypeReference returnType = function.ReturnType;
-                if (RedirectTypeRef(target, mod, ref returnType)) {
-                    function.ReturnType = returnType;
-                    anyChanged = true;
-                }
-                foreach (ParameterDefinition? param in function.Parameters) {
-                    TypeReference paramType = param.ParameterType;
-                    if (RedirectTypeRef(target, mod, ref paramType)) {
-                        param.ParameterType = paramType;
-                        anyChanged = true;
-                    }
-                }
-                foreach (GenericParameter? genericParam in function.GenericParameters) {
-                    foreach (GenericParameterConstraint? constraint in genericParam.Constraints) {
-                        TypeReference constraintType = constraint.ConstraintType;
-                        if (RedirectTypeRef(target, mod, ref constraintType)) {
-                            constraint.ConstraintType = constraintType;
-                            anyChanged = true;
-                        }
-                    }
-                }
-                return anyChanged;
-            }
-            else if (reference is TypeSpecification spec) {
-                TypeReference elementType = spec.ElementType;
-                if (RedirectTypeRef(target, mod, ref elementType)) {
-                    anyChanged = true;
-                }
-                return anyChanged;
+                return mapped;
             }
 
-            if (reference.IsNested) {
-                TypeReference declaringType = reference.DeclaringType;
-                if (RedirectTypeRef(target, mod, ref declaringType)) {
-                    reference.DeclaringType = declaringType;
-                    anyChanged = true;
+            if (reference is PointerType pointer) {
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(target, source, pointer.ElementType);
+                return ReferenceEquals(elementType, pointer.ElementType)
+                    ? pointer
+                    : new PointerType(elementType);
+            }
+
+            if (reference is ByReferenceType byReference) {
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(target, source, byReference.ElementType);
+                return ReferenceEquals(elementType, byReference.ElementType)
+                    ? byReference
+                    : new ByReferenceType(elementType);
+            }
+
+            if (reference is PinnedType pinned) {
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(target, source, pinned.ElementType);
+                return ReferenceEquals(elementType, pinned.ElementType)
+                    ? pinned
+                    : new PinnedType(elementType);
+            }
+
+            if (reference is SentinelType sentinel) {
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(target, source, sentinel.ElementType);
+                return ReferenceEquals(elementType, sentinel.ElementType)
+                    ? sentinel
+                    : new SentinelType(elementType);
+            }
+
+            if (reference is OptionalModifierType optionalModifier) {
+                TypeReference modifierType = MapTypeReferenceWithoutMutatingSource(
+                    target, source, optionalModifier.ModifierType);
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(
+                    target, source, optionalModifier.ElementType);
+                return ReferenceEquals(modifierType, optionalModifier.ModifierType)
+                    && ReferenceEquals(elementType, optionalModifier.ElementType)
+                    ? optionalModifier
+                    : new OptionalModifierType(modifierType, elementType);
+            }
+
+            if (reference is RequiredModifierType requiredModifier) {
+                TypeReference modifierType = MapTypeReferenceWithoutMutatingSource(
+                    target, source, requiredModifier.ModifierType);
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(
+                    target, source, requiredModifier.ElementType);
+                return ReferenceEquals(modifierType, requiredModifier.ModifierType)
+                    && ReferenceEquals(elementType, requiredModifier.ElementType)
+                    ? requiredModifier
+                    : new RequiredModifierType(modifierType, elementType);
+            }
+
+            if (reference is FunctionPointerType function) {
+                TypeReference returnType = MapTypeReferenceWithoutMutatingSource(
+                    target, source, function.ReturnType);
+                var parameterTypes = new TypeReference[function.Parameters.Count];
+                bool changed = !ReferenceEquals(returnType, function.ReturnType);
+                for (int i = 0; i < parameterTypes.Length; i++) {
+                    TypeReference original = function.Parameters[i].ParameterType;
+                    parameterTypes[i] = MapTypeReferenceWithoutMutatingSource(target, source, original);
+                    changed |= !ReferenceEquals(parameterTypes[i], original);
                 }
-            }
-
-            if (reference.Scope.Name == mod.Name) {
-                anyChanged = true;
-            }
-
-            IMetadataScope scope = mod.Name == reference.Scope.Name ? target : reference.Scope;
-
-            if (scope.Name == target.TypeSystem.CoreLibrary.Name) {
-                scope = target.TypeSystem.CoreLibrary;
-                anyChanged = true;
-            }
-            else if (scope != target) {
-                AssemblyNameReference? assemblyReference = target.AssemblyReferences.FirstOrDefault(ar => ar.Name == scope.Name);
-                if (assemblyReference is not null) {
-                    scope = assemblyReference;
-                    anyChanged = true;
+                if (!changed) {
+                    return function;
                 }
+                if (function.HasGenericParameters) {
+                    throw new NotSupportedException(
+                        "Cannot non-destructively remap a generic function-pointer signature.");
+                }
+
+                var mapped = new FunctionPointerType {
+                    HasThis = function.HasThis,
+                    ExplicitThis = function.ExplicitThis,
+                    CallingConvention = function.CallingConvention,
+                    ReturnType = returnType,
+                };
+                for (int i = 0; i < parameterTypes.Length; i++) {
+                    ParameterDefinition original = function.Parameters[i];
+                    mapped.Parameters.Add(new ParameterDefinition(
+                        original.Name, original.Attributes, parameterTypes[i]));
+                }
+                return mapped;
             }
 
-            if (anyChanged) {
-                if (reference is TypeDefinition td) {
-                    if (td.HasGenericParameters) {
-                        reference = target.GetType(td.FullName);
-                    }
-                    else {
-                        var tmp = new TypeReference(reference.Namespace, reference.Name, target, scope, reference.IsValueType) {
-                            DeclaringType = reference.DeclaringType
-                        };
-                        reference = tmp;
-                    }
+            if (reference is TypeSpecification specification) {
+                TypeReference elementType = MapTypeReferenceWithoutMutatingSource(
+                    target, source, specification.ElementType);
+                if (ReferenceEquals(elementType, specification.ElementType)) {
+                    return specification;
                 }
-                else {
-                    innerField_scope.SetValue(reference, scope);
-                    innerField_module.SetValue(reference, target);
-                }
+                throw new NotSupportedException(
+                    $"Unsupported type specification {reference.GetType().FullName}.");
             }
 
-            return anyChanged;
+            TypeReference? mappedDeclaringType = reference.DeclaringType is null
+                ? null
+                : MapTypeReferenceWithoutMutatingSource(target, source, reference.DeclaringType);
+
+            if (IsOwnedBySourceModule(reference, source)) {
+                TypeDefinition? mappedDefinition = target.GetType(reference.FullName);
+                if (mappedDefinition is not null) {
+                    return mappedDefinition;
+                }
+
+                var mapped = new TypeReference(
+                    reference.Namespace,
+                    reference.Name,
+                    target,
+                    target,
+                    reference.IsValueType) {
+                    DeclaringType = mappedDeclaringType,
+                };
+                foreach (GenericParameter parameter in reference.GenericParameters) {
+                    mapped.GenericParameters.Add(new GenericParameter(parameter.Name, mapped) {
+                        Attributes = parameter.Attributes,
+                    });
+                }
+                return mapped;
+            }
+
+            if (reference.Module == target
+                && ReferenceEquals(mappedDeclaringType, reference.DeclaringType)) {
+                return reference;
+            }
+
+            TypeReference imported = target.ImportReference(reference);
+            if (mappedDeclaringType is not null) {
+                imported.DeclaringType = mappedDeclaringType;
+            }
+            return imported;
         }
-        static readonly System.Reflection.BindingFlags innerFieldBindings = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
-        static readonly System.Reflection.FieldInfo innerField_scope = typeof(TypeReference).GetField("scope", innerFieldBindings)!;
-        static readonly System.Reflection.FieldInfo innerField_module = typeof(TypeReference).GetField("module", innerFieldBindings)!;
+
+        private static bool IsOwnedBySourceModule(
+            TypeReference reference,
+            ModuleDefinition source) {
+            if (reference is TypeDefinition definition) {
+                return definition.Module == source;
+            }
+
+            IMetadataScope scope = reference.Scope;
+            if (ReferenceEquals(scope, source)) {
+                return true;
+            }
+            if (scope is ModuleDefinition module) {
+                return module.Name == source.Name
+                    && module.Assembly?.Name.FullName == source.Assembly?.Name.FullName;
+            }
+            if (scope is AssemblyNameReference assembly && source.Assembly is not null) {
+                return assembly.Name == source.Assembly.Name.Name;
+            }
+            return false;
+        }
     }
 }
